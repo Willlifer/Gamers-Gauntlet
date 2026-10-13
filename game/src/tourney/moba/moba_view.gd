@@ -144,7 +144,36 @@ func _build_lane() -> void:
 		var col := MobaLook.team_color(team)
 		_cyl(Vector3(x, -0.05, 0), 2.4, 0.3, col.darkened(0.45))
 		_cyl(Vector3(x, 0.12, 0), 1.8, 0.06, col)
-		_cyl(Vector3(x - (1.2 if team == "blue" else -1.2), 1.6, 0), 0.4, 3.2, col.lightened(0.2), true)
+		_tower(Vector3(x, 0.15, 0), col)
+
+
+## A team's tower (scenery: the duel has no tower fights): a stone plinth, a
+## banded shaft in the team colour, a crown, and a glowing crystal on top.
+func _tower(at: Vector3, col: Color) -> void:
+	var stone := Color("#8a8f9c")
+	_cyl(at + Vector3(0, 0.35, 0), 1.25, 0.7, stone.darkened(0.2))
+	_cyl(at + Vector3(0, 2.3, 0), 0.75, 3.2, stone)
+	for y in [1.2, 2.4, 3.5]:
+		_cyl(at + Vector3(0, y, 0), 0.82, 0.22, col.darkened(0.15))
+	_cyl(at + Vector3(0, 4.05, 0), 1.05, 0.35, stone.darkened(0.1))
+	for i in 6:
+		var a := i * TAU / 6.0
+		_box(at + Vector3(cos(a) * 0.9, 4.4, sin(a) * 0.9), Vector3(0.32, 0.4, 0.32), stone.darkened(0.1))
+	var gem := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.7, 1.1, 0.7)
+	gem.mesh = pm
+	gem.material_override = _mat(col.lightened(0.25), true)
+	gem.position = at + Vector3(0, 5.05, 0)
+	add_child(gem)
+	var light := OmniLight3D.new()
+	light.light_color = col
+	light.light_energy = 2.0
+	light.omni_range = 6.0
+	light.position = at + Vector3(0, 4.8, 0)
+	add_child(light)
+	var tw := create_tween().set_loops()
+	tw.tween_property(gem, "rotation:y", TAU, 6.0).from(0.0)
 
 
 func _box(at: Vector3, size: Vector3, col: Color) -> MeshInstance3D:
@@ -894,20 +923,35 @@ func _place_camera(snap: bool, delta: float = 0.0) -> void:
 		if sim.mode == "pit":                    # keep the Giant in frame: lean the view toward it
 			focus = focus.lerp(Vector3.ZERO, 0.35)
 	var pitch := deg_to_rad(CAM_PITCH)
-	var want := focus + Vector3(0, sin(pitch) * CAM_DIST, cos(pitch) * CAM_DIST)
+	var fwd := view_forward()
+	var back := Vector3(-fwd.x, 0, -fwd.y)
+	var want := focus + back * cos(pitch) * CAM_DIST + Vector3(0, sin(pitch) * CAM_DIST, 0)
 	_cam.position = want if snap else _cam.position.lerp(want, minf(1.0, delta * 12.0))
-	_cam.look_at(_cam.position - Vector3(0, sin(pitch), cos(pitch)))
+	_cam.look_at(_cam.position - back * cos(pitch) - Vector3(0, sin(pitch), 0))
+
+
+## Which way "up the screen" points on the ground, per side (author 10-13):
+## in the duel your tower sits bottom-left and theirs upper-right, so the
+## lane runs corner to corner; red sees the same picture turned 180°. In
+## the pit your entrance is at the bottom.
+func view_forward() -> Vector2:
+	var me := sim.unit(local_id)
+	var blue := me == null or me.team == "blue"
+	if sim.mode == "pit":
+		return Vector2(0, -1) if blue else Vector2(0, 1)
+	var f := Vector2(1, -1).normalized()          # +x (toward red) shows up-right
+	return f if blue else -f
 
 
 func _hud_update(me: MobaUnit) -> void:
-	var b := sim.champ_of("blue")
-	var r := sim.champ_of("red")
+	var mine := me.team if me else "blue"          # your side reads first
+	var theirs := "red" if mine == "blue" else "blue"
 	if sim.mode == "duel":
-		_score_l.text = "%s  %d  –  %d  %s\nfirst to %d" % [str(names.get("blue", b.name if b else "Blue")), sim.score.blue, sim.score.red,
-			str(names.get("red", r.name if r else "Red")), MobaSim.KILLS_TO_WIN]
+		_score_l.text = "%s  %d  –  %d  %s\nfirst to %d" % [str(names.get(mine, mine.capitalize())), sim.score[mine], sim.score[theirs],
+			str(names.get(theirs, theirs.capitalize())), MobaSim.KILLS_TO_WIN]
 	elif sim.mode == "pit":
-		_score_l.text = "%s  %d  –  %d  %s   ·   last hit on the Giant wins" % [str(names.get("blue", "Blue")), sim.score.blue, sim.score.red,
-			str(names.get("red", "Red"))]
+		_score_l.text = "%s  %d  –  %d  %s   ·   last hit on the Giant wins" % [str(names.get(mine, mine.capitalize())), sim.score[mine],
+			sim.score[theirs], str(names.get(theirs, theirs.capitalize()))]
 		var boss := sim.boss()
 		if boss and _boss_fill:
 			_boss_fill.size.x = 556.0 * clampf(boss.hp / boss.max_hp, 0.0, 1.0)

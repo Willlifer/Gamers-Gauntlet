@@ -36,8 +36,9 @@ func _go() -> void:
 	BWSettings.init(true)
 	BWMusic.ensure(root)
 	AramModule.autopilot = true
+	AramModule.human_side = "red" if OS.get_environment("SIDE") == "red" else "blue"
 	var pit := OS.get_environment("MODULE") == "pit"
-	_prefix = "pit_" if pit else "aram_"
+	_prefix = ("pit_" if pit else "aram_") + ("red_" if AramModule.human_side == "red" else "")
 	var mod: AramModule = PitModule.new() if pit else AramModule.new()
 	var result := [{}]
 	mod.finished.connect(func(r): result[0] = r)

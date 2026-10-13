@@ -17,6 +17,9 @@ var _rng := RandomNumberGenerator.new()
 
 ## Tools: auto-pick for the human and let a bot drive their champion too.
 static var autopilot := false
+## Which side this machine's player starts on (online will set it; the
+## camera turns so your own tower is always bottom-left).
+static var human_side := "blue"
 
 
 static func info() -> Dictionary:
@@ -124,17 +127,19 @@ func _start() -> void:
 		return
 	(_pick_root.get_parent() as CanvasLayer).queue_free()
 	var s := MobaSim.new(int(match_cfg.seed))
-	var me := s.add_champ(_picks[_human.id], "blue", str(_human.name))
-	var them := s.add_champ(_picks[_bot_p.id], "red", str(_bot_p.name))
+	var mine := human_side
+	var theirs := "red" if mine == "blue" else "blue"
+	var me := s.add_champ(_picks[_human.id], mine, str(_human.name))
+	var them := s.add_champ(_picks[_bot_p.id], theirs, str(_bot_p.name))
 	var bots := { them.id: MobaBot.new(0.55, int(match_cfg.seed) * 7) }
 	if autopilot:
 		bots[me.id] = MobaBot.new(0.6, int(match_cfg.seed) * 3)
 	_view = MobaView.new()
 	_view.setup(s, me.id, bots, match_cfg.get("binds", TourneyState.load_binds()),
-		{ "blue": str(_human.name), "red": str(_bot_p.name) })
+		{ mine: str(_human.name), theirs: str(_bot_p.name) })
 	_view.match_over.connect(func(team: String):
-		var w: Dictionary = _human if team == "blue" else _bot_p
+		var w: Dictionary = _human if team == mine else _bot_p
 		finished.emit({ "winner": w.id, "summary": "%s (%s) %d – %d %s (%s), %d s." % [_human.name, MobaChamps.CHAMPS[me.champ].name,
-			s.score.blue, s.score.red, _bot_p.name, MobaChamps.CHAMPS[them.champ].name, int(s.time)], "stats": {} }))
+			s.score[mine], s.score[theirs], _bot_p.name, MobaChamps.CHAMPS[them.champ].name, int(s.time)], "stats": {} }))
 	add_child(_view)
 	BWMusic.play("combat")
