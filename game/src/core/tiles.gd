@@ -1,0 +1,924 @@
+class_name BWTiles
+extends RefCounted
+## Elements on the ground: the charge grid from design/ELEMENTS.md (§2-§6).
+## Pure state + rules. It reports what happened (detonations, seeds) and the
+## battle turns those into damage, because only the battle knows the units.
+##
+## A hex with nothing on it has no entry ("neutral is absence"). An entry:
+##   { h, v, marker, timer, glaze, source, origin, permanent }
+## h: water(-3)..fire(+3), v: dark(-3)..light(+3). `source` is a unit id
+## ("" = authored). Section numbers below refer to ELEMENTS.md.
+
+const AXIS_MAX := 3
+## D447 Lava Walker: its fire climbs to LAVA_MAX; an entry it laid carries
+## `lava` and burns LAVA_STAND_PCT / LAVA_CROSS_PCT a step (not 4% / 2%).
+## D494: the cap is 4 (was 5), and lava no longer fizzles what lands on it:
+## any other arrival reacts with ONE step of it, as if the hex were fire 1,
+## and a reaction spends that step (lava n -> n - 1): see _lava_route.
+const LAVA_MAX := 4
+const LAVA_STAND_PCT := 5
+const LAVA_CROSS_PCT := 3
+const STEP_CYCLES := 2
+const MARK_CYCLES := 3
+const GLAZE_CYCLES := 2
+const FIRE_STAND_PCT := 4
+const FIRE_CROSS_PCT := 2
+const LIGHT_HEAL_PCT := 3
+const HIT_PER_POINT := 7
+const DARK3_DRAIN_PCT := 3
+const WATER_MOVE := [0, 0, 1, 2]
+const DETONATE_BASE_PCT := 5
+const DETONATE_PER_POINT_PCT := 4
+const CONDUCT_DET_PCT := 2
+const CONDUCT_HIT_MULT := 0.10
+const SHATTER_MULT := 1.5
+const ELEM_RESIST_CAP := 75.0
+const GRASS_IGNITE_MIN := 2
+## D86 (author-approved element rules, ELEMENTS §8.5).
+const CHAIN_FRACTION := 0.5      # a conductive unit arcs half its damage to its nearest teammate
+const SPARK_PCT := 10            # thunder hit on a target whose hex holds no charge
+const SHATTER_HIT_PCT := 15      # any attack on a target standing on a glazed hex
+
+const AXIS := ["fire", "water", "light", "dark"]
+const OPERATORS := { "thunder": "fuse", "ice": "stasis", "wind": "gale" }
+const MARKER_ELEMENT := { "fuse": "thunder", "stasis": "ice", "gale": "wind" }
+
+var board: BWBoard
+var entries := {}        # Vector2i -> entry Dictionary
+## FX hook (tile_potency_pct): Callable(source_id, element) -> multiplier for
+## the per-point effect of tiles that unit laid. Unset = 1 (pure tile tests).
+var potency: Callable
+## FX hook (tile_erupt): eruptions that went off in the last tick(), for the
+## battle to resolve. [{hex, element, points, owner, dmg_pct, heal_pct,
+## radius, push, consume, name}]. An entry may carry `erupt` (a countdown).
+var eruptions: Array = []
+## D115 static charge: the map's permanent floor state per hex (from
+## BWBoard.statics), Vector2i(h, v). It never decays and re-forms at every
+## tick; painting on it lasts until then. `scars`: hexes whose static was
+## spent (a detonation, Consume) and stays off for STATIC_SCAR_TICKS ticks.
+const STATIC_SCAR_TICKS := 1
+var statics := {}
+var scars := {}
+## D262-D266 the ice/water spine (ELEMENTS-v3 §2, §4; src/core/pools.gd;
+## the D261 slides are gone, D397; D421: no steam). pillars: hex -> {owner, ticks, born};
+## fields (electrified): id -> {hexes, ticks, source, ramp {unit id: n}};
+## shock: hex -> field id. `occupant` (hex -> BWUnit or null) is the battle's
+## unit_at (unset = nobody). spine_tick: what the last tick thawed/discharged.
+var pillars := {}
+var fields := {}
+var shock := {}
+var spine_serial := 0
+var spine_tick := {}
+var pool_cache := {}
+var occupant: Callable
+
+
+func _init(p_board: BWBoard) -> void:
+	board = p_board
+	for hex in board.statics:
+		var s: Vector2i = board.statics[hex]
+		set_static(hex, s.x, s.y)
+	for hex in board.seeds:
+		var s: Vector2i = board.seeds[hex]
+		seed_hex(hex, s.x, s.y)
+
+
+# ------------------------------------------------------------------ reading
+
+func at(hex: Vector2i) -> Dictionary:
+	return entries.get(hex, {})
+
+
+func intensity(hex: Vector2i, element: String) -> int:
+	var e := at(hex)
+	if e.is_empty():
+		return 0
+	var ecl := int(e.get("ecl", 0))           # D461 Eclipse: the opposite of v, held beside it
+	match element:
+		"fire": return maxi(e.h, 0)
+		"water": return maxi(-e.h, 0)
+		"light": return maxi(e.v, 0) if int(e.v) >= 0 or ecl <= 0 else ecl
+		"dark": return maxi(-e.v, 0) if int(e.v) <= 0 or ecl <= 0 else ecl
+	return 0
+
+
+## D447: is this hex a Lava Walker's fire (nothing reacts with it)?
+func is_lava(hex: Vector2i) -> bool:
+	var e := at(hex)
+	return bool(e.get("lava", false)) and int(e.get("h", 0)) > 0
+
+
+func is_glazed(hex: Vector2i) -> bool:
+	return int(at(hex).get("glaze", 0)) > 0
+
+
+## §7.4 "carries the element".
+func carries(hex: Vector2i, element: String) -> bool:
+	var e := at(hex)
+	if e.is_empty():
+		return false
+	match element:
+		"fire": return e.h > 0
+		"water": return e.h < 0
+		"light": return e.v > 0 or (e.v < 0 and int(e.get("ecl", 0)) > 0)
+		"dark": return e.v < 0 or (e.v > 0 and int(e.get("ecl", 0)) > 0)
+		"thunder": return e.marker == "fuse"
+		"wind": return e.marker == "gale"
+		"ice": return e.marker == "stasis" or e.glaze > 0
+	return false
+
+
+## §7.5: dominant element and points, for Consume.
+func dominant(hex: Vector2i) -> Dictionary:
+	var e := at(hex)
+	if e.is_empty():
+		return {}
+	if e.marker != "":
+		return { "element": MARKER_ELEMENT[e.marker], "points": 1 }
+	var points: int = absi(e.h) + absi(e.v)
+	if absi(e.h) >= absi(e.v):
+		return { "element": "fire" if e.h > 0 else "water", "points": points }
+	return { "element": "light" if e.v > 0 else "dark", "points": points }
+
+
+## FX hook (tile_potency_pct): how much stronger this hex's `element` is,
+## from the unit that laid it (Brimming, Radiant, Gloaming, Shattering).
+func pot(hex: Vector2i, element: String, src: String = "?") -> float:
+	if not potency.is_valid():
+		return 1.0
+	return float(potency.call(str(at(hex).get("source", "")) if src == "?" else src, element))
+
+
+## Extra move cost to enter (§6.5). Glazed water is walkable ice (E7).
+## Brimming water costs more (rounded up).
+func move_penalty(hex: Vector2i) -> int:
+	if is_glazed(hex):
+		return 0
+	var base: int = WATER_MOVE[intensity(hex, "water")]
+	return ceili(base * pot(hex, "water")) if base > 0 else 0
+
+
+## Hit-chance points against whoever stands here (§2.2). Radiant exposes and
+## Gloaming hides harder (tile_potency_pct), so this can be fractional.
+func hit_mod(hex: Vector2i) -> float:
+	var light := intensity(hex, "light")
+	var dark := intensity(hex, "dark")
+	var v := 0.0
+	if light > 0:
+		v += HIT_PER_POINT * light * pot(hex, "light")
+	if dark > 0:
+		v -= HIT_PER_POINT * dark * pot(hex, "dark")
+	return v
+
+
+## Start-of-turn effects in % HP (§2.2). Damage applies before healing.
+## FX hook: Radiant heals more, a stronger fire burns more (tile_potency_pct).
+func standing(hex: Vector2i) -> Dictionary:
+	var fire := intensity(hex, "fire")
+	var light := intensity(hex, "light")
+	var per := LAVA_STAND_PCT if is_lava(hex) else FIRE_STAND_PCT      # D447 Lava Walker
+	return {
+		"fire": per * fire * (pot(hex, "fire") if fire > 0 else 1.0),
+		"drain": DARK3_DRAIN_PCT if intensity(hex, "dark") >= 3 else 0,
+		"heal": LIGHT_HEAL_PCT * light * (pot(hex, "light") if light > 0 else 1.0),
+		"source": str(at(hex).get("source", "")),
+		"light_src": light_owner(hex),             # D496: whose side the light heals
+	}
+
+
+## D496: who laid this hex's light. Light heals only its owner's side (an
+## authored / map light, owner "", heals anyone). `lsrc` rides beside
+## `source` because another element on the hex (fire on light) changes the
+## entry's source without changing whose light it is.
+func light_owner(hex: Vector2i) -> String:
+	var e := at(hex)
+	return str(e.get("lsrc", e.get("source", "")))
+
+
+## D496: the light owner an entry built from `e` by `caster`'s `element` keeps.
+static func _lsrc(e: Dictionary, element: String, caster: String) -> String:
+	if element == "light":
+		return caster
+	return str(e.get("lsrc", e.get("source", caster)))
+
+
+func crossing_pct(hex: Vector2i) -> float:
+	var fire := intensity(hex, "fire")
+	var per := LAVA_CROSS_PCT if is_lava(hex) else FIRE_CROSS_PCT      # D447 Lava Walker
+	return per * fire * (pot(hex, "fire") if fire > 0 else 1.0)
+
+
+## D86: a unit standing on a fuse is conductive (§8.5). D264: so is one in an
+## electrified pool.
+func conductive(hex: Vector2i) -> bool:
+	return str(at(hex).get("marker", "")) == "fuse" or shock.has(hex)
+
+
+## D262: an ice pillar stands here (impassable, blocks sight, slams).
+func is_pillar(hex: Vector2i) -> bool:
+	return pillars.has(hex) and is_glazed(hex)
+
+
+## D459: the levels a Sculptor's pillar lifts whoever stands on it (BWBoard.lift).
+func pillar_lift(hex: Vector2i) -> int:
+	return BWKs3Ice.lift(self, hex)
+
+
+## D262/D264: the board's dynamic blockers (BWBoard.blocker / sight_blocker).
+func blocks_move(hex: Vector2i) -> bool:
+	return is_pillar(hex)
+
+
+## A pillar blocks a line through it (D421: steam is gone).
+func blocks_sight(hex: Vector2i, from: Vector2i = hex, to: Vector2i = hex) -> bool:
+	return is_pillar(hex)
+
+
+## D86: does the hex hold axis charge (Spark needs it not to)?
+func charged(hex: Vector2i) -> bool:
+	var e := at(hex)
+	return not e.is_empty() and (int(e.h) != 0 or int(e.v) != 0)
+
+
+## Thunder hits on a unit standing in water get +10% per water intensity (§8.3).
+func conduct_mult(hex: Vector2i, element: String) -> float:
+	if element != "thunder":
+		return 1.0
+	return 1.0 + CONDUCT_HIT_MULT * intensity(hex, "water")
+
+
+## Tile damage after the victim's affinity resistance (§8.2).
+static func tile_damage(u: BWUnit, pct: float, element: String, mult: float = 1.0) -> int:
+	if pct <= 0.0:
+		return 0
+	var res := minf(BWFormulas.elemental_resist(u, element), ELEM_RESIST_CAP)
+	return maxi(1, roundi(u.pct_base_hp() * pct / 100.0 * mult * (1.0 - res / 100.0)))
+
+
+# ------------------------------------------------------------------ writing
+
+func can_hold(hex: Vector2i) -> bool:
+	return board.exists(hex) and board.terrain(hex) != BWBoard.JAGGED
+
+
+## D115: make `hex` a static (h, v) hex and lay its floor state now.
+## (0, 0) removes the static (the current charge is left to decay).
+func set_static(hex: Vector2i, h: int, v: int) -> void:
+	h = clampi(h, -AXIS_MAX, AXIS_MAX)
+	v = clampi(v, -AXIS_MAX, AXIS_MAX)
+	if not can_hold(hex) or (h == 0 and v == 0):
+		statics.erase(hex)
+		scars.erase(hex)
+		return
+	statics[hex] = Vector2i(h, v)
+	scars.erase(hex)
+	entries[hex] = _static_entry(hex)
+
+
+func is_static(hex: Vector2i) -> bool:
+	return statics.has(hex)
+
+
+## D115: the static's floor (h, v), or (0, 0).
+func static_at(hex: Vector2i) -> Vector2i:
+	return statics.get(hex, Vector2i.ZERO)
+
+
+## D115: a static hex whose floor is spent until a later tick.
+func is_scarred(hex: Vector2i) -> bool:
+	return scars.has(hex)
+
+
+## D134 seeded charge (§5.6): the hex starts with (h, v) and holds it with no
+## decay (an authored, permanent entry flagged `seeded`). The first change by
+## play makes it ordinary charge (a fresh entry, or `permanent` cleared and
+## the flag dropped), so it decays from then on and never comes back.
+func seed_hex(hex: Vector2i, h: int, v: int) -> void:
+	author(hex, clampi(h, -AXIS_MAX, AXIS_MAX), clampi(v, -AXIS_MAX, AXIS_MAX))
+	if entries.has(hex):
+		entries[hex]["seeded"] = true
+
+
+## D134: does the hex still hold its untouched seed?
+func is_seeded(hex: Vector2i) -> bool:
+	var e := at(hex)
+	return bool(e.get("seeded", false)) and bool(e.get("permanent", false))
+
+
+## Authored starting state (§5.4).
+func author(hex: Vector2i, h: int, v: int, marker: String = "") -> void:
+	if not can_hold(hex):
+		return
+	entries[hex] = _entry(h, v, marker, "", "cast")
+	entries[hex].permanent = true
+
+
+## Apply one action's element to a shape, simultaneously (§3.5).
+## Returns { detonations: [{hex, pct, source}], changed: [hex], marker_fired: [hex],
+##           gales: [{origin, copies}], doused: [hex] (D421), lava_hit: [hex] (D494) }.
+## FX hook `opts` (BWEffects.paint_opts): timer_plus / glaze_plus /
+## gale_timer_plus (tile_duration_plus), ring {hex: steps} (element_area_plus,
+## resolved in the same simultaneous pass), gale_radius (Gusting), erupt (a
+## tile_erupt countdown stamped on every hex this cast leaves carrying it).
+func apply(hexes: Array, element: String, caster: String, steps: int = 1, opts: Dictionary = {}) -> Dictionary:
+	var out := { "detonations": [], "changed": [], "marker_fired": [], "gales": [], "doused": [], "lava_hit": [] }
+	var plans := {}
+	# D199: `propagated` = the charge arrives as spread (on-kill paint, ENCHANTMENTS
+	# §5.3): it never fires a marker and skips glazed hexes.
+	var fresh: bool = not opts.get("propagated", false)
+	# D494 Lava Walker: an arrival on a lava hex that isn't its own walker's
+	# fire reacts with the lava as fire 1 (_lava_route), planned here and kept
+	# out of the pools / Overheat / Overfreeze passes below. (D447's fizzle is gone.)
+	var lava_plans := {}
+	var plain: Array = []
+	for h in hexes:
+		if _lava_ok(h, element, caster):
+			plain.append(h)
+		elif can_hold(h) and not lava_plans.has(h):
+			lava_plans[h] = _lava_route(at(h), element, fresh, steps, caster, opts)
+	hexes = plain
+	if opts.has("ring"):
+		var kept := {}
+		for h in opts.ring:
+			if _lava_ok(h, element, caster):
+				kept[h] = opts.ring[h]
+			elif can_hold(h) and not lava_plans.has(h):
+				lava_plans[h] = _lava_route(at(h), element, true, int(opts.ring[h]), caster, opts)
+		opts["ring"] = kept
+	var pre_ice := {}                         # D459 Sculptor: ice or glaze before this paint
+	if element == "ice" and fresh and opts.get("sculpt", false):
+		for h in hexes:
+			if is_glazed(h) or str(at(h).get("marker", "")) == "stasis":
+				pre_ice[h] = true
+	var spine := BWPools.begin(self, hexes, element, fresh, steps, caster, opts)   # D264: pool reactions, pre-action
+	var hot := BWOverheat.begin(self, hexes, element, fresh, opts)   # D285: fresh fire on fire 3 erupts
+	var frz := BWOverfreeze.begin(self, hexes, element, fresh, opts)   # D312: fresh ice on glazed water shatters
+	var brim := BWBrim.begin(self, hexes, element, fresh, opts)   # D564/D565: fresh water on water 3, light on light 3
+	spine["no_pillar"] = frz
+	var guard: Array = opts.get("fuse_guard", [])   # D307 Static Field: an ally's fuse ignores this paint
+	for hex in hexes:
+		if can_hold(hex) and not plans.has(hex):
+			if not fresh and is_glazed(hex):
+				continue
+			if fuse_guarded(hex, guard):
+				continue
+			plans[hex] = spine.plans[hex] if spine.plans.has(hex) else _route(at(hex), element, fresh, steps, caster, _hex_opts(hex, opts))
+	var ring: Dictionary = opts.get("ring", {})
+	for hex in ring:
+		if can_hold(hex) and not plans.has(hex) and not fuse_guarded(hex, guard):
+			plans[hex] = _route(at(hex), element, true, int(ring[hex]), caster, _hex_opts(hex, opts))
+	for hex in lava_plans:
+		if not plans.has(hex):
+			plans[hex] = lava_plans[hex]
+	var gales: Array = []
+	for hex in plans:
+		var p: Dictionary = plans[hex]
+		if p.op == "none":
+			continue
+		if p.op == "erase":
+			entries.erase(hex)
+		else:
+			entries[hex] = p.entry
+			p.entry.erase("seeded")              # D134: a changed seed is ordinary charge
+		out.changed.append(hex)
+		if p.has("detonate"):
+			if statics.has(hex):
+				scars[hex] = STATIC_SCAR_TICKS          # D115: a blown static stays spent a cycle
+			out.detonations.append({ "hex": hex, "pct": p.detonate, "source": p.get("det_source", caster),
+				"points": int(p.get("det_points", 0)), "mix": p.get("det_mix", {}) })   # v2 Overload reads the points blown; D423 mix
+		if p.get("scald", false):
+			out.detonations.append({ "hex": hex, "pct": float(DETONATE_BASE_PCT), "source": caster,
+				"points": 0, "mix": { "fire": 1, "water": 1 }, "scald": true })   # D566 The Scalding: the douse goes off like a fuse
+		if p.has("gale"):
+			gales.append([hex, p.gale, int(p.get("gale_level", 1))])
+		if p.get("fired", false):
+			out.marker_fired.append(hex)
+		if p.get("doused", false):
+			out.doused.append(hex)                  # D421: fire met water here
+		if p.get("lava_hit", false):
+			out.lava_hit.append(hex)                # D494: it met lava as fire 1
+	BWPools.finish(self, spine, element, caster, fresh, out, int(opts.get("glaze_plus", 0)))   # D262/D264
+	if not pre_ice.is_empty():
+		BWKs3Ice.sculpt(self, pre_ice.keys(), caster, out, opts)   # D459 Sculptor: ice on ice raises a pillar
+	BWOverfreeze.finish(self, frz, caster, out, int(opts.get("overfreeze_radius", 1)))   # D312/D398: the burst glazes radius 1 (no pillar), out.overfreeze
+	if opts.has("erupt"):
+		for hex in out.changed:
+			if carries(hex, element) and entries.has(hex) and str(entries[hex].source) == caster:
+				entries[hex]["erupt"] = (opts.erupt as Dictionary).duplicate()
+	# D93 Wildfire: fresh fire at `wild`+ from this caster may seed off grass.
+	if opts.has("wild"):
+		for hex in out.changed:
+			var en: Dictionary = entries.get(hex, {})
+			if not en.is_empty() and int(en.h) >= int(opts.wild) and str(en.source) == caster 					and en.origin == "cast" and int(en.glaze) == 0:
+				en["wild"] = true
+	BWOverheat.finish(self, hot, caster, out, opts)   # D285: the eruptions (ring +2, vent to 2), out.overheat
+	BWBrim.finish(self, brim, element, caster, out)   # D564/D565: Runneth Over, Glinting, out.brim
+	for g in gales:
+		# D95: a gale 2 copies one ring further (rings 1 and 2, same skip rules)
+		var gr := int(opts.get("gale_radius", 1)) + int(g[2]) - 1
+		if int(g[1][0]) > 0:
+			gr += int(opts.get("fire_gale_plus", 0))      # D456 Wildfire Gale: fire it carries goes 1 ring further
+		var copies := _gale_copy(g[0], g[1], caster, out.changed, gr, int(opts.get("gale_timer_plus", 0)))
+		out.gales.append({ "origin": g[0], "copies": copies, "level": int(g[2]), "hv": g[1], "fresh": fresh })   # D309: the squall reads hv
+	return out
+
+
+## D447 Lava Walker: does `element` from `caster` land on `h` the plain way?
+## Off lava, always; on lava, only its own walker's fire (it climbs to the
+## cap). Anything else goes through _lava_route (D494).
+func _lava_ok(h: Vector2i, element: String, caster: String) -> bool:
+	if not is_lava(h):
+		return true
+	return element == "fire" and str(at(h).get("source", "")) == caster
+
+
+## D494: what `element` arriving on lava entry `e` (fire n) does. The lava
+## acts as FIRE 1 for it: the arrival is routed onto a fire-1 copy of the hex
+## (its light / dark and glaze kept). A reaction (a detonation, a douse, a
+## gale carrying the fire off, ice freezing it) spends that one step, so the
+## lava is left at n - 1 (still lava, still its walker's; at 0 it's gone).
+## A detonation reads 1 fire point (plus the light / dark it blows). Arrivals
+## that don't react leave the lava at n: light / dark lay on the other axis,
+## another unit's fire meets hotter fire (nothing changes; on a glaze it
+## melts it, as fire does). Same plan shape as _route.
+func _lava_route(e: Dictionary, element: String, fresh: bool, steps: int, caster: String, opts: Dictionary = {}) -> Dictionary:
+	var n := int(e.h)
+	var proxy := e.duplicate()
+	proxy.h = 1
+	proxy.erase("lava")
+	var p := _route(proxy, element, fresh, steps, caster, opts)
+	if str(p.op) == "none":
+		return p
+	var reacted: bool = p.has("detonate") or bool(p.get("doused", false)) or p.has("gale") 		or (element == "ice" and str(p.op) == "set" and int((p.entry as Dictionary).get("glaze", 0)) > int(e.get("glaze", 0)))
+	var left := n - 1 if reacted else n
+	var after: Dictionary = {} if str(p.op) == "erase" else (p.entry as Dictionary).duplicate()
+	if after.is_empty():
+		after = _entry(0, 0, "", str(e.get("source", "")), str(e.get("origin", "cast")))
+	if not reacted and element == "fire":
+		after = e.duplicate()                      # another's fire on lava: the lava stands (a glaze melts)
+		after.glaze = int((p.entry as Dictionary).get("glaze", 0))
+	after.h = left
+	if left > 0:
+		after["lava"] = true
+		after.source = str(e.get("source", ""))    # still the walker's lava
+		after.marker = ""
+	else:
+		after.erase("lava")
+	after.erase("seeded")
+	var out := p.duplicate()
+	out["lava_hit"] = true
+	if int(after.h) == 0 and int(after.v) == 0 and str(after.get("marker", "")) == "":
+		out.op = "erase"
+		out.erase("entry")
+	else:
+		out.op = "set"
+		out.entry = after
+	if p.has("gale"):
+		out.gale = [1, int((p.entry as Dictionary).get("v", 0))]   # the step the gale carries off is fire 1
+	return out
+
+
+## D494: route `element` onto `hex` as a paint would, lava included (squalls,
+## the rings that call _route directly).
+func route_at(hex: Vector2i, element: String, fresh: bool, steps: int, caster: String, opts: Dictionary = {}) -> Dictionary:
+	if _lava_ok(hex, element, caster):
+		return _route(at(hex), element, fresh, steps, caster, opts)
+	return _lava_route(at(hex), element, fresh, steps, caster, opts)
+
+
+## D567/D568: a pillar is never FrostFire's or Charged Ice's (fire melts it,
+## thunder shatters it, as ever): the paint's options without them there.
+func _hex_opts(hex: Vector2i, opts: Dictionary) -> Dictionary:
+	if not is_pillar(hex) or not (opts.has("frostfire") or opts.has("charged_ice")):
+		return opts
+	var o := opts.duplicate()
+	o.erase("frostfire")
+	o.erase("charged_ice")
+	return o
+
+
+## D307 Static Field: a fuse whose owner is in `guard` (allies of the painter
+## holding Static Field) can't be set off, re-armed or washed by that paint.
+func fuse_guarded(hex: Vector2i, guard: Array) -> bool:
+	if guard.is_empty():
+		return false
+	var e := at(hex)
+	return str(e.get("marker", "")) == "fuse" and str(e.get("source", "")) in guard
+
+
+## D93 Fault Lines: a Shatter hit breaks the glaze (the charge stays).
+func break_glaze(hex: Vector2i) -> bool:
+	var e := at(hex)
+	if e.is_empty() or int(e.get("glaze", 0)) <= 0:
+		return false
+	e.glaze = 0
+	e.erase("seeded")
+	return true
+
+
+## Consume (§7.2): the hex is eaten back to bare ground. A static hex is
+## spent like a detonated one (D115).
+## D423: the non-thunder elements a detonation consumes, by steps: the axis
+## charges (fire / water, light / dark: their intensity) and a glaze (ice, 1).
+## { element: steps }; empty = a pure fuse pop (thunder only). The view
+## colours the blast ring from it (BWTileFX.blast_colors).
+static func blast_mix(e: Dictionary) -> Dictionary:
+	var out := {}
+	var h := int(e.get("h", 0))
+	var v := int(e.get("v", 0))
+	if h != 0:
+		out["fire" if h > 0 else "water"] = absi(h)
+	if v != 0:
+		out["light" if v > 0 else "dark"] = absi(v)
+	if int(e.get("glaze", 0)) > 0:
+		out["ice"] = 1
+	return out
+
+
+func clear(hex: Vector2i) -> void:
+	entries.erase(hex)
+	if statics.has(hex):
+		scars[hex] = STATIC_SCAR_TICKS
+
+
+## Siphon (§9.3): both axes 2 steps toward 0, strip marker and glaze.
+func siphon(hex: Vector2i) -> void:
+	var e := at(hex)
+	if e.is_empty():
+		return
+	var h: int = e.h - signi(e.h) * mini(2, absi(e.h))
+	var v: int = e.v - signi(e.v) * mini(2, absi(e.v))
+	if h == 0 and v == 0:
+		entries.erase(hex)
+		return
+	entries[hex] = _entry(h, v, "", e.source, e.origin)
+	if e.has("lsrc") and v > 0:
+		entries[hex]["lsrc"] = e.lsrc            # D496
+
+
+## The per-cycle tick (§5.1): eruptions, decay, grass spread, then the
+## statics re-form (D115). Returns
+## seeded hexes; eruptions that went off are left in `eruptions`.
+func tick() -> Array:
+	_erupt_phase()
+	for hex in entries.keys():
+		var e: Dictionary = entries[hex]
+		if e.permanent or (statics.has(hex) and not scars.has(hex)):
+			continue                           # statics decay in _static_phase
+		if pillars.has(hex) or shock.has(hex):
+			continue                           # D262/D264: a pillar or a live field freezes decay
+		if e.glaze > 0:
+			e.glaze -= 1
+			continue
+		e.timer -= 1
+		if e.timer > 0:
+			continue
+		if e.marker != "":
+			entries.erase(hex)
+			continue
+		var ah := absi(e.h)
+		var av := absi(e.v)
+		var v_sign := signi(int(e.v))
+		if ah >= av:
+			e.h -= signi(e.h)
+		if av >= ah:
+			e.v -= signi(e.v)
+		if int(e.get("ecl", 0)) > 0:                # D461: an eclipse's other half fades with it
+			e.ecl = int(e.ecl) - 1
+			if e.v == 0 and int(e.ecl) > 0:
+				e.v = -v_sign * int(e.ecl)          # the dominant half is gone: the other one stands alone
+				e.ecl = 0
+			if int(e.ecl) <= 0:
+				e.erase("ecl")
+		if e.h == 0 and e.v == 0:
+			entries.erase(hex)
+		else:
+			e.timer = STEP_CYCLES
+	BWPools.tick(self)                         # D262/D264: pillars and fields count down
+	var seeded := _grass_spread()
+	_static_phase()
+	return seeded
+
+
+## D115, the static half of the tick, last (after decay and grass spread, so
+## a real fire cast on static fire still gets its once-per-cast ignition).
+## A scarred static counts its scar down and stays off. Otherwise the floor
+## re-forms: an empty hex gets it back; a glazed one is frozen (glaze counts
+## down, nothing else); a marker armed while it was spent fades on its own
+## timer, then the floor returns; on charge, every axis the static declares
+## snaps back to its value and a free axis (painted on top) decays on the
+## entry's timer, one step per STEP_CYCLES. Restored entries are
+## origin "spread", source "" (no one's), so they never ignite grass.
+func _static_phase() -> void:
+	var keys := statics.keys()
+	keys.sort()
+	for hex in keys:
+		if scars.has(hex):
+			scars[hex] = int(scars[hex]) - 1
+			if int(scars[hex]) <= 0:
+				scars.erase(hex)
+			continue
+		var s: Vector2i = statics[hex]
+		var e := at(hex)
+		if pillars.has(hex) or shock.has(hex):
+			continue                           # D262/D264: frozen while the pillar or field stands
+		if e.is_empty():
+			entries[hex] = _static_entry(hex)
+			continue
+		if int(e.glaze) > 0:
+			e.glaze -= 1
+			continue
+		if str(e.marker) != "":
+			e.timer -= 1
+			if e.timer <= 0:
+				entries[hex] = _static_entry(hex)
+			continue
+		var h: int = s.x if s.x != 0 else int(e.h)
+		var v: int = s.y if s.y != 0 else int(e.v)
+		var excess := (s.x == 0 and h != 0) or (s.y == 0 and v != 0)
+		if excess:
+			e.timer -= 1
+			if e.timer <= 0:
+				if s.x == 0:
+					h -= signi(h)
+				if s.y == 0:
+					v -= signi(v)
+				e.timer = STEP_CYCLES
+		if h == s.x and v == s.y:
+			entries[hex] = _static_entry(hex)
+		else:
+			e.h = h
+			e.v = v
+
+
+func _static_entry(hex: Vector2i) -> Dictionary:
+	var s: Vector2i = statics[hex]
+	var e := _entry(s.x, s.y, "", "", "spread")
+	e["static"] = true
+	return e
+
+
+# ------------------------------------------------------------------ internals
+
+## FX hook (tile_erupt): count every armed tile down; at 0 it goes off with
+## its element's current intensity (gone = fizzles). The eruption is reported,
+## never painted: it lays nothing, fires no marker, and is spent whether or
+## not it found anyone, so an eruption can never chain (§5.3).
+func _erupt_phase() -> void:
+	eruptions = []
+	var keys := entries.keys()
+	keys.sort()
+	for hex in keys:
+		var e: Dictionary = entries[hex]
+		if not e.has("erupt"):
+			continue
+		var er: Dictionary = e.erupt
+		er.left = int(er.left) - 1
+		if er.left > 0:
+			continue
+		e.erase("erupt")
+		var pts := intensity(hex, str(er.element))
+		if pts <= 0:
+			continue
+		var rec := er.duplicate()
+		rec.erase("left")
+		rec["hex"] = hex
+		rec["points"] = pts
+		eruptions.append(rec)
+		if er.consume:
+			entries.erase(hex)
+
+func _entry(h: int, v: int, marker: String, source: String, origin: String, timer_plus: int = 0) -> Dictionary:
+	return { "h": h, "v": v, "marker": marker, "glaze": 0,
+		"timer": MARK_CYCLES if marker != "" else STEP_CYCLES + timer_plus,
+		"source": source, "origin": origin, "permanent": false }
+
+
+## Pure: what would `element` arriving do to entry `e`? (§3.1-§3.3)
+## D405: every element ignites a fuse: fire / light / dark detonate the new
+## state, water electrifies (BWPools.begin overrides that plan), ice and wind
+## detonate the empty fuse, thunder re-arms it.
+## FX hook: `opts` carries the caster's tile_duration_plus (timer_plus, glaze_plus).
+func _route(e: Dictionary, element: String, fresh: bool, steps: int, caster: String, opts: Dictionary = {}) -> Dictionary:
+	var h: int = e.get("h", 0)
+	var v: int = e.get("v", 0)
+	var marker: String = e.get("marker", "")
+	var glaze: int = e.get("glaze", 0)
+	var charged := h != 0 or v != 0
+	var mine := glaze > 0 and marker == "" and str(e.get("glaze_source", "")) == caster
+	var frost := mine and element == "fire" and bool(opts.get("frostfire", false))
+
+	# D568 Charged Ice: your glaze is a fuse for you: any FRESH element of
+	# yours but ice (it re-glazes or Overfreezes) and thunder (it already
+	# shatters) sets it off as a shatter. FrostFire's fire holds it instead.
+	if mine and fresh and bool(opts.get("charged_ice", false)) and not element in ["ice", "thunder"] and not frost:
+		var ci := _operate(e.duplicate(), "fuse", caster)
+		ci["charged_ice"] = true
+		return ci
+
+	if element in AXIS:
+		if glaze > 0:
+			if frost:                       # D567 FrostFire: your fire under your glaze; it holds
+				var ff := e.duplicate()
+				ff.h = clampi(maxi(h, 0) + steps, 0, AXIS_MAX)   # the fire takes the place of any water
+				ff.source = caster
+				if v > 0:
+					ff["lsrc"] = _lsrc(e, element, caster)
+				ff.permanent = false
+				ff.timer = STEP_CYCLES + int(opts.get("timer_plus", 0))
+				ff.erase("seeded")
+				ff.erase("lava")
+				return { "op": "set", "entry": ff, "frostfire": true }
+			if element == "fire":           # fire melts the glaze, and is spent
+				var melted := e.duplicate()
+				melted.glaze = 0
+				melted.permanent = false
+				return { "op": "set", "entry": melted }
+			return { "op": "none" }          # everything else washes off
+		var nh := h
+		var nv := v
+		# D461 Eclipse: your light on your dark (or dark on light) is held beside it
+		if element in ["light", "dark"] and opts.get("eclipse", false) and marker == "" and v != 0 \
+				and str(e.get("source", "")) == caster and (v > 0) != (element == "light"):
+			var ecl_e := e.duplicate()
+			ecl_e["ecl"] = mini(AXIS_MAX, int(e.get("ecl", 0)) + steps)
+			ecl_e.permanent = false
+			ecl_e.timer = STEP_CYCLES
+			ecl_e.erase("seeded")
+			return { "op": "set", "entry": ecl_e }
+		match element:
+			"fire": nh += steps
+			"water": nh -= steps
+			"light": nv += steps
+			"dark": nv -= steps
+		# D447: a Lava Walker's fire climbs to fire_max (5); anything else keeps
+		# a hotter hex where it is (never cools it to 3)
+		nh = clampi(nh, -AXIS_MAX, int(opts.get("fire_max", AXIS_MAX)) if element == "fire" else maxi(AXIS_MAX, h))
+		nv = clampi(nv, -AXIS_MAX, AXIS_MAX)
+		# D421 douse: fire meeting water (either order) clears both from the
+		# hex (its light/dark stays); no steam, nothing lingers.
+		var douse := marker == "" and ((element == "fire" and h < 0) or (element == "water" and h > 0))
+		if douse:
+			nh = 0
+			# D566 The Scalding: your fire meeting your water (either order) goes off like a fuse
+			var scald := fresh and bool(opts.get("scald", false)) and str(e.get("source", "")) == caster
+			if nv == 0:
+				return { "op": "erase", "doused": true, "scald": scald }
+			var dz := _entry(0, nv, "", str(e.get("source", caster)), str(e.get("origin", "cast")))
+			if nv > 0:
+				dz["lsrc"] = _lsrc(e, element, caster)   # D496
+			return { "op": "set", "doused": true, "entry": dz, "scald": scald }
+		if marker != "":
+			if not fresh:
+				return { "op": "none" }      # containment rule 1
+			var arrived := _entry(nh, nv, "", caster, "cast", int(opts.get("timer_plus", 0)))
+			if nv > 0:
+				arrived["lsrc"] = _lsrc(e, element, caster)   # D496
+			if marker == "gale":
+				arrived["gale_level"] = int(e.get("gale_level", 1))
+			var p := _operate(arrived, marker, str(e.get("source", caster)))
+			p["fired"] = true
+			return p
+		if nh == 0 and nv == 0:
+			return { "op": "erase" }
+		var ne := _entry(nh, nv, "", caster, "cast" if fresh else "spread", int(opts.get("timer_plus", 0)) if fresh else 0)
+		if element == "fire" and nh > 0 and opts.get("lava", false):
+			ne["lava"] = true                       # D447: a Lava Walker's fire
+		if nv > 0 or int(e.get("ecl", 0)) > 0:
+			ne["lsrc"] = _lsrc(e, element, caster)  # D496: fire on your light leaves it yours
+		if int(e.get("ecl", 0)) > 0 and nv != 0 and signi(nv) == signi(v):
+			ne["ecl"] = int(e.ecl)                  # D461: an eclipsed hex keeps its other half
+		return { "op": "set", "entry": ne }
+
+	# operator element
+	var mk: String = OPERATORS.get(element, "")
+	if mk == "":
+		return { "op": "none" }
+	if not charged:
+		if marker == "fuse" and mk != "fuse":
+			# D405: any element ignites a fuse. Ice or wind arriving on one
+			# detonates it (the empty fuse: the DETONATE_BASE_PCT blast) and is
+			# spent; a propagated arrival does nothing (containment, §3.1).
+			if not fresh:
+				return { "op": "none" }
+			var p := _operate(e.duplicate(), "fuse", str(e.get("source", caster)))
+			p["fired"] = true
+			p["ignited"] = element
+			return p
+		var armed := _entry(0, 0, mk, caster, "cast")                    # arm or replace
+		if mk == "gale" and marker == "gale":
+			armed["gale_level"] = mini(int(e.get("gale_level", 1)) + 1, int(opts.get("gale_max", 2)))   # D95: gale 2; D293 Jetstream: gale 3
+		if mk == "fuse":
+			armed.timer += int(opts.get("fuse_plus", 0))                 # D93 Static Field
+		return { "op": "set", "entry": armed }
+	if glaze > 0 and element == "wind":
+		return { "op": "none" }
+	return _operate(e.duplicate(), mk, caster, int(opts.get("glaze_plus", 0)))
+
+
+## An operator acting on a charged entry. `src` is credited for a blast.
+## FX hooks: Brimming boosts the water bonus by the water's layer; Shattering
+## boosts the shatter by whoever glazed it; Frozen lengthens the glaze.
+func _operate(e: Dictionary, mk: String, src: String, glaze_plus: int = 0) -> Dictionary:
+	match mk:
+		"fuse":
+			var water := maxi(-int(e.h), 0)
+			var wet := CONDUCT_DET_PCT * water * (pot(Vector2i.ZERO, "water", str(e.get("source", ""))) if water > 0 else 1.0)
+			var pts := absi(e.h) + absi(e.v) + int(e.get("ecl", 0))      # D461: an eclipsed hex blows both halves
+			var pct := float(DETONATE_BASE_PCT + DETONATE_PER_POINT_PCT * pts) + wet
+			if int(e.get("glaze", 0)) > 0:
+				pct *= SHATTER_MULT * pot(Vector2i.ZERO, "ice", str(e.get("glaze_source", "")))
+			return { "op": "erase", "detonate": pct, "det_source": src, "det_points": pts,
+				"det_mix": blast_mix(e) }   # D423: what the blast consumed (its ring's colour)
+		"stasis":
+			e.glaze = GLAZE_CYCLES + glaze_plus
+			e["glaze_source"] = src
+			e.permanent = false
+			return { "op": "set", "entry": e }
+		"gale":
+			e.permanent = false
+			var lvl := int(e.get("gale_level", 1))
+			e.erase("gale_level")
+			return { "op": "set", "entry": e, "gale": [e.h, e.v], "gale_level": lvl }
+	return { "op": "none" }
+
+
+## FX hooks: `radius` 2 for Gusting, `timer_plus` for Lingering.
+func _gale_copy(origin: Vector2i, hv: Array, caster: String, changed: Array, radius: int = 1, timer_plus: int = 0) -> Array:
+	var copies: Array = []
+	for n in board.area(origin, radius):
+		if n == origin or not can_hold(n) or n in changed:
+			continue
+		var cur := at(n)
+		if not cur.is_empty() and (cur.marker != "" or cur.glaze > 0):
+			continue
+		if is_lava(n):
+			# D494: a gale's copy reaching lava meets it as fire 1: water douses
+			# a step (lava n - 1), light / dark lay beside it, fire changes nothing
+			var lv := cur
+			if int(hv[0]) < 0:
+				lv.h = int(lv.h) - 1
+				if int(lv.h) <= 0:
+					lv.h = 0
+					lv.erase("lava")
+			if int(hv[1]) != 0:
+				lv.v = int(hv[1])
+			if int(lv.h) == 0 and int(lv.v) == 0:
+				entries.erase(n)
+			changed.append(n)
+			copies.append(n)
+			continue
+		var copy := _entry(hv[0], hv[1], "", caster, "spread")
+		copy.timer = 1 + timer_plus
+		entries[n] = copy
+		changed.append(n)
+		copies.append(n)
+	return copies
+
+
+## Grass spread (§6.2), plus D93 Wildfire: a `wild` fire (fresh, 2+, laid by
+## a Wildfire holder) also seeds fire 1 onto any neighbour whose fire axis is
+## neutral, whatever its terrain, under the same once-per-cast flag. Only the
+## grass rule dries wet ground; a wild seed skips anything charged.
+func _grass_spread() -> Array:
+	var seeds := {}                            # hex -> [source, grass?]
+	var spent: Array = []
+	for hex in entries:
+		var e: Dictionary = entries[hex]
+		var grass := board.terrain(hex) == BWBoard.GRASSY
+		var wild: bool = e.get("wild", false)
+		if not (grass or wild) or e.h < GRASS_IGNITE_MIN or (e.origin != "cast" and not wild) or e.glaze > 0:   # D307: a wild eruption ring is spread
+			continue
+		spent.append(hex)
+		for n in board.neighbors(hex):
+			var by_grass := grass and board.terrain(n) == BWBoard.GRASSY
+			if not (by_grass or (wild and can_hold(n))):
+				continue
+			if not seeds.has(n) or (by_grass and not seeds[n][1]):
+				seeds[n] = [e.source, by_grass]
+	for hex in spent:
+		entries[hex].origin = "spread"
+		entries[hex].erase("wild")
+	var seeded: Array = []
+	for n in seeds:
+		var cur := at(n)
+		if not cur.is_empty() and (cur.marker != "" or cur.glaze > 0):
+			continue
+		var h: int = cur.get("h", 0)
+		if h >= 1:
+			continue                           # seeds never stack
+		if h < 0:                              # wet grass dries instead
+			if not seeds[n][1]:
+				continue                       # a wild seed doesn't dry anything
+			cur.h += 1
+			cur.permanent = false                 # a dried authored / seeded hex is ordinary now
+			cur.erase("seeded")
+			if cur.h == 0 and cur.v == 0:
+				entries.erase(n)
+			continue
+		var seed := _entry(1, int(cur.get("v", 0)), "", seeds[n][0], "spread")
+		if int(seed.v) > 0:
+			seed["lsrc"] = _lsrc(cur, "fire", "")  # D496: the light under a seed stays its owner's
+		entries[n] = seed
+		seeded.append(n)
+	return seeded

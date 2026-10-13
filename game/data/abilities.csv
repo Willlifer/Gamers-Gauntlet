@@ -1,0 +1,26 @@
+id,name,type,source_item,effect_text,effect_key,params
+bloodied,Bloodied,reactive,leather_tassets,The first time you fall below half HP: +25% strength and +1 move for the rest of the battle.,trigger_stat,trigger=low_hp;threshold=50;stats=str;pct=25;move=1;once=1
+second_wind,Second Wind,reactive,chaps|vest,The first time you fall below half HP: +2 speed and +2 move for the rest of the battle.,trigger_stat,trigger=low_hp;threshold=50;stats=spd;amount=2;move=2;once=1
+iron_wall,Iron Wall,reactive,silken_robe|robe_bottoms|platelegs|single_shoulder_guard,"After the 3rd hit on you, take 20% less damage for the rest of the battle.",trigger_stat,trigger=damaged;hits=3;taken_pct=-20;once=1
+poise,Poise,reactive,tiara|tights,"When you avoid an attack, your next attack gets +25% critical chance.",trigger_stat,trigger=avoided;next_crit=25
+crowd_pleaser,Crowd Pleaser,reactive,tilted_beret|gladiator_chestpiece,"When you knock out an enemy, +15% strength and defense for the rest of the battle (up to 2 times).",trigger_stat,trigger=knockout;stats=str+def;pct=15;times=2
+heavy_is_the_head,Heavy Is the Head,reactive,crown,"When an ally is knocked out: +20% willpower and resistance for the rest of the battle, and your next attack deals +50% and can't be avoided.",trigger_stat,trigger=ally_ko;stats=wil+res;pct=20;next_dmg_pct=50;next_sure=1
+unflinching,Unflinching,supportive,feathered_full_helm,"You and allies next to you cannot be knocked back, pulled or shoved.",immune,what=displace;radius=1
+deadeye,Deadeye,supportive,feathered_cap,+5% hit chance and +3% critical chance for every hex between you and your target.,attack_mod,hit_per_hex=5;crit_per_hex=3
+imbued,Imbued,supportive,wizard_hat,"When you use an element, your next attack with that same element deals 25% more damage.",element_damage_pct,pct=25;next_same=1
+royal_presence,Royal Presence,supportive,crown,Allies within 2 hexes deal 10% more damage.,aura_mod,radius=2;allies=1;dmg_pct=10
+guardian,Guardian,supportive,chain_mail|platemail,Allies next to you take 10% less damage.,aura_mod,radius=1;allies=1;taken_pct=-10
+mana_veil,Mana Veil,supportive,tiara|silken_robe|scarf,"Allies next to you roll their element resists with Advantage (roll twice, keep the better).",aura_mod,radius=1;allies=1;resist_adv=1
+scouts_lead,Scout's Lead,supportive,baseball_cap|leather_cuirass,Allies within 2 hexes get +1 move.,aura_mod,radius=2;allies=1;move=1
+bastion,Bastion,passive,chain_mail|platemail|single_shoulder_guard,"Double your glance chance, and glances against you deal 25% instead of 50%.",glance_mod,chance_mult=2;reduction_mult=2;cap=75
+crosstrained,Crosstrained,passive,brigandine|vest|silken_robe|robe_bottoms,Add 25% of your second-best stat to your best stat.,stat_share,from=second;to=best;pct=25
+hardened,Hardened,passive,feathered_full_helm|brigandine,Critical hits and weapon skills against you deal 15% less (a crit on you is x1.275 instead of x1.5).,damage_taken_mod,source=skill;pct=-15;crit_mult_minus=0.225
+attuned,Attuned,passive,wizard_hat,+1 extra affinity point in any element you attack with.,affinity_gain_plus,amount=1
+flair,Flair,passive,tilted_beret|gladiator_chestpiece,Your first attack each battle crits (if it lands clean).,attack_mod,first_crit=1
+leap_ready,Leap Ready,passive,dragoon_helm|scarf,+1 move.,aura_mod,radius=0;move=1
+dragoons_descent,Dragoon's Descent,passive,dragoon_helm,+10% damage and +8% critical chance for each level of elevation you stand above your target.,attack_mod,dmg_per_height_pct=10;crit_per_height=8
+unbowed,Unbowed,passive,platemail|platelegs,"You cannot be knocked back, pulled or shoved.",immune,what=displace;radius=0
+acrobat,Acrobat,passive,leather_cuirass|tights,The first attack on you each battle misses.,immune,what=first_attack;once=1
+sure_stride,Sure Stride,passive,chaps|robe_bottoms,Muddy ground and water never slow you.,immune,what=muddy+water_wading;radius=0
+quick_draw,Quick Draw,passive,bandolier,"Once per battle, a weapon skill comes back 1 turn early.",skill_cd_minus,amount=1;once_per_battle=1
+ammo_belt,Ammo Belt,passive,bandolier,+1 range with bows.,range_mod,mult=1;plus=1;dmg_pct=100;ranged_only=1
