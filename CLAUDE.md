@@ -1,4 +1,4 @@
-# Tournament (working name)
+# The Gamer
 
 A party tournament of short games for 4–8 friends, built in Godot 4.7
 (GDScript) on top of a copy of Black | White's project, for its characters,
@@ -20,10 +20,16 @@ The author's plan and rulings: the Claude Doc "Tournament Plan"
   `TourneyModule` (`setup(match)`, `finished(result)`, `info()`, `simulate()`).
   Register in `TourneyModules.POOL`. A game's sim should be pure state on a
   fixed tick with a seeded rng, so lockstep works later.
-  - `bw_twins`: the Black | White Twins fight (thunder, fire, wind vs Noon and Dusk).
-  - next: ARAM 1v1 with the author's three champions (Merr, Temu, Braves):
-    click to move and attack, QWER, flash + ignite, minions. 60 auto damage,
-    700 HP, one auto a second. Coloured champions on a coloured world.
+  - `bw_twins`: the Black | White Twins fight (thunder, fire, wind vs Noon and
+    Dusk). Fewest turns to win takes it (author 10-13); wanted later: the room
+    votes the winner.
+  - `aram`: MOBA, the ARAM duel (`src/tourney/moba/`). Merr, Temu, Braves;
+    first to 3 kills; HP back only on death; minion waves that fight each
+    other, then you. League's locked camera, click to move/attack, QWER,
+    flash + ignite. 1 world unit = 100 League units. Unset numbers are
+    League-ish defaults marked OPEN in `moba_champs.gd`.
+  - next: Baron smite fight on the same engine.
+- **The range** (`RangeScreen`): binds plus a live practice MobaView with a dummy.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
 
@@ -34,6 +40,8 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `--path .` plays (`-- --bots 3 --autostart` seats bots and starts).
 - `--headless --path . --script res://tools/tourney_probe.gd`: bracket, bets and coin maths for 4, 5 and 8 players; exit 0.
 - `--path . --script res://tools/tourney_shots.gd`: walks every screen windowed and saves frames to `design/shots/`; exit 0.
+- `--headless --path . --script res://tools/moba_probe.gd`: bot vs bot over every champion pairing; matches end, replays match; exit 0.
+- `--path . --script res://tools/aram_shots.gd`: ARAM on autopilot plus the range, frames to `design/shots/`; exit 0.
 - Black | White's `--self-test` still runs and must stay green.
 
 ## Author preferences

@@ -69,6 +69,7 @@ func add_bot() -> Dictionary:
 	p.exp = ["new", "some", "lots"][rng.randi() % 3]
 	p.hair_style = BWHair.styles()[rng.randi() % BWHair.styles().size()]
 	p.hair_hex = HAIR_COLOURS[rng.randi() % HAIR_COLOURS.size()]
+	_random_look(p)
 	p.ready = true
 	players.append(p)
 	return p
@@ -82,8 +83,50 @@ func remove_bot() -> void:
 
 
 func _blank(id: String, bot: bool) -> Dictionary:
-	return { "id": id, "name": "Player", "title": TITLES[0], "exp": "new", "hair_style": "buzzed",
-		"hair_hex": HAIR_COLOURS[0], "bot": bot, "ready": false, "coins": 0, "wins": 0, "losses": 0 }
+	var p := { "id": id, "bot": bot, "ready": false, "coins": 0, "wins": 0, "losses": 0 }
+	p.merge(DEFAULT_LOOK, true)
+	return p
+
+
+## Everything the creator sets. Armour "" = none.
+const DEFAULT_LOOK := { "name": "Player", "title": "Rookie", "exp": "new", "hair_style": "buzzed",
+	"hair_hex": "#e0b040", "weapon": "sword", "top": "tshirt", "bottom": "sweatpants", "shade": "mid",
+	"head": "", "chest": "", "legs": "" }
+const SHADES := ["light", "mid", "dark"]
+
+
+## Weapon models by class, for the creator (benched classes included: it's a look).
+static func weapon_models() -> Array:
+	var out: Array = []
+	for id in BWWeaponView.ids():
+		var c := str(BWWeaponView.meta_for(id).get("class", ""))
+		if c != "":
+			out.append(id)
+	out.sort_custom(func(a, b):
+		var ca := str(BWWeaponView.meta_for(a).class)
+		var cb := str(BWWeaponView.meta_for(b).class)
+		return ca < cb or (ca == cb and a < b))
+	return out
+
+
+## Armour pieces that have a model, for one slot ("" first = none).
+static func armour_for(slot: String) -> Array:
+	var out: Array = [""]
+	for r in BWData.table("equipment"):
+		if str(r.slot) == slot and BWEquipmentView.has_model(str(r.id)):
+			out.append(str(r.id))
+	return out
+
+
+func _random_look(p: Dictionary) -> void:
+	var w := weapon_models()
+	p.weapon = w[rng.randi() % w.size()]
+	p.top = BWClothing.TOPS[rng.randi() % BWClothing.TOPS.size()]
+	p.bottom = BWClothing.BOTTOMS[rng.randi() % BWClothing.BOTTOMS.size()]
+	p.shade = SHADES[rng.randi() % SHADES.size()]
+	for slot in ["head", "chest", "legs"]:
+		var a := armour_for(slot)
+		p[slot] = a[rng.randi() % a.size()] if rng.randf() < 0.4 else ""
 
 
 func all_ready() -> bool:
@@ -97,10 +140,14 @@ func unit_for(p: Dictionary) -> BWUnit:
 	u.name = str(p.name)
 	u.team = "player"
 	u.element = ""
-	u.weapon_class = "sword"
-	u.weapon_model = "sword"
-	u.cosmetics = { "hair_style": str(p.hair_style), "hair_hex": str(p.hair_hex),
-		"gender": "a", "top": "tshirt", "bottom": "sweatpants", "clothing_shade": "mid" }
+	u.weapon_model = str(p.get("weapon", "sword"))
+	u.weapon_class = str(BWWeaponView.meta_for(u.weapon_model).get("class", "sword"))
+	u.cosmetics = { "hair_style": str(p.hair_style), "hair_hex": str(p.hair_hex), "gender": "a",
+		"top": str(p.get("top", "tshirt")), "bottom": str(p.get("bottom", "sweatpants")),
+		"clothing_shade": str(p.get("shade", "mid")) }
+	for slot in ["head", "chest", "legs"]:
+		if str(p.get(slot, "")) != "":
+			u.equipment[slot] = { "base": str(p[slot]), "id": str(p[slot]) }
 	for s in BWUnit.STATS:
 		u.stats[s] = 5
 	u.hp = u.max_hp()
@@ -154,7 +201,8 @@ func settle(match_id: String, winner: String) -> Dictionary:
 
 static func load_profile() -> Dictionary:
 	var cf := ConfigFile.new()
-	var out := { "name": "You", "title": TITLES[0], "exp": "new", "hair_style": "buzzed", "hair_hex": HAIR_COLOURS[2] }
+	var out := DEFAULT_LOOK.duplicate()
+	out.name = "You"
 	if cf.load(CFG) != OK:
 		return out
 	for k in out:
@@ -165,8 +213,8 @@ static func load_profile() -> Dictionary:
 static func save_profile(p: Dictionary) -> void:
 	var cf := ConfigFile.new()
 	cf.load(CFG)
-	for k in ["name", "title", "exp", "hair_style", "hair_hex"]:
-		cf.set_value("profile", k, p.get(k, ""))
+	for k in DEFAULT_LOOK:
+		cf.set_value("profile", k, p.get(k, DEFAULT_LOOK[k]))
 	cf.save(CFG)
 
 

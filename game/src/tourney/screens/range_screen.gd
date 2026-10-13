@@ -61,7 +61,42 @@ func _ready() -> void:
 		_refresh())
 	TourneyUI.button(r, "Back to the lobby", func(): back.emit())
 	var p := TourneyUI.panel(_root, Rect2(660, 20, 920, 860), "Practice")
-	TourneyUI.para(p, "The practice target arrives with the first %s game. For now this is where your binds live." % ("MOBA" if kind == "moba" else "shooter"), BWStyle.F_BODY)
+	if kind != "moba":
+		TourneyUI.para(p, "The shooter practice target arrives with the first shooter game. For now this is where your binds live.", BWStyle.F_BODY)
+		return
+	var r2 := TourneyUI.row(p)
+	TourneyUI.label(r2, "Champion:", BWStyle.F_SMALL, TourneyUI.DIM)
+	for id in MobaChamps.ORDER:
+		TourneyUI.button(r2, str(MobaChamps.CHAMPS[id].name), func(): _practice(id))
+	TourneyUI.para(p, "Right- or left-click to move and attack. Your binds work here. The dummy heals 4 s after you stop hitting it.")
+	_box = p
+	_practice(MobaChamps.ORDER[0])
+
+
+var _box: VBoxContainer
+var _svc: SubViewportContainer
+
+
+func _practice(champ: String) -> void:
+	if _svc:
+		_svc.queue_free()
+	_binds = TourneyState.load_binds()
+	_svc = SubViewportContainer.new()
+	_svc.stretch = true
+	_svc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_svc.custom_minimum_size = Vector2(880, 640)
+	_box.add_child(_svc)
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.handle_input_locally = true
+	_svc.add_child(vp)
+	var s := MobaSim.new(1, "practice")
+	var me := s.add_champ(champ, "blue", "You")
+	me.pos = Vector2(-6, 0)
+	s.add_dummy(Vector2(0, 0))
+	var view := MobaView.new()
+	view.setup(s, me.id, {}, _binds, { "blue": "You" })
+	vp.add_child(view)
 
 
 func _refresh() -> void:

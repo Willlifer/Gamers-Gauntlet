@@ -55,7 +55,9 @@ func _until(cls, timeout: float = 20.0) -> Node:
 func _go() -> void:
 	# a scripted human: the fight module rolls their result instead of playing
 	BWFightModule.scripted = true
-	tour = load("res://src/tourney/tourney.gd").new()
+	var ts: GDScript = load("res://src/tourney/tourney.gd")
+	ts.set("simulate_all", true)
+	tour = ts.new()
 	root.add_child(tour)
 	var lobby: LobbyScreen = await _until(LobbyScreen)
 	await _wait(1.5)

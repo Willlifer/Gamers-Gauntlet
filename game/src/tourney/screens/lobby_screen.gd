@@ -92,33 +92,67 @@ func _build_right() -> void:
 
 func _build_creator() -> void:
 	var v := TourneyUI.panel(_root, Rect2(440, 20, 720, 580), "You")
-	var r := TourneyUI.row(v, 20)
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 10)
-	r.add_child(left)
-	_stage = TourneyUI.stage(left, state.unit_for(_me), Vector2(300, 300), false)
+	var r := TourneyUI.row(v, 16)
+	_stage = TourneyUI.stage(r, state.unit_for(_me), Vector2(250, 420), true)
 	var form := VBoxContainer.new()
-	form.add_theme_constant_override("separation", 10)
+	form.add_theme_constant_override("separation", 6)
 	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	r.add_child(form)
-	TourneyUI.label(form, "Name", BWStyle.F_SMALL, TourneyUI.DIM)
-	var name_e := TourneyUI.line_edit(form, str(_me.name), "Your name")
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 12)
+	grid.add_theme_constant_override("v_separation", 4)
+	form.add_child(grid)
+	var name_e := LineEdit.new()
+	name_e.text = str(_me.name)
 	name_e.max_length = 14
+	name_e.add_theme_font_size_override("font_size", BWStyle.F_SMALL)
 	name_e.text_changed.connect(func(t): _me.name = t if t != "" else "You"; _save(); _refresh_players())
-	TourneyUI.label(form, "Title", BWStyle.F_SMALL, TourneyUI.DIM)
-	TourneyUI.option(form, TourneyState.TITLES, TourneyState.TITLES.find(str(_me.title)),
-		func(i): _me.title = TourneyState.TITLES[i]; _save(); _refresh_players())
-	TourneyUI.label(form, "Game experience", BWStyle.F_SMALL, TourneyUI.DIM)
-	var exps := ["new", "some", "lots"]
-	TourneyUI.option(form, ["New to these games", "Some experience", "Lots of experience"], exps.find(str(_me.exp)),
-		func(i): _me.exp = exps[i]; _save())
-	TourneyUI.label(form, "Hair", BWStyle.F_SMALL, TourneyUI.DIM)
+	_field(grid, "Name", name_e)
+	_pick(grid, "Title", TourneyState.TITLES, "title", false)
+	_pick(grid, "Experience", ["new", "some", "lots"], "exp", false, ["New", "Some", "Lots"])
 	var styles := Array(BWHair.styles())
-	TourneyUI.option(form, styles.map(func(s): return str(s).capitalize()), styles.find(str(_me.hair_style)),
-		func(i): _me.hair_style = styles[i]; _save(); _restage())
+	_pick(grid, "Hair", styles, "hair_style", true)
+	var weapons := TourneyState.weapon_models()
+	_pick(grid, "Weapon", weapons, "weapon", true,
+		weapons.map(func(w): return "%s  (%s)" % [str(w).capitalize(), str(BWWeaponView.meta_for(w).get("class", ""))]))
+	_pick(grid, "Shade", TourneyState.SHADES, "shade", true)
+	_pick(grid, "Top", Array(BWClothing.TOPS), "top", true)
+	_pick(grid, "Bottom", Array(BWClothing.BOTTOMS), "bottom", true)
+	for slot in ["head", "chest", "legs"]:
+		var ids := TourneyState.armour_for(slot)
+		_pick(grid, slot.capitalize() + " armour", ids, slot, true, ids.map(func(i): return "None" if i == "" else str(i).capitalize()))
 	TourneyUI.label(form, "Hair colour", BWStyle.F_SMALL, TourneyUI.DIM)
-	_swatches = TourneyUI.row(form, 6)
+	_swatches = TourneyUI.row(form, 5)
 	_refresh_swatches()
+
+
+func _field(grid: GridContainer, title: String, c: Control) -> void:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 0)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(box)
+	TourneyUI.label(box, title, 13, TourneyUI.DIM)
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(c)
+
+
+## A dropdown bound to a profile key; `restage` redresses the figure.
+func _pick(grid: GridContainer, title: String, values: Array, key: String, restage: bool, labels: Array = []) -> void:
+	var o := OptionButton.new()
+	o.add_theme_font_size_override("font_size", BWStyle.F_SMALL)
+	o.fit_to_longest_item = false
+	for i in values.size():
+		o.add_item(str(labels[i]) if not labels.is_empty() else str(values[i]).capitalize())
+	o.selected = maxi(0, values.find(_me.get(key, "")))
+	o.item_selected.connect(func(i):
+		_me[key] = values[i]
+		_save()
+		if restage:
+			_restage()
+		else:
+			_refresh_players())
+	_field(grid, title, o)
 
 
 func _refresh_swatches() -> void:
@@ -137,7 +171,7 @@ func _restage() -> void:
 	var parent := cont.get_parent()
 	var idx := cont.get_index()
 	cont.queue_free()
-	_stage = TourneyUI.stage(parent, state.unit_for(_me), Vector2(300, 300), false)
+	_stage = TourneyUI.stage(parent, state.unit_for(_me), Vector2(250, 420), true)
 	parent.move_child(_stage.container, idx)
 	_refresh_players()
 

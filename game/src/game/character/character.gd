@@ -692,6 +692,10 @@ func _fly(w: BWWeaponView, to_stow: bool) -> void:
 		off.scale = off_s
 
 
+## The Gamer: playback rate for clips (real-time games run autos faster).
+var anim_speed := 1.0
+
+
 func _process(delta: float) -> void:
 	if poser == null:
 		return
@@ -702,7 +706,7 @@ func _process(delta: float) -> void:
 	poser.camera = vp.get_camera_3d() if vp else null
 	if animator:
 		_track_motion(delta)
-		animator.update(delta)
+		animator.update(delta * anim_speed)
 		_update_bow(delta)
 		_update_toss()                         # D513: the thrown axe's empty hand
 		_update_sparkle()

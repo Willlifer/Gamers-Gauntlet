@@ -2,8 +2,9 @@ class_name BWFightModule
 extends TourneyModule
 ## The Black | White Twins fight as a tournament game: each player takes a
 ## thunder, fire and wind unit against Noon and Dusk. A human plays it on
-## this machine; a bot's run is rolled. The faster win takes the match; a
-## win beats a loss; two losses go to whoever lasted longer.
+## this machine; a bot's run is rolled. The author's rule (10-13): the win
+## in the fewest turns takes it; a win beats a loss; two losses go to whoever
+## lasted longer. Wanted later: the room votes the winner instead.
 
 const ELEMENTS := ["thunder", "fire", "wind"]
 
@@ -58,7 +59,7 @@ static func _decide(m: Dictionary, rs: Dictionary) -> Dictionary:
 	else:
 		w = a if ra.cycles >= rb.cycles else b
 	var line := func(p: Dictionary, r: Dictionary) -> String:
-		return "%s %s in %d rounds" % [p.name, "beat the Twins" if r.won else "fell", r.cycles]
+		return "%s %s in %d turns" % [p.name, "beat the Twins" if r.won else "fell", r.cycles]
 	return { "winner": w.id, "summary": line.call(a, ra) + ".  " + line.call(b, rb) + ".", "stats": rs }
 
 

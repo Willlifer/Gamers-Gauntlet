@@ -5,6 +5,8 @@ extends Node
 
 var state: TourneyState
 var screen: Node
+## Tools: roll every game's result instead of playing it.
+static var simulate_all := false
 
 
 func _ready() -> void:
@@ -96,7 +98,7 @@ func go_game(match_id: String) -> void:
 		"binds": TourneyState.load_binds(), "sens": TourneyState.load_sens() }
 	var script := TourneyModules.script_for(m.game)
 	var humans: bool = cfg.players.any(func(p): return not p.bot)
-	if not humans:
+	if not humans or simulate_all:
 		var r: Dictionary = script.simulate(cfg, state.rng)
 		_record(match_id, r)
 		return

@@ -108,12 +108,12 @@ static func option(parent: Control, items: Array, selected: int, fn: Callable) -
 
 static func swatch(parent: Control, hex: String, picked: bool, fn: Callable) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(30, 30)
+	b.custom_minimum_size = Vector2(26, 26)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(hex)
 	sb.border_color = Color.WHITE if picked else Color(1, 1, 1, 0.25)
 	sb.set_border_width_all(3 if picked else 1)
-	sb.set_corner_radius_all(15)
+	sb.set_corner_radius_all(13)
 	for st in ["normal", "hover", "pressed", "focus"]:
 		b.add_theme_stylebox_override(st, sb)
 	b.pressed.connect(fn)
