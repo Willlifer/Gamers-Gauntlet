@@ -26,8 +26,23 @@ const FLASH_CD := 60.0          # League 300 s; scaled for a 3-kill duel
 const IGNITE_RANGE := 6.0
 const IGNITE_CD := 60.0
 const IGNITE_DMG := 120.0       # true damage over 5 s
+## "Objective take": the boss pit (author 10-13: champions on 2 teams dance
+## around a boss; whoever lands the kill takes it, smite in hand)
+const PIT_R := 10.5             # the pit's walkable radius
+const BOSS_R := 1.8
+const BOSS_HP := 27000.0
+const BOSS_LEASH := 7.0         # come this close and it turns on you
+const BOSS_AD := 130.0
+const SLAM_EVERY := 8.0
+const SLAM_DMG := 220.0
+const NOVA_EVERY := 12.0
+const NOVA_DMG := 160.0
+const SMITE_DMG := 600.0        # true damage, the boss only
+const SMITE_RANGE := 5.0
+const SMITE_CD := 15.0
+const RESPAWN_PIT := 8.0
 
-var mode := "duel"              # "duel" | "practice" (a dummy, no waves, no win)
+var mode := "duel"              # "duel" | "pit" (the boss) | "practice" (a dummy, no waves, no win)
 var rng := RandomNumberGenerator.new()
 var time := 0.0
 var units: Array = []           # MobaUnit
@@ -43,7 +58,7 @@ var _wave_t := FIRST_WAVE
 func _init(p_seed: int = 1, p_mode: String = "duel") -> void:
 	rng.seed = p_seed
 	mode = p_mode
-	if mode == "practice":
+	if mode != "duel":
 		_wave_t = INF
 
 
@@ -51,12 +66,16 @@ func _init(p_seed: int = 1, p_mode: String = "duel") -> void:
 
 func add_champ(champ_id: String, team: String, name: String) -> MobaUnit:
 	var u := MobaChamps.make(champ_id)
-	u.id = "%s_%s" % [team, champ_id]
+	var slot := units.filter(func(o): return o.kind == "champ" and o.team == team).size()
+	u.id = "%s_%s" % [team, champ_id] if unit("%s_%s" % [team, champ_id]) == null else "%s_%s_%d" % [team, champ_id, slot]
 	u.team = team
 	u.name = name
-	u.pos = spawn_of(team)
+	u.set_meta("slot", slot)
+	u.pos = spawn_of(team, slot)
 	u.facing = Vector2.RIGHT if team == "blue" else Vector2.LEFT
-	u.cd = { "q": 0.0, "w": 0.0, "e": 0.0, "r": 0.0, "flash": 0.0, "ignite": 0.0 }
+	if mode == "pit":
+		u.facing = Vector2.UP if team == "blue" else Vector2.DOWN
+	u.cd = { "q": 0.0, "w": 0.0, "e": 0.0, "r": 0.0, "flash": 0.0, ("smite" if mode == "pit" else "ignite"): 0.0 }
 	units.append(u)
 	return u
 
@@ -77,8 +96,39 @@ func add_dummy(at: Vector2) -> MobaUnit:
 	return u
 
 
-func spawn_of(team: String) -> Vector2:
+func spawn_of(team: String, slot: int = 0) -> Vector2:
+	if mode == "pit":
+		var side := 1.0 if team == "blue" else -1.0
+		return Vector2((slot - 1) * 2.2, side * (PIT_R - 1.2))
 	return Vector2(-SPAWN_X if team == "blue" else SPAWN_X, 0.0)
+
+
+## The pit's boss: stationary, hits whoever comes closest.
+func add_boss() -> MobaUnit:
+	var u := MobaUnit.new()
+	u.id = "boss"
+	u.team = "neutral"
+	u.kind = "boss"
+	u.name = "The Giant"
+	u.pos = Vector2.ZERO
+	u.radius = BOSS_R
+	u.max_hp = BOSS_HP
+	u.hp = BOSS_HP
+	u.ms = 0.0
+	u.ad = BOSS_AD
+	u.period = 1.6
+	u.range = BOSS_LEASH + BOSS_R
+	u.windup = 0.45
+	u.proj_speed = 14.0
+	u.facing = Vector2.DOWN
+	u.set_meta("slam_t", SLAM_EVERY * 0.6)
+	u.set_meta("nova_t", NOVA_EVERY * 0.75)
+	units.append(u)
+	return u
+
+
+func boss() -> MobaUnit:
+	return unit("boss")
 
 
 func unit(id: String) -> MobaUnit:
@@ -86,6 +136,11 @@ func unit(id: String) -> MobaUnit:
 		if u.id == id:
 			return u
 	return null
+
+
+## Champions of `team` (alive or not).
+func champs_of(team: String) -> Array:
+	return units.filter(func(o): return o.kind == "champ" and o.team == team)
 
 
 func champ_of(team: String) -> MobaUnit:
@@ -167,7 +222,7 @@ func _tick_unit(u: MobaUnit, ord: Dictionary) -> void:
 			if u.respawn_t <= 0.0:
 				u.alive = true
 				u.hp = u.max_hp
-				u.pos = spawn_of(u.team)
+				u.pos = spawn_of(u.team, int(u.get_meta("slot", 0)))
 				u.dots = []
 				u.order = { "kind": "idle" }
 				_emit({ "type": "respawn", "unit": u.id })
@@ -178,6 +233,10 @@ func _tick_unit(u: MobaUnit, ord: Dictionary) -> void:
 	if u.kind == "dummy":
 		if u.hp < u.max_hp and time - float(u.get_meta("hurt_at", -10.0)) > 4.0:
 			u.hp = u.max_hp
+		return
+	if u.kind == "boss":
+		_boss_brain(u)
+		_act(u)
 		return
 	# orders
 	if ord.get("stop", false):
@@ -270,7 +329,64 @@ func _walk(u: MobaUnit, to: Vector2) -> bool:
 
 
 func _clamp(p: Vector2) -> Vector2:
+	if mode == "pit":
+		if p.length() > PIT_R:
+			p = p.normalized() * PIT_R
+		if p.length() < BOSS_R + 0.5:
+			p = (p.normalized() if p.length() > 0.01 else Vector2.DOWN) * (BOSS_R + 0.5)
+		return p
 	return Vector2(clampf(p.x, -HALF_LEN, HALF_LEN), clampf(p.y, -HALF_W, HALF_W))
+
+
+## The boss: turns on the nearest champion inside its leash; every few
+## seconds a telegraphed slam (a cone at its target) or a nova (a ring round it).
+func _boss_brain(b: MobaUnit) -> void:
+	var t: MobaUnit = null
+	var bd := BOSS_LEASH
+	for o in units:
+		if o.kind == "champ" and o.alive and not o.stealth:
+			var d: float = o.pos.distance_to(b.pos) - o.radius - b.radius
+			if d <= bd:
+				t = o
+				bd = d
+	if t == null:
+		b.order = { "kind": "idle" }
+		b.atk_wind = -1.0
+		if b.hp < b.max_hp and time - float(b.get_meta("hurt_at", -10.0)) > 6.0:
+			b.hp = minf(b.max_hp, b.hp + b.max_hp * 0.02 * TICK)     # left alone, it knits back
+		return
+	if str(b.order.get("target", "")) != t.id:
+		b.order = { "kind": "attack", "target": t.id }
+	b.set_meta("slam_t", float(b.get_meta("slam_t")) - TICK)
+	b.set_meta("nova_t", float(b.get_meta("nova_t")) - TICK)
+	if float(b.get_meta("slam_t")) <= 0.0:
+		b.set_meta("slam_t", SLAM_EVERY)
+		var dir := (t.pos - b.pos).normalized()
+		var at := b.pos
+		add_area({ "kind": "blast", "pos": at, "r": 6.5, "cone": dir, "cone_deg": 100.0, "delay": 1.1, "team": "neutral",
+			"owner": b.id, "look": "boss_slam",
+			"on_fire": func() -> void: cone_hit(at, dir, 6.5, 100.0, b, SLAM_DMG, "slam") })
+		b.cast_serial += 1
+	elif float(b.get_meta("nova_t")) <= 0.0:
+		b.set_meta("nova_t", NOVA_EVERY)
+		var at := b.pos
+		add_area({ "kind": "blast", "pos": at, "r": 4.5, "delay": 1.3, "team": "neutral", "owner": b.id, "look": "boss_nova",
+			"on_fire": func() -> void: area_hit(at, 4.5, b, NOVA_DMG, "nova", false) })
+		b.cast_serial += 1
+
+
+## Everything of another team inside a cone from `at` toward `dir`.
+func cone_hit(at: Vector2, dir: Vector2, r: float, deg: float, src: MobaUnit, amount: float, kind: String) -> Array:
+	var out: Array = []
+	for o in units:
+		if o.team == src.team or not o.alive:
+			continue
+		var d: Vector2 = o.pos - at
+		if d.length() <= r + o.radius and (d.length() < 0.5 or rad_to_deg(absf(d.angle_to(dir))) <= deg * 0.5):
+			out.append(o)
+	for o in out:
+		damage(o, amount, src, kind)
+	return out
 
 
 func _nearest_enemy(u: MobaUnit, r: float, kinds: Array = ["champ", "minion", "dummy"]) -> MobaUnit:
@@ -331,6 +447,7 @@ func damage(t: MobaUnit, amount: float, src: MobaUnit, kind: String) -> void:
 	t.hp -= amount
 	t.hit_serial += 1
 	t.set_meta("hurt_at", time)
+	t.set_meta("last_kind", kind)
 	if src:
 		src.dmg_done += amount
 	_emit({ "type": "hit", "unit": t.id, "amount": amount, "kind": kind, "src": src.id if src else "" })
@@ -379,18 +496,33 @@ func _die(t: MobaUnit, src: MobaUnit) -> void:
 		if o.order.get("target", "") == t.id:
 			o.order = { "kind": "idle" }
 			o.atk_wind = -1.0
+	if t.kind == "boss":
+		# the objective: whoever lands the last hit takes it for their team
+		var team := src.team if src and src.team in ["blue", "red"] else ""
+		if team == "":
+			team = "blue" if _damage_by("blue") >= _damage_by("red") else "red"
+		winner = team
+		_emit({ "type": "win", "team": team, "how": str(t.get_meta("last_kind", "")), "by": src.id if src else "" })
+		return
 	if t.kind != "champ":
 		return
-	t.respawn_t = RESPAWN
+	t.respawn_t = RESPAWN_PIT if mode == "pit" else RESPAWN
 	t.stealth = false
-	var other := "red" if t.team == "blue" else "blue"
-	score[other] += 1
-	var k := champ_of(other)
-	if k:
-		k.kills += 1
-	if mode == "duel" and score[other] >= KILLS_TO_WIN:
-		winner = other
-		_emit({ "type": "win", "team": other })
+	if src == null or src.kind != "champ":
+		return
+	score[src.team] += 1
+	src.kills += 1
+	if mode == "duel" and score[src.team] >= KILLS_TO_WIN:
+		winner = src.team
+		_emit({ "type": "win", "team": src.team })
+
+
+func _damage_by(team: String) -> float:
+	var n := 0.0
+	for u in units:
+		if u.team == team:
+			n += u.dmg_done
+	return n
 
 
 func area_hit(at: Vector2, r: float, src: MobaUnit, amount: float, kind: String, spell: bool = true) -> Array:
@@ -421,6 +553,13 @@ func _cast(u: MobaUnit, c: Dictionary) -> void:
 			u.cd.flash = FLASH_CD
 			ok = true
 			_emit({ "type": "flash", "unit": u.id })
+		"smite":
+			var b := boss()
+			if b and b.alive and b.pos.distance_to(u.pos) <= SMITE_RANGE + b.radius:
+				u.cd.smite = SMITE_CD
+				ok = true
+				_emit({ "type": "smite", "unit": u.id })
+				damage(b, SMITE_DMG, u, "smite")
 		"ignite":
 			if tgt and tgt.team != u.team and tgt.targetable() and tgt.pos.distance_to(u.pos) <= IGNITE_RANGE + tgt.radius:
 				dot(tgt, "ignite", IGNITE_DMG, 5.0, u)

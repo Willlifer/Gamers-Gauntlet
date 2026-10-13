@@ -3,10 +3,11 @@ extends SceneTree
 ## saving the champion select, frames through the fight, and the MOBA range
 ## with its dummy to SHOTS=<dir> (default ../design/shots). Exit 0 when the
 ## match ended and every frame was written.
-##   godot --path . --script res://tools/aram_shots.gd
+##   [MODULE=pit] godot --path . --script res://tools/aram_shots.gd   (pit: the Objective take)
 
 var out := ""
 var fails := 0
+var _prefix := "aram_"
 
 
 func _initialize() -> void:
@@ -23,7 +24,7 @@ func _shot(name: String) -> void:
 	await process_frame
 	await process_frame
 	await RenderingServer.frame_post_draw
-	root.get_texture().get_image().save_png(out.path_join("aram_" + name + ".png"))
+	root.get_texture().get_image().save_png(out.path_join(_prefix + name + ".png"))
 	print("shot ", name)
 
 
@@ -35,7 +36,9 @@ func _go() -> void:
 	BWSettings.init(true)
 	BWMusic.ensure(root)
 	AramModule.autopilot = true
-	var mod := AramModule.new()
+	var pit := OS.get_environment("MODULE") == "pit"
+	_prefix = "pit_" if pit else "aram_"
+	var mod: AramModule = PitModule.new() if pit else AramModule.new()
 	var result := [{}]
 	mod.finished.connect(func(r): result[0] = r)
 	root.add_child(mod)
@@ -44,7 +47,7 @@ func _go() -> void:
 	await _wait(0.6)
 	await _shot("select")
 	var t := 0.0
-	var marks := [6.0, 20.0, 40.0, 70.0]
+	var marks := [6.0, 20.0, 40.0, 70.0] if not pit else [5.0, 18.0, 35.0, 55.0, 75.0]
 	while result[0].is_empty() and t < 300.0:
 		await _wait(0.5)
 		t += 0.5

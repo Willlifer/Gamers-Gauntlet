@@ -1,0 +1,20 @@
+# The Gamer: decisions
+
+Append-only. Who ruled: **Author** (the owner) or **Claude** (a call made to
+keep moving, open to reversal). Newest last.
+
+| # | Date | Decision | Who |
+|---|---|---|---|
+| G1 | 2026-10-13 | The game is **The Gamer**: an online tournament of short plug-in games (1–3 min each), 4–8 players, double elimination, betting. The shell is the product; every game is a module behind `TourneyModule`. | Author |
+| G2 | 2026-10-13 | Black \| White supplies characters, animations, weapons and VFX only. Its rules, hexes and black-and-white palette do not carry over. | Author |
+| G3 | 2026-10-13 | ARAM: Merr, Temu, Braves as specified; first to 3 kills; HP returns only on death; minions fight each other, then champions; League's locked camera; click to move and attack, QWER, flash + ignite. Numbers left open use League-ish values (1 unit = 100 League units), marked OPEN. | Author / Claude |
+| G4 | 2026-10-13 | Twins module: fewest turns to win takes it. Later: the room votes the winner. | Author |
+| G5 | 2026-10-13 | Temu's stealth breaks only on movement (literal reading; League breaks it on attack too). Revisit after play. | Claude |
+| G6 | 2026-10-13 | **Purpose: friends' game nights.** Fun and polished enough to enjoy; commercial polish later, on the games that prove fun. | Author |
+| G7 | 2026-10-13 | **Joining: remote, by browser link** and join code. WebRTC between browsers, a small signalling service; a TURN relay if needed. | Author |
+| G8 | 2026-10-13 | **Shooters come after online works for the MOBA games.** Lockstep first (MOBA, OSRS, WoW, Twins, Gartic); the shooter network model (server-authoritative with prediction) is added for the gun modules. | Author |
+| G9 | 2026-10-13 | **Quality bar: the spirit, not the letter.** Art direction, animation polish, a reusable character framework and honest tests apply. No character workshop tool, CPU renderer or generator outputs. | Author |
+| G10 | 2026-10-13 | Build order: (1) online proof with ARAM over WebRTC lockstep in browsers; (2) a clean character package pulled out of the Black \| White copy; (3) map maker (not hex based); (4) modules by reuse: Baron, WoW raid, OSRS; (5) shooter network model, gun art and shooter modules. Art agents run two or three at a time with owned files. | Claude (proposed; awaiting the author's go) |
+| G11 | 2026-10-13 | **Scope now: the two MOBA games only**, ARAM and the boss fight ("Objective take"). The long list stays the long-term menu. Online proof, the character package and the art agents wait until the author asks. | Author |
+| G12 | 2026-10-13 | Objective take: each tournament player leads a team of three (themself + 2 bot allies, the two champions they didn't pick); the boss is Black \| White's Giant (violet), stationary in a round pit, hitting the nearest champion within its reach and telegraphing a cone slam (8 s) and a nova (12 s). Smite: 600 true damage, boss only, reach 5, 15 s. The team that lands the last hit wins. Boss HP 27,000, tuned on bot fights to ~80 s median, smite deciding ~90%. | Claude |
+| G13 | 2026-10-13 | Module names: "MOBA: ARAM duel" and "MOBA: Objective take". | Claude (reading the author's "moba - objective take") |

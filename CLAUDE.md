@@ -28,7 +28,9 @@ The author's plan and rulings: the Claude Doc "Tournament Plan"
     other, then you. League's locked camera, click to move/attack, QWER,
     flash + ignite. 1 world unit = 100 League units. Unset numbers are
     League-ish defaults marked OPEN in `moba_champs.gd`.
-  - next: Baron smite fight on the same engine.
+  - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
+    plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
+- **Current scope (G11): these two MOBA games.** See `DECISIONS.md`.
 - **The range** (`RangeScreen`): binds plus a live practice MobaView with a dummy.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
@@ -41,7 +43,7 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `--headless --path . --script res://tools/tourney_probe.gd`: bracket, bets and coin maths for 4, 5 and 8 players; exit 0.
 - `--path . --script res://tools/tourney_shots.gd`: walks every screen windowed and saves frames to `design/shots/`; exit 0.
 - `--headless --path . --script res://tools/moba_probe.gd`: bot vs bot over every champion pairing; matches end, replays match; exit 0.
-- `--path . --script res://tools/aram_shots.gd`: ARAM on autopilot plus the range, frames to `design/shots/`; exit 0.
+- `[MODULE=pit] --path . --script res://tools/aram_shots.gd`: ARAM (or the pit) on autopilot plus the range, frames to `design/shots/`; exit 0.
 - Black | White's `--self-test` still runs and must stay green.
 
 ## Author preferences

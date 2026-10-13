@@ -38,6 +38,9 @@ var _hp_l: Label
 var _smoke: ColorRect
 var _over := false
 var _hover_ring: MeshInstance3D
+var _boss_bar: Control
+var _boss_fill: ColorRect
+var _boss_l: Label
 
 
 func setup(p_sim: MobaSim, p_local: String, p_bots: Dictionary, p_binds: Dictionary, p_names: Dictionary = {}) -> void:
@@ -77,6 +80,50 @@ func _build_world() -> void:
 	sun.light_energy = 1.1
 	sun.shadow_enabled = true
 	add_child(sun)
+	if sim.mode == "pit":
+		_build_pit()
+	else:
+		_build_lane()
+	_hover_ring = _ring(0.9, Color(1, 0.3, 0.3, 0.9))
+	_hover_ring.visible = false
+	_cam = Camera3D.new()
+	_cam.fov = CAM_FOV
+	add_child(_cam)
+	_cam.make_current()
+
+
+## The objective pit: a sunken round floor, a ring of rock, the Giant's dais.
+func _build_pit() -> void:
+	var R := MobaSim.PIT_R
+	_cyl(Vector3(0, -3.2, 0), 40.0, 0.2, Color("#141924"))
+	_cyl(Vector3(0, -0.25, 0), R + 1.2, 0.5, Color("#4f4a5e"))
+	_cyl(Vector3(0, 0.005, 0), R - 2.5, 0.01, Color("#5a5470"))
+	for i in 10:
+		var a := i * TAU / 10.0
+		var line := _box(Vector3(cos(a) * (R * 0.5), 0.008, sin(a) * (R * 0.5)), Vector3(R, 0.01, 0.07), Color("#433e52"))
+		line.rotation.y = -a
+	# the rim: rocks all round, with a gap at each side's entrance (south blue, north red)
+	for i in 36:
+		var a := i * TAU / 36.0
+		var gap := absf(sin(a)) > 0.97
+		if gap:
+			continue
+		var h := 1.4 + 0.9 * absf(sin(i * 2.3))
+		var rock := _box(Vector3(cos(a) * (R + 1.4), h / 2.0 - 0.3, sin(a) * (R + 1.4)), Vector3(2.0, h, 1.6),
+			Color("#7a6f99").lerp(Color("#4c4366"), absf(sin(i * 1.1))))
+		rock.rotation.y = -a
+	for team in ["blue", "red"]:
+		var z := (R + 0.4) * (1.0 if team == "blue" else -1.0)
+		var col := MobaLook.team_color(team)
+		_box(Vector3(0, 0.02, z), Vector3(6.5, 0.04, 1.4), col.darkened(0.3))
+	# the dais and its glow
+	_cyl(Vector3(0, 0.08, 0), MobaSim.BOSS_R + 0.6, 0.16, Color("#2b2340"))
+	_cyl(Vector3(0, 0.17, 0), MobaSim.BOSS_R + 0.3, 0.02, Color("#9b6bff"), true)
+	var leash := _ring(MobaSim.BOSS_LEASH + MobaSim.BOSS_R, Color(0.75, 0.5, 1.0, 0.35))
+	leash.position.y = 0.03
+
+
+func _build_lane() -> void:
 	var L := MobaSim.HALF_LEN
 	var W := MobaSim.HALF_W
 	# the abyss under everything
@@ -98,12 +145,6 @@ func _build_world() -> void:
 		_cyl(Vector3(x, -0.05, 0), 2.4, 0.3, col.darkened(0.45))
 		_cyl(Vector3(x, 0.12, 0), 1.8, 0.06, col)
 		_cyl(Vector3(x - (1.2 if team == "blue" else -1.2), 1.6, 0), 0.4, 3.2, col.lightened(0.2), true)
-	_hover_ring = _ring(0.9, Color(1, 0.3, 0.3, 0.9))
-	_hover_ring.visible = false
-	_cam = Camera3D.new()
-	_cam.fov = CAM_FOV
-	add_child(_cam)
-	_cam.make_current()
 
 
 func _box(at: Vector3, size: Vector3, col: Color) -> MeshInstance3D:
@@ -158,6 +199,28 @@ func _ring(r: float, col: Color) -> MeshInstance3D:
 	return mi
 
 
+## A flat fan (cone telegraph) pointing along +x, `deg` wide.
+func _fan(r: float, deg: float, col: Color) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 24
+	var half := deg_to_rad(deg) * 0.5
+	for i in n:
+		var a0 := -half + 2.0 * half * i / n
+		var a1 := -half + 2.0 * half * (i + 1) / n
+		st.add_vertex(Vector3.ZERO)
+		st.add_vertex(Vector3(cos(a1) * r, 0, sin(a1) * r))
+		st.add_vertex(Vector3(cos(a0) * r, 0, sin(a0) * r))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var m := _mat(col)
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = m
+	add_child(mi)
+	return mi
+
+
 func _disc(r: float, col: Color) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
@@ -181,6 +244,7 @@ func _add_unit(u: MobaUnit) -> void:
 	match u.kind:
 		"champ": bu = MobaLook.champ_unit(u.champ, u.team)
 		"minion": bu = MobaLook.minion_unit(u.role, u.team, u.id)
+		"boss": bu = MobaLook.boss_unit()
 		_: bu = MobaLook.dummy_unit(u.id)
 	var ch := BWCharacter.create(bu)
 	root.add_child(ch)
@@ -190,9 +254,12 @@ func _add_unit(u: MobaUnit) -> void:
 	elif u.kind == "minion":
 		MobaLook.tint(ch, MobaLook.team_color(u.team))
 		root.scale = Vector3.ONE * 0.72
+	elif u.kind == "boss":
+		MobaLook.tint(ch, MobaLook.BOSS)
+		root.scale = Vector3.ONE * 2.3
 	else:
 		MobaLook.tint(ch, Color("#c9a66b"))
-	var sel := _disc(u.radius, Color(MobaLook.team_color(u.team), 0.35))
+	var sel := _disc(u.radius, Color(MobaLook.BOSS if u.kind == "boss" else MobaLook.team_color(u.team), 0.35))
 	sel.reparent(root, false)
 	sel.position.y = 0.02
 	sel.scale = Vector3.ONE / root.scale.x
@@ -205,7 +272,7 @@ func _add_unit(u: MobaUnit) -> void:
 func _make_bar(u: MobaUnit) -> Control:
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var w := 96.0 if u.kind == "champ" else 46.0
+	var w := 96.0 if u.kind == "champ" else (150.0 if u.kind == "boss" else 46.0)
 	var h := 11.0 if u.kind == "champ" else 6.0
 	c.size = Vector2(w, h)
 	var bg := ColorRect.new()
@@ -216,11 +283,11 @@ func _make_bar(u: MobaUnit) -> Control:
 	fill.name = "fill"
 	fill.position = Vector2(1, 1)
 	fill.size = Vector2(w - 2, h - 2)
-	fill.color = MobaLook.SELF if u.id == local_id else (MobaLook.BLUE if _ally(u) else MobaLook.RED)
+	fill.color = MobaLook.SELF if u.id == local_id else (MobaLook.BOSS if u.kind == "boss" else (MobaLook.BLUE if _ally(u) else MobaLook.RED))
 	c.add_child(fill)
 	if u.kind == "champ":
 		var n := Label.new()
-		n.text = str(names.get(u.team, u.name))
+		n.text = str(names.get(u.id, names.get(u.team, u.name) if sim.mode == "duel" else u.name))
 		n.add_theme_font_size_override("font_size", 13)
 		n.add_theme_color_override("font_outline_color", Color.BLACK)
 		n.add_theme_constant_override("outline_size", 5)
@@ -281,6 +348,35 @@ void fragment() {
 	_center_l.add_theme_color_override("font_outline_color", Color.BLACK)
 	_center_l.add_theme_constant_override("outline_size", 10)
 	root.add_child(_center_l)
+	if sim.mode == "pit":
+		_boss_bar = Control.new()
+		_boss_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_KEEP_SIZE, 0)
+		_boss_bar.position.y = 64
+		_boss_bar.size = Vector2(560, 22)
+		_boss_bar.position.x -= 280
+		_boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(_boss_bar)
+		var bb := ColorRect.new()
+		bb.color = Color(0, 0, 0, 0.88)
+		bb.size = Vector2(560, 22)
+		_boss_bar.add_child(bb)
+		_boss_fill = ColorRect.new()
+		_boss_fill.color = MobaLook.BOSS
+		_boss_fill.position = Vector2(2, 2)
+		_boss_fill.size = Vector2(556, 18)
+		_boss_bar.add_child(_boss_fill)
+		var mark := ColorRect.new()          # one smite kills it left of this line
+		mark.color = Color(1, 0.85, 0.3)
+		mark.size = Vector2(3, 26)
+		mark.position = Vector2(2 + 556 * MobaSim.SMITE_DMG / MobaSim.BOSS_HP, -2)
+		_boss_bar.add_child(mark)
+		_boss_l = Label.new()
+		_boss_l.add_theme_font_size_override("font_size", 14)
+		_boss_l.add_theme_color_override("font_outline_color", Color.BLACK)
+		_boss_l.add_theme_constant_override("outline_size", 5)
+		_boss_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_boss_l.size = Vector2(560, 22)
+		_boss_bar.add_child(_boss_l)
 	_feed = VBoxContainer.new()
 	_feed.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_KEEP_SIZE, 16)
 	_feed.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -309,10 +405,11 @@ void fragment() {
 	row.add_theme_constant_override("separation", 6)
 	v.add_child(row)
 	var c: Dictionary = MobaChamps.CHAMPS[me.champ]
-	for slot in ["q", "w", "e", "r", "flash", "ignite"]:
+	var spell2 := "smite" if sim.mode == "pit" else "ignite"
+	for slot in ["q", "w", "e", "r", "flash", spell2]:
 		var p := PanelContainer.new()
 		var ps := StyleBoxFlat.new()
-		ps.bg_color = Color(MobaLook.team_color(me.team), 0.25) if slot in ["flash", "ignite"] else Color(Color(str(c.tint)), 0.3)
+		ps.bg_color = Color(MobaLook.team_color(me.team), 0.25) if slot in ["flash", "ignite", "smite"] else Color(Color(str(c.tint)), 0.3)
 		ps.set_corner_radius_all(4)
 		ps.set_content_margin_all(4)
 		p.add_theme_stylebox_override("panel", ps)
@@ -322,12 +419,12 @@ void fragment() {
 		pv.add_theme_constant_override("separation", 0)
 		p.add_child(pv)
 		var key := Label.new()
-		key.text = TourneyUI.key_name(int(binds.get("spell2" if slot == "ignite" else slot, 0)))
+		key.text = TourneyUI.key_name(int(binds.get("spell2" if slot in ["ignite", "smite"] else slot, 0)))
 		key.add_theme_font_size_override("font_size", 13)
 		key.add_theme_color_override("font_color", Color(1, 0.85, 0.4))
 		pv.add_child(key)
 		var nm := Label.new()
-		nm.text = "Flash" if slot == "flash" else ("Ignite" if slot == "ignite" else MobaChamps.spell_name(me.champ, slot))
+		nm.text = slot.capitalize() if slot in ["flash", "ignite", "smite"] else MobaChamps.spell_name(me.champ, slot)
 		nm.add_theme_font_size_override("font_size", 12)
 		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		nm.custom_minimum_size.x = 70
@@ -419,7 +516,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			if int(binds.get(k, -1)) == ev.keycode:
 				slot = k
 		if int(binds.get("spell2", -1)) == ev.keycode:
-			slot = "ignite"
+			slot = "smite" if sim.mode == "pit" else "ignite"
 		if slot != "":
 			var h := _hovered()
 			_order["cast"] = { "slot": slot, "aim": _mouse_world(), "target": h.id if h else "" }
@@ -499,7 +596,7 @@ func _on_event(e: Dictionary) -> void:
 			var u := sim.unit(str(e.unit))
 			if u and u.kind == "champ":
 				var by := sim.unit(str(e.by))
-				_feed_line("%s slain%s" % [str(names.get(u.team, u.name)), (" by " + str(names.get(by.team, by.name))) if by and by.kind == "champ" else ""],
+				_feed_line("%s slain%s" % [_who(u), (" by " + _who(by)) if by and by.kind == "champ" else ""],
 					MobaLook.team_color(u.team))
 				BWMusic.sting("pick")
 		"shot":
@@ -527,10 +624,22 @@ func _on_event(e: Dictionary) -> void:
 			var u := sim.unit(str(e.unit))
 			if u:
 				_burst(u.pos, 1.0, Color("#fff27a"))
+		"smite":
+			var b := sim.boss()
+			if b:
+				_burst(b.pos, 2.6, Color("#ffe066"))
+				var u := sim.unit(str(e.unit))
+				if u:
+					_feed_line("%s smites (%d)" % [u.name, int(MobaSim.SMITE_DMG)], MobaLook.team_color(u.team))
 		"win":
 			_over = true
 			var t := str(e.team)
-			_center_l.text = "%s wins" % str(names.get(t, t.capitalize()))
+			if sim.mode == "pit":
+				var by := sim.unit(str(e.get("by", "")))
+				_center_l.text = "Team %s takes the Giant%s" % [str(names.get(t, t.capitalize())),
+					("\n" + by.name + (" smites it" if str(e.get("how", "")) == "smite" else " lands the last hit")) if by else ""]
+			else:
+				_center_l.text = "%s wins" % str(names.get(t, t.capitalize()))
 			_center_l.add_theme_color_override("font_color", MobaLook.team_color(t))
 			BWMusic.sting("level_up")
 			for id in _views:
@@ -538,6 +647,11 @@ func _on_event(e: Dictionary) -> void:
 				if u and u.kind == "champ" and u.team == t and u.alive:
 					(_views[id].char as BWCharacter).pose("cheer")
 			TourneyUI.after(self, 3.0, func(): match_over.emit(t))
+
+
+## A champion's display name: the player's name in the duel, its own label in the pit.
+func _who(u: MobaUnit) -> String:
+	return str(names.get(u.id, names.get(u.team, u.name) if sim.mode == "duel" else u.name))
 
 
 func _proj(id: int) -> Dictionary:
@@ -554,6 +668,8 @@ func _look_color(look: String, team: String) -> Color:
 		return Color("#c084ff")
 	if look.begins_with("braves"):
 		return Color("#ffb347")
+	if look.begins_with("boss"):
+		return Color("#ff4f6d")
 	return MobaLook.team_color(team).lightened(0.3)
 
 
@@ -587,13 +703,26 @@ func _area_mesh(a: Dictionary) -> Node3D:
 	var col := _look_color(str(a.get("look", "")), str(a.team))
 	match str(a.kind):
 		"blast":
-			var ring := _ring(float(a.r), Color(col, 0.95))
-			ring.reparent(root, false)
-			var fill := _disc(float(a.r), Color(col, 0.25))
-			fill.reparent(root, false)
-			fill.scale = Vector3(0.05, 1, 0.05)
-			var tw := create_tween()
-			tw.tween_property(fill, "scale", Vector3.ONE, float(a.delay))
+			if a.has("cone"):
+				var dir: Vector2 = a.cone
+				var edge := _fan(float(a.r), float(a.cone_deg), Color(col, 0.28))
+				edge.reparent(root, false)
+				edge.rotation.y = -dir.angle()
+				var fill := _fan(float(a.r), float(a.cone_deg), Color(col, 0.35))
+				fill.reparent(root, false)
+				fill.rotation.y = -dir.angle()
+				fill.position.y = 0.01
+				fill.scale = Vector3(0.05, 1, 0.05)
+				var tw := create_tween()
+				tw.tween_property(fill, "scale", Vector3.ONE, float(a.delay))
+			else:
+				var ring := _ring(float(a.r), Color(col, 0.95))
+				ring.reparent(root, false)
+				var fill := _disc(float(a.r), Color(col, 0.25))
+				fill.reparent(root, false)
+				fill.scale = Vector3(0.05, 1, 0.05)
+				var tw := create_tween()
+				tw.tween_property(fill, "scale", Vector3.ONE, float(a.delay))
 		"smoke":
 			for i in 9:
 				var mi := MeshInstance3D.new()
@@ -762,6 +891,8 @@ func _place_camera(snap: bool, delta: float = 0.0) -> void:
 	if me:
 		var p: Vector2 = (_prev.get(me.id, me.pos) as Vector2).lerp(me.pos, clampf(_acc / MobaSim.TICK, 0.0, 1.0))
 		focus = Vector3(p.x, 0, p.y)
+		if sim.mode == "pit":                    # keep the Giant in frame: lean the view toward it
+			focus = focus.lerp(Vector3.ZERO, 0.35)
 	var pitch := deg_to_rad(CAM_PITCH)
 	var want := focus + Vector3(0, sin(pitch) * CAM_DIST, cos(pitch) * CAM_DIST)
 	_cam.position = want if snap else _cam.position.lerp(want, minf(1.0, delta * 12.0))
@@ -774,6 +905,13 @@ func _hud_update(me: MobaUnit) -> void:
 	if sim.mode == "duel":
 		_score_l.text = "%s  %d  –  %d  %s\nfirst to %d" % [str(names.get("blue", b.name if b else "Blue")), sim.score.blue, sim.score.red,
 			str(names.get("red", r.name if r else "Red")), MobaSim.KILLS_TO_WIN]
+	elif sim.mode == "pit":
+		_score_l.text = "%s  %d  –  %d  %s   ·   last hit on the Giant wins" % [str(names.get("blue", "Blue")), sim.score.blue, sim.score.red,
+			str(names.get("red", "Red"))]
+		var boss := sim.boss()
+		if boss and _boss_fill:
+			_boss_fill.size.x = 556.0 * clampf(boss.hp / boss.max_hp, 0.0, 1.0)
+			_boss_l.text = "The Giant  %d" % maxi(0, int(boss.hp))
 	else:
 		_score_l.text = "Practice: hit the dummy"
 	if me == null:

@@ -8,6 +8,7 @@ extends RefCounted
 const BLUE := Color("#3a7bd5")
 const RED := Color("#d64545")
 const SELF := Color("#3fcf5a")
+const BOSS := Color("#9b6bff")
 
 
 static func champ_unit(id: String, team: String) -> BWUnit:
@@ -37,6 +38,20 @@ static func minion_unit(role: String, team: String, id: String) -> BWUnit:
 	u.cosmetics = { "hair_style": "none", "top": "tshirt", "bottom": "tight_pants", "clothing_shade": "light", "gender": "a" }
 	for s in BWUnit.STATS:
 		u.stats[s] = 3
+	u.hp = u.max_hp()
+	return u
+
+
+## The pit's boss: Black | White's Giant (its armour and anchor), in violet.
+static func boss_unit() -> BWUnit:
+	var u := BWUnit.new()
+	u.id = "boss"
+	u.name = "The Giant"
+	u.team = "enemy"
+	u.weapon_class = "axe"
+	u.weapon_model = "anchor"
+	for s in BWUnit.STATS:
+		u.stats[s] = 9
 	u.hp = u.max_hp()
 	return u
 
