@@ -10,10 +10,10 @@ config_version=5
 
 [application]
 
-config/name="Black | White"
+config/name="Tournament"
 config/description="Black-and-white stick-figure hex tactics."
 config/version="0.1.0"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/tourney.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [display]

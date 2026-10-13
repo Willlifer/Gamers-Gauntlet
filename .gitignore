@@ -12,3 +12,4 @@ desktop.ini
 *.lnk
 # Windows builds (build_windows.bat, D395)
 dist/
+design/shots/

@@ -174,6 +174,8 @@ func build(u: BWUnit) -> bool:
 	if hair:
 		hair.attach_to(rig)
 		poser.hair_skeleton = hair.skeleton
+		if u.cosmetics.has("hair_hex"):             # Tournament: a player's own hair colour, not an element's
+			hair.set_color(Color(str(u.cosmetics.hair_hex)))
 		refresh_hair()
 	equipment = BWEquipmentView.for_rig(rig)
 	refresh_equipment()
@@ -509,7 +511,7 @@ static func _profile(mi: MeshInstance3D, garment: bool, y_off: float) -> Diction
 ## element at the tips; rank 0 = unaligned grey). A look element with no affinity
 ## behind it (the boss look) stays solid. Returns true when it changed.
 func refresh_hair() -> bool:
-	if hair == null or unit == null:
+	if hair == null or unit == null or unit.cosmetics.has("hair_hex"):
 		return false
 	if BWLook.hair_ranks(unit.affinity).is_empty() and str(look.get("element", "")) != "":
 		var c := BWLook.element_color(str(look.element))
