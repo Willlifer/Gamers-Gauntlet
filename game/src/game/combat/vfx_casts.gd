@@ -1043,7 +1043,14 @@ func _hex(h: Variant) -> Vector3:
 	return Vector3.ZERO
 
 
+## Colour overrides by element (The Gamer's MOBA dyes the releases per
+## champion; empty, and so unused, in Black | White's own combat).
+static var tint_over := {}
+
+
 static func _col(el: String) -> Color:
+	if tint_over.has(el):
+		return tint_over[el]
 	if el == "" or not el in ELEMENTS:
 		return Color(0.86, 0.86, 0.88)
 	return BWLook.element_color(el)
