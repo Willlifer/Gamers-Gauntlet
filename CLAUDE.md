@@ -45,6 +45,7 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `--headless --path . --script res://tools/moba_probe.gd`: bot vs bot over every champion pairing; matches end, replays match; exit 0.
 - `[MODULE=pit] --path . --script res://tools/aram_shots.gd`: ARAM (or the pit) on autopilot plus the range, frames to `design/shots/`; exit 0.
 - `[TAG=r6] --path . --script res://tools/moba_ref_shots.gd`: the reference-review frames (duel wave, duel fight, red side, pit) at fixed seeded moments, to `design/shots/ref/<tag>_*.png`; compare against `design/ref/league_aram_hud.jpg` (G15).
+  The review loop itself is the `reference-gauntlet` skill (G16): shoot, score, fix, repeat.
 - Black | White's self-test still runs and must stay green: `--headless --path . res://scenes/main.tscn -- --self-test` (the main scene is the tournament now, so name Black | White's; ~8 min).
 
 ## Author preferences
