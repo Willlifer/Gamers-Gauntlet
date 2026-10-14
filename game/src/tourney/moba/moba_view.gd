@@ -516,6 +516,10 @@ func _add_unit(u: MobaUnit) -> void:
 	if u.kind == "champ":
 		var c: Dictionary = MobaChamps.CHAMPS[u.champ]
 		MobaLook.tint(ch, Color(str(c.tint)), Color(str(c.hair_hex)))
+		if c.has("kit_weapon"):
+			# a Gamer kit item in place of the Black | White weapon (held on the
+			# same socket; the weapon's clips keep driving the body)
+			GKBWHold.swap_weapon(ch, GKRegistry.build(str(c.kit_weapon), c.get("kit_params", {})))
 	elif u.kind == "minion":
 		MobaLook.tint(ch, MobaLook.team_color(u.team))
 		root.scale = Vector3.ONE * 0.72
@@ -671,6 +675,10 @@ func _hovered() -> MobaUnit:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F1:
+		_toggle_tune()
+		get_viewport().set_input_as_handled()
+		return
 	if local_id == "" or _over:
 		return
 	if ev is InputEventMouseButton and ev.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_LEFT]:
@@ -693,6 +701,20 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif int(binds.get("stop", -1)) == ev.keycode:
 			_order["stop"] = true
 			get_viewport().set_input_as_handled()
+
+
+## F1: the live feel-numbers panel (MobaTunePanel).
+var _tune_panel: MobaTunePanel
+
+
+func _toggle_tune() -> void:
+	if _tune_panel:
+		_tune_panel.queue_free()
+		_tune_panel = null
+		return
+	_tune_panel = MobaTunePanel.new()
+	_tune_panel.sim = sim
+	add_child(_tune_panel)
 
 
 func _click() -> void:
@@ -885,6 +907,39 @@ func _el_of(look: String) -> String:
 	return "wind"
 
 
+## Temu's slingshot shot: the white felt ball itself, tumbling, a faint
+## violet trail (it reads as a thing thrown, not a bolt of magic).
+func _stone_mesh(p: Dictionary, col: Color) -> Node3D:
+	var root := Node3D.new()
+	add_child(root)
+	root.position = Vector3(p.pos.x, 1.0, p.pos.y)
+	root.set_meta("el", "dark")
+	root.set_meta("r", 0.16)
+	var ball := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.17
+	sm.height = 0.34
+	ball.mesh = sm
+	ball.material_override = GKMaterials.get_material("felt_white")
+	root.add_child(ball)
+	var tw := create_tween().set_loops()
+	tw.tween_property(ball, "rotation:x", TAU, 0.35).from(0.0)
+	var trail: Array = []
+	for k in 4:
+		var g := MeshInstance3D.new()
+		var gm := SphereMesh.new()
+		gm.radius = 0.12 - 0.022 * k
+		gm.height = gm.radius * 2.0
+		g.mesh = gm
+		g.material_override = _add_mat(Color(col, 0.32 - 0.07 * k))
+		add_child(g)
+		g.global_position = root.position
+		trail.append(g)
+	root.set_meta("trail", trail)
+	root.set_meta("hist", [])
+	return root
+
+
 ## A glowing bolt: a bright core, a soft additive halo, and a fading trail.
 func _shot_mesh(look: String, p: Dictionary) -> Node3D:
 	var owner := sim.unit(str(p.owner))
@@ -892,6 +947,8 @@ func _shot_mesh(look: String, p: Dictionary) -> Node3D:
 		look = owner.champ
 	var col := _look_color(look, str(p.team))
 	var r := 0.22
+	if look == "temu" and owner and owner.kind == "champ":
+		return _stone_mesh(p, col)
 	match look:
 		"merr_spit": r = 0.42
 		"merr_phlegm": r = 0.48
@@ -1096,7 +1153,7 @@ func _draw(alpha: float, delta: float) -> void:
 		var ch: BWCharacter = v.char
 		var p: Vector2 = (_prev.get(id, u.pos) as Vector2).lerp(u.pos, alpha)
 		root.position = Vector3(p.x, 0.0, p.y)
-		root.rotation.y = lerp_angle(root.rotation.y, atan2(u.facing.x, u.facing.y), minf(1.0, delta * 18.0))
+		root.rotation.y = lerp_angle(root.rotation.y, atan2(u.facing.x, u.facing.y), minf(1.0, delta * MobaTune.value("turn_rate")))
 		var hidden := u.stealth and (me == null or u.team != me.team)
 		var blind := me != null and me.blind_t > 0.0 and u.team != me.team and u.pos.distance_to(me.pos) > MobaSim.SMOKE_SIGHT
 		root.visible = u.alive and not hidden and not blind or (u.kind == "champ" and not u.alive and v.pose == "fall" and float(v.anim_t) < 1.6)

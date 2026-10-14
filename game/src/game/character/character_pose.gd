@@ -171,8 +171,17 @@ func update(delta: float) -> void:
 
 # ----------------------------------------------------------------- solver
 
+## The Gamer kit: keys laid over every pose before solving (e.g. hand_r /
+## hand_l holding a kit rifle while the clips walk the legs). Empty = off.
+var override := {}
+
+
 ## Solve one resolved pose onto the skeleton.
 func apply(p: Dictionary) -> void:
+	if not override.is_empty():
+		p = p.duplicate()
+		for k in override:
+			p[k] = override[k]
 	var G := {}
 	var breath := sin(breathe) * breath_amount
 	var root_off: Vector3 = p.root + Vector3(0, -0.006 + 0.006 * breath, 0)

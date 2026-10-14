@@ -54,12 +54,14 @@ func _build(p: Dictionary) -> GKAsset:
 	var s: float = p.scale
 	var g := GKMesh.new()
 	g.push(Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), Vector3.ZERO))
+	var bolt := GKMesh.new()                  # its own part: a viewmodel works the bolt
+	bolt.push(Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), Vector3.ZERO))
 	var stock_role: String = { "olive": "polymer_olive", "black": "polymer_black", "tan": "polymer_olive:#a48e6a", "grey": "polymer_olive:#6a6e70" }[p.stock]
 	var act_end := 0.245
 	var muzzle_z := act_end + float(p.barrel)
 	var fore_end := act_end + float(p.forend)
 	_stock(g, stock_role, p, fore_end)
-	_action(g, act_end)
+	_action(g, bolt, act_end)
 	# the barrel: tapered, crowned, its bore a dark dot
 	# a heavy contour barrel: thick at the chamber, a long gentle taper, a crown
 	g.lathe("gunmetal", Vector3(0, BORE_Y, act_end - 0.005), Vector3(0, BORE_Y, muzzle_z), [
@@ -75,6 +77,7 @@ func _build(p: Dictionary) -> GKAsset:
 		_bipod(g, fore_end - 0.035, 0.0 if p.bipod == "folded" else float(p.bipod_angle))
 	g.pop()
 	a.add_part("body", g.commit())
+	a.add_part("bolt", bolt.commit())
 	var eye_y := (BORE_Y + 0.056) if p.scope else (BORE_Y + 0.02)
 	a.markers = {
 		"grip": Transform3D.IDENTITY,
@@ -82,6 +85,7 @@ func _build(p: Dictionary) -> GKAsset:
 		"muzzle": Transform3D(Basis.IDENTITY, Vector3(0, BORE_Y, muzzle_z + 0.006) * s),
 		"eye": Transform3D(Basis.IDENTITY, Vector3(0, eye_y, -0.2) * s),
 		"butt": Transform3D(Basis.IDENTITY, Vector3(0, 0.0, -0.418) * s),
+		"bolt_pivot": Transform3D(Basis.IDENTITY, Vector3(0, BORE_Y, 0.03) * s),   # the bolt turns about the bore here
 	}
 	a.meta = { "class": "rifle", "hands": "two", "socket": "socket_weapon_r", "projectile": "bullet",
 		"length": (muzzle_z + 0.418) * s, "notes": "Bolt-action, scoped; aim from the eye marker." }
@@ -172,15 +176,15 @@ func _stock(g: GKMesh, role: String, p: Dictionary, fore_end: float) -> void:
 
 
 ## Receiver, bolt, rail, the knob on the right (-x).
-func _action(g: GKMesh, act_end: float) -> void:
+func _action(g: GKMesh, bolt: GKMesh, act_end: float) -> void:
 	g.lathe("gunmetal", Vector3(0, BORE_Y, -0.03), Vector3(0, BORE_Y, act_end), [
 		Vector2(0.0, 0.006), Vector2(0.006, 0.0125), Vector2(0.02, 0.0135), Vector2(0.03, 0.0168), Vector2(act_end + 0.03 - 0.008, 0.0168),
 		Vector2(act_end + 0.03, 0.015)], 18)
 	# ejection port, a dark recess on the right
 	g.box("rubber", Vector3(-0.0158, BORE_Y + 0.004, 0.115), Vector3(0.004, 0.012, 0.06), 0.001)
 	# bolt handle: down and back from the receiver to a big tactical knob
-	g.tube("gunmetal", [Vector3(-0.012, BORE_Y + 0.002, 0.032), Vector3(-0.034, BORE_Y - 0.006, 0.026), Vector3(-0.054, BORE_Y - 0.026, 0.016)], [0.0048, 0.0044, 0.0042], 10)
-	g.sphere("alloy_black", Vector3(-0.061, BORE_Y - 0.033, 0.012), 0.0135, 16, Vector3(1.0, 1.0, 1.12))
+	bolt.tube("gunmetal", [Vector3(-0.012, BORE_Y + 0.002, 0.032), Vector3(-0.034, BORE_Y - 0.006, 0.026), Vector3(-0.054, BORE_Y - 0.026, 0.016)], [0.0048, 0.0044, 0.0042], 10)
+	bolt.sphere("alloy_black", Vector3(-0.061, BORE_Y - 0.033, 0.012), 0.0135, 16, Vector3(1.0, 1.0, 1.12))
 	# picatinny rail with its cross slots
 	var top := BORE_Y + 0.0168
 	g.box("alloy_black", Vector3(0, top + 0.003, 0.11), Vector3(0.016, 0.006, 0.25), 0.0008)
@@ -190,7 +194,7 @@ func _action(g: GKMesh, act_end: float) -> void:
 		g.box("gunmetal", Vector3(0, top + 0.0098, z), Vector3(0.0215, 0.0012, 0.0035))
 		z += 0.01
 	# bolt shroud at the back
-	g.lathe("gunmetal", Vector3(0, BORE_Y, -0.05), Vector3(0, BORE_Y, -0.02), [Vector2(0, 0.004), Vector2(0.004, 0.009), Vector2(0.03, 0.011)], 12)
+	bolt.lathe("gunmetal", Vector3(0, BORE_Y, -0.05), Vector3(0, BORE_Y, -0.02), [Vector2(0, 0.004), Vector2(0.004, 0.009), Vector2(0.03, 0.011)], 12)
 
 
 ## 1-inch scope: eyepiece, power ring, tube, turrets, objective bell, lenses.

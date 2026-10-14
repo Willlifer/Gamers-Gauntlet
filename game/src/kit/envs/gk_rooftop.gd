@@ -106,7 +106,12 @@ func _build(p: Dictionary) -> GKAsset:
 	for k in 3:
 		a.markers["spawn_a%d" % k] = Transform3D(Basis(Vector3.UP, -PI * 0.5), M * Vector3(ax1 - 50.0, H, -24.0 + k * 3.0))
 		a.markers["spawn_b%d" % k] = Transform3D(Basis(Vector3.UP, PI * 0.5), M * Vector3(bx0 + 34.0, H, -12.0 + k * 3.0))
-	a.meta = { "ref_cam_fov": 46.0, "eye_a_fov": 70.0, "eye_b_fov": 70.0, "roof_height": H * s,
+	var roofs := { "a": [], "b": [] }
+	for side in ["a", "b"]:
+		for r in (a_rects if side == "a" else b_rects):
+			var rr: Rect2 = r
+			(roofs[side] as Array).append([rr.position.x * s, rr.position.y * s, rr.end.x * s, rr.end.y * s])
+	a.meta = { "roofs": roofs, "ref_cam_fov": 46.0, "eye_a_fov": 70.0, "eye_b_fov": 70.0, "roof_height": H * s,
 		"notes": "Two roofs; spawn_a* west, spawn_b* east; the scaffold walk joins them when `bridge` is on." }
 	var yaw := deg_to_rad(float(p.sun_yaw))
 	var el := deg_to_rad(float(p.sun_height))

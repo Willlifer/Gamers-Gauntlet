@@ -549,7 +549,7 @@ func _cast(u: MobaUnit, c: Dictionary) -> void:
 	match slot:
 		"flash":
 			var d := aim - u.pos
-			u.pos = _clamp(u.pos + d.limit_length(FLASH_RANGE))
+			u.pos = _clamp(u.pos + d.limit_length(MobaTune.value("flash_range")))
 			u.cd.flash = FLASH_CD
 			ok = true
 			_emit({ "type": "flash", "unit": u.id })

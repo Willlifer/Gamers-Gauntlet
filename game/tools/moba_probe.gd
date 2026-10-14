@@ -11,6 +11,7 @@ var fails := 0
 
 
 func _initialize() -> void:
+	MobaTune.use_defaults()                # tuned playtest numbers never change tool results
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 4
 	_duels(runs)
 	_pits(runs * 4)

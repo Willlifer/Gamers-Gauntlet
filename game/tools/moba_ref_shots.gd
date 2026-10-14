@@ -12,6 +12,7 @@ var tag := "now"
 
 
 func _initialize() -> void:
+	MobaTune.use_defaults()                # tuned playtest numbers never change tool results
 	out = OS.get_environment("SHOTS")
 	if out == "":
 		out = ProjectSettings.globalize_path("res://").path_join("../design/shots/ref").simplify_path()

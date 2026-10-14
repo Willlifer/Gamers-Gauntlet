@@ -2,7 +2,7 @@ extends SceneTree
 ## Headless: compile every kit script (fast feedback while authoring).
 func _initialize() -> void:
 	var bad := 0
-	for d in ["res://src/kit", "res://src/kit/items", "res://src/kit/envs", "res://src/kit/bench"]:
+	for d in ["res://src/kit", "res://src/kit/items", "res://src/kit/envs", "res://src/kit/bench", "res://src/kit/bw", "res://src/tourney/fps", "res://src/tourney/moba", "res://src/tourney/modules"]:
 		var da := DirAccess.open(d)
 		if da == null:
 			continue

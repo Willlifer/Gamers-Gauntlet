@@ -81,12 +81,16 @@ func _build(p: Dictionary) -> GKAsset:
 	var stroke := 0.09 * float(p.pump)
 	var f1 := mag_end - 0.006 - stroke               # the pump ends just behind the cap
 	var f0 := maxf(f1 - 0.3, rec_end + 0.02 - stroke)
-	_forend(g, furn, f0, f1, my)
-	# action bars from the forend into the receiver
+	# the pump and its action bars are their own part: a viewmodel racks it
+	var pg := GKMesh.new()
+	pg.push(Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * s), Vector3.ZERO))
+	_forend(pg, furn, f0, f1, my)
 	for sx in [-1.0, 1.0]:
-		g.box("blued", Vector3(sx * 0.0115, my + 0.002, (rec_end - 0.03 + f0 + 0.02) * 0.5), Vector3(0.0025, 0.007, f0 + 0.02 - (rec_end - 0.03)))
+		pg.box("blued", Vector3(sx * 0.0115, my + 0.002, (rec_end - 0.03 + f0 + 0.02) * 0.5), Vector3(0.0025, 0.007, f0 + 0.02 - (rec_end - 0.03)))
+	pg.pop()
 	g.pop()
 	a.add_part("body", g.commit())
+	a.add_part("pump", pg.commit())
 	a.markers = {
 		"grip": Transform3D.IDENTITY,
 		"support": Transform3D(Basis.IDENTITY, Vector3(0, my - 0.02, (f0 + f1) * 0.5) * s),

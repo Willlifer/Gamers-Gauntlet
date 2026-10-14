@@ -21,6 +21,7 @@ const CHAMPS := {
 			"e": ["Spread", "Ignite a target; it bursts onto everything near it: 1.5x auto damage."],
 			"r": ["Phlegm", "A gob that bounces between enemies 3 times: 3x auto damage a hit."] } },
 	"temu": { "name": "Temu", "title": "the Welder", "weapon": "bow", "weapon_model": "shortbow",
+		"kit_weapon": "slingshot", "kit_params": { "scale": 2.6 },   # the author: Temu uses the slingshot (bow clips drive the draw)
 		"hair_style": "short_mohawk", "hair_hex": "#a259ff", "tint": "#a259ff", "gender": "m", "top": "hoodie", "bottom": "tight_shorts",
 		"range": 5.0, "ms": 3.45, "ad": 60.0, "proj_speed": 16.0, "windup": 0.28, "role": "Marksman · long range",
 		"cd": { "q": 5.0, "w": 15.0, "e": 0.0, "r": 12.0 },
@@ -53,9 +54,9 @@ static func make(id: String) -> MobaUnit:
 	u.hp = u.max_hp
 	u.ad = float(c.ad)
 	u.range = float(c.range)
-	u.ms = float(c.ms)
-	u.proj_speed = float(c.proj_speed)
-	u.windup = float(c.windup)
+	u.ms = MobaTune.value(id + ".ms")                  # the feel numbers (MobaTune; defaults = the table above)
+	u.proj_speed = MobaTune.value(id + ".proj_speed")
+	u.windup = MobaTune.value(id + ".windup")
 	return u
 
 
