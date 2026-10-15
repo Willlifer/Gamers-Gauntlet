@@ -515,7 +515,7 @@ func _on_event(e: Dictionary) -> void:
 			if str(e.id) == me_id:
 				_hud.error(str(e.text))
 		"warn":
-			_hud.warn(str(e.text), Color(str(e.get("col", "#ff8a2a"))))
+			_hud.warn(str(e.text), Color(str(e.get("col", "#ff8a2a"))), bool(e.get("always", false)))
 		"pull":
 			pass
 		"dmg":
@@ -608,7 +608,8 @@ func _boss_spell(e: Dictionary) -> void:
 	var v: Dictionary = _views.get("boss", {})
 	match str(e.stage):
 		"cast":
-			_hud.log_line("The Giant begins to cast %s." % MmoSim.SPELL_NAMES.get(str(e.spell), ""), Color("#ff9040"))
+			if not sim.silent:
+				_hud.log_line("The Giant begins to cast %s." % MmoSim.SPELL_NAMES.get(str(e.spell), ""), Color("#ff9040"))
 			if not v.is_empty():
 				v.move = "bombs" if str(e.spell) == "brand" else str(e.spell)      # Cinderbrand reuses the fling
 				v.move_t = 0.0
@@ -626,7 +627,8 @@ func _boss_spell(e: Dictionary) -> void:
 				"brand":
 					for u: MmoUnit in sim.living():
 						_fx.release_at("fire", _v3(u.pos) + Vector3(0, 1.2, 0), 0.8)
-					_hud.log_line("Cinderbrand burns the raid. Run it off, cleanse it or heal through it.", Color("#ff9040"))
+					if not sim.silent:
+						_hud.log_line("Cinderbrand burns the raid. Run it off, cleanse it or heal through it.", Color("#ff9040"))
 
 
 # ------------------------------------------------------------------- draw

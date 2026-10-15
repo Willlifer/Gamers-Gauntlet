@@ -253,6 +253,9 @@ func _raids(runs: int) -> void:
 	var grade_c := {}
 	var parts_c := {}
 	var grades: Array = []
+	var frenzy_gaps: Array = []
+	var on_own := 0
+	var late_warns := 0
 	var fails_c := {}
 	var deaths_c := {}
 	for i in runs:
@@ -266,12 +269,20 @@ func _raids(runs: int) -> void:
 			var orders := {}
 			for id: String in bots:
 				orders[id] = (bots[id] as MmoBot).think(s, s.unit(id))
+			var was_silent := s.silent
 			for e: Dictionary in s.step(orders):
+				if e.type == "warn" and (was_silent or s.silent):
+					if e.get("always", false):
+						on_own += 1
+					else:
+						late_warns += 1
 				if (e.type == "dmg" or e.type == "heal") and str(e.src) != "boss" and str(e.src) != "":
 					var key := "%s %s" % [s.unit(str(e.src)).cls, e.what]
 					_by[key] = float(_by.get(key, 0.0)) + float(e.get("eff", e.n))
 				if e.type == "boss_spell" and e.stage == "cast":
-					if s.time - last_end < MmoTune.value("spell_gap") - 0.05:
+					if s.frenzied:
+						frenzy_gaps.append(s.time - last_end)
+					if s.time - last_end < s.spell_gap_now() - 0.05:
 						_fail("spell %s began %.2f s after the last ended" % [e.spell, s.time - last_end])
 			var busy := not s.spell.is_empty()
 			if was_busy and not busy:
@@ -312,6 +323,17 @@ func _raids(runs: int) -> void:
 	grades.sort()
 	if not grades.is_empty() and grades[-1] - grades[0] > 8.0:
 		_fail("bot grades spread %.1f points across classes (> 8)" % (grades[-1] - grades[0]))
+	# G35: one "You're on your own now." per raid at half health, no warnings after it; the rotation doubles at a quarter
+	if on_own != runs:
+		_fail("\"You're on your own now.\" came %d times in %d raids" % [on_own, runs])
+	if late_warns > 0:
+		_fail("%d text warnings after the Giant went quiet" % late_warns)
+	var fg := 0.0
+	for g: float in frenzy_gaps:
+		fg += g
+	print("  G35: %d raids quiet from 50%%; %d spells under frenzy, mean gap %.1f s (normal %.1f)" % [on_own, frenzy_gaps.size(), fg / maxf(1.0, frenzy_gaps.size()), MmoTune.value("spell_gap")])
+	if frenzy_gaps.is_empty() or fg / frenzy_gaps.size() > MmoTune.value("spell_gap") * 0.75:
+		_fail("the rotation didn't speed up below 25%")
 	# the letter decides first, then the score
 	if not MmoGrade.beats({ "rank": 1, "score": 86.0 }, { "rank": 2, "score": 99.0 }) or MmoGrade.beats({ "rank": 1, "score": 86.0 }, { "rank": 1, "score": 90.0 }):
 		_fail("MmoGrade.beats: the letter first, then the score")

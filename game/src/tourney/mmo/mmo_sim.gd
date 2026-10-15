@@ -51,6 +51,8 @@ var winner := ""                # "" | "raid" | "boss"
 var pulled := false
 var pull_time := 0.0
 var enraged := false
+var silent := false             ## below silence_at: no text warnings any more (G35)
+var frenzied := false           ## below frenzy_at: the spell rotation runs frenzy_rate x faster (G35)
 var spell := {}                 # the Giant's spell in progress: { id, t, total, stage, ... }
 var next_spell_at := INF
 var next_brand_at := INF        # Cinderbrand's own clock (G30)
@@ -157,6 +159,8 @@ func step(orders: Dictionary) -> Array:
 
 
 func _emit(e: Dictionary) -> void:
+	if silent and str(e.type) == "warn" and not e.get("always", false):
+		return                                            # G35: the Giant has gone quiet
 	e["time"] = time
 	_events.append(e)
 
@@ -839,6 +843,15 @@ func _tick_boss() -> void:
 			if u.pos.distance_to(b.pos) < PULL_R:
 				_pull()
 		return
+	# G35: at half health the warnings stop; at a quarter the rotation doubles
+	if not silent and b.hp_pct() <= MmoTune.value("silence_at"):
+		silent = true
+		_emit({ "type": "warn", "text": "You're on your own now.", "col": "#ff4040", "always": true })
+	if not frenzied and b.hp_pct() <= MmoTune.value("frenzy_at"):
+		frenzied = true
+		next_spell_at = minf(next_spell_at, time + spell_gap_now())
+		next_brand_at = minf(next_brand_at, time + MmoTune.value("brand_every") / MmoTune.value("frenzy_rate"))
+		_emit({ "type": "frenzy" })
 	if not enraged and time - pull_time >= MmoTune.value("enrage"):
 		enraged = true
 		_emit({ "type": "warn", "text": "The Giant goes into a rage!", "col": "#ff2020" })
@@ -953,7 +966,7 @@ func _begin_spell() -> void:
 ## Cinderbrand (G30): not in the bag; on its own clock it takes the next
 ## spell slot (spell_gap still holds before and after it).
 func _begin_brand() -> void:
-	next_brand_at = time + MmoTune.value("brand_every")
+	next_brand_at = time + MmoTune.value("brand_every") / (MmoTune.value("frenzy_rate") if frenzied else 1.0)
 	var total := float(SPELL_CAST.brand)
 	spell = { "id": "brand", "t": 0.0, "total": total, "stage": "cast" }
 	boss.cast = { "ab": "brand", "t": 0.0, "total": total, "channel": false }
@@ -987,6 +1000,11 @@ func brand(u: MmoUnit) -> void:
 		"school": "fire", "debuff": true, "cleanse": true, "glyph": "flame", "col": "#ff7a2a" })
 
 
+## The gap between spells now: spell_gap, divided by frenzy_rate below frenzy_at (G35).
+func spell_gap_now() -> float:
+	return MmoTune.value("spell_gap") / (MmoTune.value("frenzy_rate") if frenzied else 1.0)
+
+
 func _end_spell(stage_after := 0.6) -> void:
 	spell.stage = "after"
 	spell["after_t"] = stage_after
@@ -1000,7 +1018,7 @@ func _spell_after() -> bool:
 	if float(spell.after_t) <= 0.0:
 		_bag_last = str(spell.id)
 		spell = {}
-		next_spell_at = time + MmoTune.value("spell_gap")
+		next_spell_at = time + spell_gap_now()
 	return true
 
 

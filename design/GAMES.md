@@ -73,6 +73,8 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
     unavoidable burn on everyone, 25% of max HP over 30 s. Run it off (each
     metre walked takes 0.5 s off), get cleansed (paladin Cleanse, priest
     Dispel Magic) or be healed through it.
+- **Below 50%:** no more text warnings, only "You're on your own now." **Below 25%:**
+  the spell rotation runs twice as fast (G35). Timer enrage at 300 s: 5x damage.
 - **Controls:** WoW Classic's; the camera starts behind you.
 - **The verdict: a grade** (G33, `MmoGrade`): output against a same-class
   bot (`MmoClasses.PAR`) 35, mechanics done 30, AoEs avoided 15, survival

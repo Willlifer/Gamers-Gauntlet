@@ -249,7 +249,14 @@ func log_line(text: String, col := Color(1, 1, 1)) -> void:
 	_log.text = "\n".join(_log_lines)
 
 
-func warn(text: String, col := Color("#ff8a2a")) -> void:
+## Below half health the fight stops talking (G35): only the one line gets through.
+func quiet() -> bool:
+	return sim != null and sim.silent
+
+
+func warn(text: String, col := Color("#ff8a2a"), always := false) -> void:
+	if quiet() and not always:
+		return
 	_warn.text = text
 	_warn.add_theme_color_override("font_color", col)
 	_warn_t = 4.5
@@ -262,6 +269,8 @@ func error(text: String) -> void:
 
 
 func center(text: String, t := 4.0) -> void:
+	if quiet() and sim.winner == "":
+		return
 	_center.text = text
 	_center_t = t
 
@@ -455,6 +464,8 @@ func _timers_update() -> void:
 	for c in _timers.get_children():
 		c.queue_free()
 	var rows: Array = []
+	if quiet():
+		return
 	if sim.pulled and sim.boss.alive:
 		if sim.spell.is_empty():
 			var left := sim.next_spell_at - sim.time
@@ -627,7 +638,7 @@ class CastBar extends Control:
 			f = 1.0 - f
 		var nm := ""
 		if unit.kind == "boss":
-			nm = str(MmoSim.SPELL_NAMES.get(str(unit.cast.ab), ""))
+			nm = "" if hud and hud.quiet() else str(MmoSim.SPELL_NAMES.get(str(unit.cast.ab), ""))
 		else:
 			nm = str(MmoClasses.ability(unit.cls, str(unit.cast.ab)).get("name", ""))
 		draw_rect(Rect2(Vector2(-2, -2), size + Vector2(4, 4)), Color(0, 0, 0, 0.8))
