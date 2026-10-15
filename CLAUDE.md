@@ -39,6 +39,7 @@ a `history/` summary when the session was long.
   bot, F10 leaves), the double-elimination bracket with slot-reel rolls (the
   top ready match plays next), the
   matchup with bets (house 5 a side, bets 5–25, winners split by stake), the
+  load-in (`VersusScreen`, G42: black, both players and the challenge slam in), the
   result with comments, the champion. Offline with bots for now; online is
   stage 3 (deterministic lockstep over WebRTC, see the plan).
 - **Modules** (`game/src/tourney/modules/`): one game each, behind

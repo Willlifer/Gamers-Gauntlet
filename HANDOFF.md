@@ -12,6 +12,8 @@
 - **Raid: Cinderbrand (G30):** an unavoidable burn worth 25% HP over 30 s; run it off, get cleansed or be healed through it.
 - **New module: OSRS: Warden's Trial (G34).** Game squares and 0.6 s ticks. You pray against projectiles and dodge lightning, boulders, slams and the row tear-out. The twist is the Sun Sigil. The fastest kill wins.
 - **Raid, later (G35-G40):** silent below 50%, frenzy below 25%. Scorched Earth: half the courtyard burns at 45 s, then turns in 15 s bursts with 30 s rests, a random way each time, with chevrons on the edges. Bombs can leave burning ground. **Eight spells a class** on one bar (the old 16 shelved). Raids of eight with duplicate classes allowed.
+- **Class themes (G41):** warrior charges, paladin group heals, priest HoTs and DoTs (Renew on the Giant = Shadow Word: Pain), mage burns, hunter and rogue dash in and out. Bots won't dash into hazards; PAR re-measured.
+- **Load-in (G42):** `VersusScreen` between the matchup and the game: black, left player, right player, then the map and challenge name slam in.
 - **Raid verdict: a grade (G33):** output, mechanics, AoEs avoided, survival and activity, weighted into S-F. The higher grade wins. There is a report card at the end.
 
 ## Do this first
@@ -24,7 +26,7 @@
 - The whole tournament: `--path .`. Full command list in CLAUDE.md.
 
 **Green (2026-10-15):**
-- tourney_probe OK; tourney_shots OK (10 screens).
+- tourney_probe OK; tourney_shots OK (10 screens + the load-in beats).
 - fps_probe 17/17 (new); osrs_probe OK (new); kit_probe 601/601.
-- mmo_probe OK (Cinderbrand checks, 20/20 bot kills, replay); mmo_input OK; mmo_audio OK.
+- mmo_probe OK (G41 theme checks, 12/12 bot kills, grades within 8, replay); mmo_input OK; mmo_audio OK.
 - moba_probe and the B/W self-test were not rerun: their code wasn't touched.

@@ -1,6 +1,6 @@
 extends Node
 ## The tournament's entry point and flow: lobby → bracket (rolls) → for each
-## match: up next → matchup and bets → the game → result → bracket … →
+## match: up next → matchup and bets → the load-in (versus) → the game → result → bracket … →
 ## champion. Quick play (lobby) opens one game against a bot and comes back.
 ## Behind every screen the backdrop circles a game's map (G27); it switches
 ## off while a game runs. F10 leaves a game early (quick play: to the lobby;
@@ -162,6 +162,27 @@ func go_game(match_id: String) -> void:
 		var r: Dictionary = script.simulate(cfg, state.rng)
 		_record(match_id, r)
 		return
+	go_versus(match_id, cfg)
+
+
+## The load-in (G42): black, the Chris loop, both players and the challenge slam in; then the game.
+func go_versus(match_id: String, cfg: Dictionary) -> void:
+	var m := state.bracket.get_match(match_id)
+	var s := VersusScreen.new()
+	s.state = state
+	s.players = cfg.players
+	s.game_id = str(m.game)
+	var map := str(TourneyBackdrop.FOR_GAME.get(m.game, ""))
+	if map != "":
+		backdrop.show_map(map)
+		s.map_tex = backdrop.map_texture()
+	s.done.connect(func(): _launch(match_id, cfg))
+	_swap(s)
+	TourneyMusic.play("hype")
+
+
+func _launch(match_id: String, cfg: Dictionary) -> void:
+	var script := TourneyModules.script_for(state.bracket.get_match(match_id).game)
 	var mod: TourneyModule = script.new()
 	mod.finished.connect(func(r):
 		if _game_match == match_id:

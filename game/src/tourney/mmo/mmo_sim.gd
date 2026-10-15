@@ -508,20 +508,34 @@ func _effect(u: MmoUnit, ab: Dictionary, f: Dictionary, tgt: MmoUnit, school: St
 				damage(u, o, float(f.aoe), school, name_, "hit", threat, crit_next)
 		_emit({ "type": "burst", "id": u.id, "pos": at, "r": float(f.r), "school": school })
 		return
+	if f.has("dot") and str(f.get("on", "")) == "foe":
+		tgt = boss if boss and boss.alive else null
 	if f.has("dot") and tgt:
 		var total := float(f.dot) + float(f.get("per_cp", 0.0)) * cp
 		add_aura(tgt, { "id": "%s_%s" % [str(ab.id), u.id], "name": name_, "src": u.id, "dur": float(f.dur), "every": 3.0 if float(f.dur) >= 9.0 else 1.0,
 			"dot": total, "school": school, "glyph": str(ab.glyph), "col": str(ab.col), "debuff": true, "threat": threat })
 		return
+	if f.has("hot") and f.has("foe_dot") and tgt and is_enemy(u, tgt):
+		add_aura(tgt, { "id": "%s_%s" % [str(f.get("foe_id", ab.id)), u.id], "name": str(f.get("foe_name", name_)), "src": u.id, "dur": float(f.dur),
+			"every": 3.0, "dot": float(f.foe_dot), "school": str(f.get("foe_school", school)), "glyph": str(ab.glyph), "col": str(f.get("foe_col", ab.col)),
+			"debuff": true, "threat": threat })
+		return
 	if f.has("hot"):
-		var who := tgt if tgt else u
+		var who := u if f.get("self", false) else (tgt if tgt else u)
 		add_aura(who, { "id": "%s_%s" % [str(ab.id), u.id], "name": name_, "src": u.id, "dur": float(f.dur), "every": 3.0,
 			"hot": float(f.hot), "glyph": str(ab.glyph), "col": str(ab.col) })
 		return
 	if f.has("group_heal"):
+		var at := tgt.pos if str(f.get("at", "self")) == "target" and tgt else u.pos
+		for o: MmoUnit in living():
+			if o.pos.distance_to(at) <= float(f.r):
+				heal(u, o, float(f.group_heal), name_)
+		return
+	if f.has("group_hot"):
 		for o: MmoUnit in living():
 			if o.pos.distance_to(u.pos) <= float(f.r):
-				heal(u, o, float(f.group_heal), name_)
+				add_aura(o, { "id": "%s_%s" % [str(ab.id), u.id], "name": name_, "src": u.id, "dur": float(f.dur), "every": 3.0,
+					"hot": float(f.group_hot), "glyph": str(ab.glyph), "col": str(ab.col) })
 		return
 	if f.has("shield"):
 		var who := u if f.get("self", false) or tgt == null else tgt
@@ -639,22 +653,28 @@ func _effect(u: MmoUnit, ab: Dictionary, f: Dictionary, tgt: MmoUnit, school: St
 		return
 
 
-func _dash(u: MmoUnit, f: Dictionary, tgt: MmoUnit) -> void:
-	var from := u.pos
+## Where a dash effect would put `u` (G41: the bots look before they leap).
+func dash_to(u: MmoUnit, f: Dictionary, tgt: MmoUnit) -> Vector2:
+	var p := u.pos
 	match str(f.dir):
 		"target":
 			if tgt:
-				var d := (tgt.pos - u.pos)
-				u.pos = tgt.pos - d.normalized() * (tgt.radius + u.radius + 0.6)
+				p = tgt.pos - (tgt.pos - u.pos).normalized() * (tgt.radius + u.radius + 0.6)
 		"behind":
 			if tgt:
-				u.pos = tgt.pos - tgt.forward() * (tgt.radius + u.radius + 0.7)
-				u.yaw = atan2(tgt.pos.x - u.pos.x, tgt.pos.y - u.pos.y)
+				p = tgt.pos - tgt.forward() * (tgt.radius + u.radius + 0.7)
 		"forward":
-			u.pos += u.forward() * float(f.dash)
+			p += u.forward() * float(f.dash)
 		"back":
-			u.pos -= u.forward() * float(f.dash)
-	u.pos = _clamp(u.pos, u.radius)
+			p -= u.forward() * float(f.dash)
+	return _clamp(p, u.radius)
+
+
+func _dash(u: MmoUnit, f: Dictionary, tgt: MmoUnit) -> void:
+	var from := u.pos
+	u.pos = dash_to(u, f, tgt)
+	if str(f.dir) == "behind" and tgt:
+		u.yaw = atan2(tgt.pos.x - u.pos.x, tgt.pos.y - u.pos.y)
 	_cancel(u, "")
 	_emit({ "type": "dash", "id": u.id, "from": from, "to": u.pos, "how": str(f.dir) })
 

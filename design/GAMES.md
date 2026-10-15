@@ -56,14 +56,24 @@ The same duel on the kit's Dust2-mid hallway (G29): you at the T end, the bot
 in the tower half of the lane. Same guns, bullets, bot and `FpsTune`.
 
 ## mmo_raid: MMO Raid night
-A WoW Classic raid of six against the Giant in a round courtyard (G22).
+A WoW Classic raid against the Giant in a round courtyard (G22).
 - **Seats:** a raid of eight. Both contestants (any classes, the same one allowed)
   and one bot of each class; the Giant scales with the raid's size (G39).
 - **Classes:** warrior (tank, rage), paladin (hammer + heals), priest (healer),
   mage, hunter, rogue (energy). **Eight abilities each on 1–8** (G39), in the
   same order for every class: spammable, strong, self steroid, team steroid,
   self heal, self cleanse, super, the class's pick. `MmoClasses.CLASSES`
-  (the old sixteen on `shelf`).
+  (the old sixteen on `shelf`). Each class leans into its theme (G41):
+  the warrior charges (Shield Charge, Colossus Smash, Taunt close 25-30 m);
+  the paladin's light spills onto the raid (Crusader Strike, Word of Glory,
+  Hammer of Wrath and Flash of Light heal everyone near); the priest works
+  over time (Renew on an ally heals, on the Giant is Shadow Word: Pain;
+  Vampiric Embrace DoTs the Giant; Penance, Desperate Prayer and Divine Hymn
+  leave HoTs); the mage's fire and frost keep burning (Frostbite, Ignite,
+  Pyroblast's long burn); the hunter and rogue move on their spells (Chimera
+  Shot rolls back, Master's Call bounds in, Disengage leaps out and crits
+  the next shot; Ambush shadowsteps in, Cloak flickers out, Sprint dashes).
+  Bots never dash into a hazard.
 - **Rules:** WoW Classic's global cooldown, cast bars broken by moving, the
   180° facing rule, threat and taunts, auras, resurrection.
 - **The Giant:** 300,000 HP; 360 a swing every 2.2 s; enrage at 300 s. One spell

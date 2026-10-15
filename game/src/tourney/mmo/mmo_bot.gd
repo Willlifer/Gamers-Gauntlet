@@ -222,6 +222,11 @@ func _want(s: MmoSim, u: MmoUnit, ab: Dictionary, tag: String) -> Dictionary:
 		if ab.get("exec", false) and b.hp_pct() > 0.2:
 			return {}
 		go["target"] = b.id
+	for f: Dictionary in ab.fx:                        # G41: never dash into fire, bombs or circles
+		if f.has("dash"):
+			var land := s.dash_to(u, f, b if kind == "enemy" else null)
+			if s.danger_at(land, 1.0) or s.in_scorch(land, 2.0, 3.0):
+				return {}
 	var fight := s.pulled and s.time - s.pull_time > 1.0
 	match tag:
 		"def":

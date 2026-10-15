@@ -33,7 +33,7 @@ Last reviewed: 2026-10-15 (playtest rulings, the tournament look, FPS bullets an
 | L-10 | MMO art gaps after gauntlet r4: gryphon end caps, bag and micro-menu icons, the minimap rim and buttons, thicker Giant arms, outfit exaggeration (pauldrons, capes, chunky weapons), a cooler palette and a water channel. | WATCH | The author thinks the game looks great (10-15): these were gaps against the reference photos, not problems. Only if the author points at one. |
 | L-11 | Kit texture art: the kit's assets plateaued at ~30/50 against the photos with procedural surfaces. | WATCH | As L-10: only if the author points at one. |
 | L-12 | The FPS bot has no pathfinding (stays on its roof / its half of the hallway); FPS has no sounds yet. | WATCH | The author plays the FPS more (they liked it, G31): footsteps, shots, bullet whizz, navigation. |
-| L-14 | The tournament look (G27): tiles, reels, backdrop, two-sided bracket. | AWAITING PLAY | The author judges it ("I'll judge it"); frames in `design/shots/tourney_*.png`. |
+| L-14 | The tournament look (G27): tiles, reels, backdrop, two-sided bracket; the load-in (G42). | AWAITING PLAY | The author judges it ("I'll judge it"); frames in `design/shots/tourney_*.png`. |
 | L-15 | OSRS: Warden's Trial (G34): difficulty, the tick feel, the camera, the Sun Sigil twist, and the UI against the OSRS look. | AWAITING PLAY | The author plays it (Quick play or `--module osrs_raid`); all numbers on F1. |
 | L-13 | Black \| White's own code was touched three times for modules: `cosmetics.hair_hex`, `BWCharacterPose.override` + `override_w`, `BWAnimator.reverse`. | WATCH | Any further change under `src/game` or `src/core`: rerun the B/W self-test (~8 min). |
 

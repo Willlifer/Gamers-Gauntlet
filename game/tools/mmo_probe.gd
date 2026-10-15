@@ -17,6 +17,7 @@ var _by := {}
 func _initialize() -> void:
 	MmoTune.use_defaults()
 	_abilities()
+	_themes()
 	_mechanics()
 	_brand()
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 6
@@ -116,6 +117,66 @@ func _abilities() -> void:
 				continue
 			ok += 1
 	print("abilities: %d / %d went off" % [ok, MmoClasses.ORDER.size() * MmoClasses.SLOTS])
+
+
+## G41: each class's kit carries its theme, and the new effects work.
+func _themes() -> void:
+	var count := func(c: String, test: Callable) -> int:
+		var n := 0
+		for ab: Dictionary in MmoClasses.abilities(c):
+			for f: Dictionary in ab.fx:
+				if test.call(f):
+					n += 1
+					break
+		return n
+	var want := {
+		"warrior": [func(f: Dictionary) -> bool: return str(f.get("dir", "")) == "target", 2, "charges"],
+		"paladin": [func(f: Dictionary) -> bool: return f.has("group_heal") or f.has("group_hot"), 3, "group heals"],
+		"priest": [func(f: Dictionary) -> bool: return f.has("hot") or f.has("group_hot") or f.has("dot") or f.has("foe_dot"), 4, "over-time spells"],
+		"mage": [func(f: Dictionary) -> bool: return f.has("dot"), 3, "DoTs"],
+		"hunter": [func(f: Dictionary) -> bool: return f.has("dash"), 3, "moves"],
+		"rogue": [func(f: Dictionary) -> bool: return f.has("dash"), 3, "moves"],
+	}
+	for c: String in want:
+		var n: int = count.call(c, want[c][0])
+		if n < int(want[c][1]):
+			_fail("%s has %d %s (want %d)" % [c, n, want[c][2], want[c][1]])
+	# a charge lands in melee from 20 m; Renew on the Giant is Shadow Word: Pain; Vampiric Embrace dots the Giant
+	var s := _raid(7)
+	var b := s.boss
+	s._pull()
+	s.next_spell_at = INF
+	var w: MmoUnit
+	var pr: MmoUnit
+	for p: MmoUnit in s.players():
+		if p.cls == "warrior" and not w:
+			w = p
+		if p.cls == "priest" and not pr:
+			pr = p
+	w.pos = b.pos + Vector2(0, b.radius + 20.0)
+	w.yaw = atan2(b.pos.x - w.pos.x, b.pos.y - w.pos.y)
+	w.res = w.res_max
+	w.target = b.id
+	s.try_cast(w, "shield_slam")
+	if s.dist(w, b) > MmoClasses.MELEE:
+		_fail("Shield Charge didn't reach melee (%.1f m)" % s.dist(w, b))
+	pr.pos = b.pos + Vector2(b.radius + 15.0, 0)
+	pr.yaw = atan2(b.pos.x - pr.pos.x, b.pos.y - pr.pos.y)
+	pr.target = b.id
+	s.try_cast(pr, "renew")
+	if b.aura("sw_pain_%s" % pr.id).is_empty():
+		_fail("Renew on the Giant laid no Shadow Word: Pain")
+	pr.cd.clear()
+	pr.gcd = 0.0
+	var ve_ok := s.try_cast(pr, "vampiric_embrace")
+	var ve_err: Array = s._events.filter(func(e: Dictionary) -> bool: return e.type == "error").map(func(e: Dictionary) -> String: return str(e.text))
+	for i in 45:
+		s.step({})
+	if not ve_ok:
+		_fail("Vampiric Embrace didn't go: %s" % [ve_err])
+	if b.aura("vampiric_embrace_%s" % pr.id).is_empty():
+		_fail("Vampiric Embrace laid no DoT on the Giant")
+	print("themes: checked")
 
 
 # ------------------------------------------------------------- mechanics

@@ -70,6 +70,11 @@ func show_map(id: String = "") -> void:
 	_place()
 
 
+## The map as it circles (the load-in frames it, G42).
+func map_texture() -> Texture2D:
+	return _vp.get_texture()
+
+
 ## Off while a game runs: hidden and not rendering.
 func set_active(on: bool) -> void:
 	visible = on

@@ -94,6 +94,31 @@ func _go() -> void:
 	mu._bet(mu.state.me().id, mu._m.p1, 10)
 	await _wait(0.5)
 	await _shot("matchup_bet")
+	# the load-in (G42), twice: this match's game, then a game with a map (the slams at each beat)
+	var mid := mu.match_id
+	var m: Dictionary = tour.state.bracket.get_match(mid)
+	for g: String in [str(m.game), "fps_mid"]:
+		var vs := VersusScreen.new()
+		vs.state = tour.state
+		vs.players = [tour.state.player(m.p1), tour.state.player(m.p2)]
+		vs.game_id = g
+		var map := str(TourneyBackdrop.FOR_GAME.get(g, ""))
+		if map != "":
+			tour.backdrop.show_map(map)
+			vs.map_tex = tour.backdrop.map_texture()
+		tour._swap(vs)
+		var tag := "versus" if g == str(m.game) else "versus_map"
+		await _wait(0.3)
+		await _shot(tag + "_0_black")
+		await _wait(0.65)
+		await _shot(tag + "_1_left")
+		await _wait(0.8)
+		await _shot(tag + "_2_right")
+		await _wait(1.2)
+		await _shot(tag + "_3_all")
+	tour.go_matchup(mid)
+	mu = await _until(MatchupScreen, 5.0)
+	await _wait(0.3)
 	mu._go()
 	var rs: ResultScreen = await _until(ResultScreen, 30.0)
 	await _wait(0.8)
