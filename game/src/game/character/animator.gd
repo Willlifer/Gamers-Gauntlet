@@ -90,6 +90,7 @@ var current := ""                 ## last requested pose name
 var layers: Array = []            ## bottom .. top; see _clip_layer()
 var pending := ""                 ## pose to play when the running one-shot ends
 var walk_rate := -1.0             ## >= 0 forces the locomotion playback rate (tools); < 0 = follow root speed
+var reverse := false             ## The Gamer: gait clips play backwards (a backpedal)
 var run_rate := -1.0              ## > 0: a planned run's rate (phase-aligns the stop); reset by any other request
 var wounded := false              ## HP < 35%: idle -> wounded, walk / run -> limp
 var rotate_idles := true          ## play idle variants while standing (tools turn it off)
@@ -785,9 +786,13 @@ func _advance(delta: float) -> void:
 				rate = clampf(Vector2(velocity.x, velocity.z).length() / (sp * sc), 0.0, 1.6)
 		elif l.loop and str(l.clip) in ["idle", "idle_bouncy", "wounded"]:
 			rate = float(personality.get("rate", 1.0))
+		if reverse and m.has("gait"):
+			rate = -rate
 		l.rate = rate
 		var t0 := float(l.t)
 		var t1 := t0 + delta * rate
+		if t1 < 0.0 and l.loop:
+			t1 = fposmod(t1, a.length)
 		if l.hold >= 0.0 and t0 <= l.hold:
 			t1 = minf(t1, l.hold)
 		if l.loop:
@@ -795,7 +800,7 @@ func _advance(delta: float) -> void:
 				t1 = fmod(t1, a.length)
 		elif t1 >= a.length:
 			t1 = a.length
-		if is_same(l, top) and delta > 0.0:
+		if is_same(l, top) and delta > 0.0 and t1 >= t0:
 			_fire_markers(l, t0, t1)
 		l.t = t1
 		if not l.loop and t1 >= a.length and not l.ended:

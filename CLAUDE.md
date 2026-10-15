@@ -29,6 +29,7 @@ The author's plan and rulings: the Claude Doc "Tournament Plan"
     flash + ignite. 1 world unit = 100 League units. Unset numbers are
     League-ish defaults marked OPEN in `moba_champs.gd`.
   - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops.
+  - `mmo_raid`: MMO: Raid night (`src/tourney/mmo/`, G22-G23): a WoW Classic raid of six on the Giant, WoW controls and HUD; contestants compared by rating.
   - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
     plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
 - **Current scope (G11): these two MOBA games.** See `DECISIONS.md`.
@@ -51,7 +52,8 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `[ASSETS=sniper,rooftop] [TAG=r5] [FULL=1] --path . --script res://tools/kit_ref_shots.gd`: kit review sheets beside `design/ref/kit/*` to `design/shots/kit/`.
 - `--path . res://scenes/kit_bench.tscn`: the kit bench (shape assets, presets, export .glb).
 - `--path . res://scenes/fps_proto.tscn`: the FPS prototype alone (G20); `--path . --script res://tools/fps_shots.gd` shoots its frames to `design/shots/fps/`.
-- F1 in a MOBA match / the range / the FPS: the live feel-number panels (G19), saved to `user://moba_tune.cfg` / `user://fps_tune.cfg`.
+- `--path . res://scenes/mmo_proto.tscn`: the MMO raid alone (class pick, then the fight). Checks: `--headless --path . --script res://tools/mmo_probe.gd` (all 96 abilities, the mechanics, the 5 s spell gap, bot raids, replay), `--headless ... tools/mmo_input.gd` (the WoW controls through real input events); frames: `[TAG=r4] [CLASS=priest] --path . --script res://tools/mmo_shots.gd` and `tools/mmo_moves_sheet.gd` (the Giant's poses) to `design/shots/mmo/`.
+- F1 in a MOBA match / the range / the FPS / the raid: the live feel-number panels (G19), saved to `user://moba_tune.cfg` / `user://fps_tune.cfg` / `user://mmo_tune.cfg`.
 - Black | White's self-test still runs and must stay green: `--headless --path . res://scenes/main.tscn -- --self-test` (the main scene is the tournament now, so name Black | White's; ~8 min).
 
 ## Author preferences
