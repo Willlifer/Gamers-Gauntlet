@@ -15,7 +15,7 @@ signal quick_play(module_id: String)
 ## Muted tints and the big faded tag per game (restrained: the streaks move, the colour stays quiet).
 const LOOKS := {
 	"bw_twins": ["#3b3656", "B|W"], "aram": ["#25415e", "ARAM"], "pit": ["#2b4a3c", "PIT"],
-	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "mmo_raid": ["#4c2f3d", "RAID"],
+	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "mmo_raid": ["#4c2f3d", "RAID"], "osrs_raid": ["#4e3d26", "OSRS"],
 }
 const CARD := Rect2(1200, 90, 380, 736)     ## the creator: 19% of 1600x900
 
@@ -65,9 +65,9 @@ func _build_tiles() -> void:
 	for i in infos.size():
 		var info: Dictionary = infos[i]
 		var look: Array = LOOKS.get(str(info.id), ["#2c3546", ""])
-		var col := i % 3
-		var row := i / 3
-		var t := TourneyTile.make(_root, Rect2(20 + col * 385, 442 + row * 140, 370, 126), str(info.name), "", Color(look[0]), str(look[1]))
+		var col := i % 4
+		var row := i / 4
+		var t := TourneyTile.make(_root, Rect2(20 + col * 288, 442 + row * 140, 276, 126), str(info.name), "", Color(look[0]), str(look[1]))
 		t.title_size = 22
 		t.blurb = str(info.get("blurb", ""))
 		var id := str(info.id)

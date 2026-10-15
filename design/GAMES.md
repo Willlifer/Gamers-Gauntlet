@@ -80,6 +80,22 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
   letter wins, then the higher score. The report card shows the parts.
 - **Numbers:** `MmoTune` (F1).
 
+## osrs_raid: OSRS Warden's Trial
+After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
+- **You:** 99 HP, 99 prayer; protect from magic / missiles / melee (1 2 3 or
+  the buttons beside the inventory) drain a point every 3 ticks. 12 sharks and
+  4 prayer potions, 25% each; eating delays your next attack 3 ticks.
+- **Weapons:** bow 10-45 every 4 ticks, staff 15-55 every 5; 85% to land;
+  range 10 squares. Pick one first; the other sits in the inventory to swap.
+- **The Warden (1,200 HP):** projectiles every 5 ticks (4 in phase 3), magic
+  or ranged, landing 3 ticks later; a melee smack next to it. Specials every
+  11 ticks: lightning (phase 1); boulders, slam, lightning (phase 2); and in
+  phase 3 lightning, boulders, slam, twin volleys, and the far row torn out
+  every 18 ticks down to 5 rows.
+- **Sun Sigil** (the twist): stand on it as it ignites → next 3 attacks x2.
+- **Verdict:** the same seeded fight for both; a kill beats a death, then
+  the faster kill, then more damage, then less taken. Numbers: `OsrsTune` (F1).
+
 ## The Gauntlet Kit (assets for modules)
 Parametric, deterministic assets in `game/src/kit/` (G17): sniper, pump
 shotgun, slingshot, Dust2-mid hallway, apartment rooftops (with the G18
