@@ -7,6 +7,30 @@ palette or hex-tactics mechanics carry over: this is a different game.
 The author's plan and rulings: the Claude Doc "Tournament Plan"
 (https://claude.ai/code/artifact/fe47289b-de23-4688-8000-7b7df9058a51).
 
+## Start here
+
+1. `HANDOFF.md`: the state right now, and what to do first.
+2. `LEDGER.md`: what is owed, blocked, waiting on play, or settled.
+3. Open only the docs your task needs (table below).
+
+## Which doc answers what (and which wins)
+
+| Doc | Answers | Lifespan |
+|---|---|---|
+| `design/GAMES.md` | **What each game is now**: rules, and which code table or tune store holds its numbers. **Current truth.** | Edited in place |
+| `DECISIONS.md` | **Why and when** a rule became what it is, and who ruled (Author vs Claude). Append-only; superseded rows are marked in Status. | Permanent |
+| `LEDGER.md` | What's owed, blocked, awaiting play, watched or deferred. One row per item, under the four-test rule. | Weeks |
+| `HANDOFF.md` | State now and what to do first. Rewritten each session, ≤ 40 lines. | One session |
+| `PLAN.md` | The finish line, the stages and their status, how a module is built. | Project |
+| `history/` | Session summaries, for orientation only. | Permanent |
+
+If GAMES.md and DECISIONS disagree, GAMES.md is current, unless the DECISIONS
+row is newer and the doc wasn't updated. Then fix the doc.
+
+**End of every session:** rewrite HANDOFF, update LEDGER (close, add,
+re-state), append DECISIONS rows, update GAMES.md for rule changes, and add
+a `history/` summary when the session was long.
+
 ## Shape
 
 - **The shell** (`game/src/tourney/`): lobby with join code and the character
@@ -32,7 +56,7 @@ The author's plan and rulings: the Claude Doc "Tournament Plan"
   - `mmo_raid`: MMO: Raid night (`src/tourney/mmo/`, G22-G23): a WoW Classic raid of six on the Giant, WoW controls and HUD; contestants compared by rating.
   - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
     plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
-- **Current scope (G11): these two MOBA games.** See `DECISIONS.md`.
+- **Scope:** G11 narrowed it to the two MOBA games; the author has since asked for the FPS (G20) and MMO (G22) modules. Next steps wait on the author (PLAN, LEDGER L-8/L-9).
 - **The range** (`RangeScreen`): binds plus a live practice MobaView with a dummy.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
