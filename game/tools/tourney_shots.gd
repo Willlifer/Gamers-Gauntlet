@@ -1,6 +1,6 @@
 extends SceneTree
-## Windowed: opens the tournament with 3 bots, walks lobby → range → bracket
-## rolls → vote → matchup → (the game is skipped: the human's run is
+## Windowed: opens the tournament with 3 bots, walks lobby → range → quick
+## play (FPS: Mid duel, back on F10's path) → bracket rolls → up next → matchup → (the game is skipped: the human's run is
 ## replaced by a roll) → result → champion, saving a frame of each to
 ## SHOTS=<dir> (default ../design/shots). Exit 0 when every screen appeared.
 ##   godot --path . --script res://tools/tourney_shots.gd
@@ -68,16 +68,26 @@ func _go() -> void:
 	await _shot("range_moba")
 	rng.back.emit()
 	lobby = await _until(LobbyScreen)
+	await _wait(0.5)
+	tour.go_quick("fps_mid")
+	await _wait(3.0)
+	await _shot("quick_fps_mid")
+	tour.go_lobby()
+	lobby = await _until(LobbyScreen)
 	await _wait(0.8)
 	lobby.state.me().ready = true
 	lobby.start.emit()
 	var br: BracketScreen = await _until(BracketScreen)
 	await _wait(0.8)
 	await _shot("bracket_rolling")
-	await _wait(3.5)
-	await _shot("bracket_rolled")
-	await _wait(1.5)
-	await _shot("bracket_vote")
+	await _wait(1.0)
+	await _shot("bracket_landing")
+	var t0 := 0.0
+	while br._phase != "next" and t0 < 15.0:
+		await _wait(0.1)
+		t0 += 0.1
+	await _wait(0.6)
+	await _shot("bracket_next")
 	var mu: MatchupScreen = await _until(MatchupScreen, 20.0)
 	await _wait(2.0)
 	await _shot("matchup")
@@ -100,9 +110,10 @@ func _go() -> void:
 			(cur as ResultScreen).done.emit()
 		elif cur is MatchupScreen:
 			(cur as MatchupScreen)._go()
-		elif cur is BracketScreen and (cur as BracketScreen)._phase == "vote":
-			(cur as BracketScreen)._decide()
+		elif cur is BracketScreen and (cur as BracketScreen)._phase == "next":
+			(cur as BracketScreen).decide()
 	var ch: ChampionScreen = await _until(ChampionScreen, 10.0)
+	await _wait(0.5)
 	await _wait(1.0)
 	await _shot("champion")
 	print("tourney shots: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))

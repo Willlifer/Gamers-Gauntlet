@@ -7,7 +7,18 @@ row is newer; then fix this doc.
 
 ## The tournament (shell)
 - 4–8 players, double elimination; each match's game is rolled from the
-  enabled modules (`TourneyModules.POOL`), with a 10 s vote on which match goes first.
+  enabled modules (`TourneyModules.POOL`). The rolls are slot reels: games,
+  then first-round players, stopping in a cascade, the last pick rolling in
+  over 0.5 s. The top ready match (layout order) plays next: no vote (G27).
+- Lobby: Smash-style tiles. Tournament, the two ranges, and **Quick play**:
+  any game at once against a bot, nothing counts, back to the lobby at the
+  end or on F10. The creator is a card on the right (under a quarter of the
+  screen). In a tournament match, F10 forfeits (G27).
+- Look: ink panels over a game's map circling slowly behind every screen
+  (`TourneyBackdrop`; the matchup shows that match's map when it has one),
+  one warm accent, gold for winners, blue and red for the two sides. The
+  bracket has two sides (winners from the left, losers from the right, the
+  grand final under the trophy), with name plates and portraits (G27).
 - Bets: the house stakes 5 a side; players bet 5–25 and winners split the pot
   by stake. Results get comments; the champion screen ends the night.
 - Offline now: you plus bots. A bot-vs-bot match is rolled by the module's `simulate()`.
@@ -34,6 +45,15 @@ Smite: 600 true damage, the boss only. The last hit wins (G12).
 First person on the kit rooftops against a bot, first to 5. Sniper (4x
 scope), shotgun, slingshot. Shift tap crouch, hold prone; RMB aims; a
 CS:GO-style reticle drawn from the real spread (G20). Numbers: `FpsTune` (F1).
+- **Bullets fly** (G28): rifle and shotgun rounds (one per pellet), and the
+  bot's, travel straight at 5x the slingshot ball's full-draw speed (375 m/s;
+  `bullet_speed`) with a trail (`bullet_trail`, 8 m), and hurt whoever they
+  meet: rifle 85 (head x2.5), pellet 13 (x1.5); the bot's 34, a head 100.
+  The bot's accuracy roll now picks where it aims; the bullet still has to land.
+
+## fps_mid: FPS Mid duel (prototype)
+The same duel on the kit's Dust2-mid hallway (G29): you at the T end, the bot
+in the tower half of the lane. Same guns, bullets, bot and `FpsTune`.
 
 ## mmo_raid: MMO Raid night
 A WoW Classic raid of six against the Giant in a round courtyard (G22).
@@ -49,9 +69,14 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
   - Meteor Rain: 14 marked impacts
   - Giant's Bombs: a 6 m bomb on everyone; spread
   - Earthshatter: a 5 m ring; group in
+  - **Cinderbrand** (its own clock: 20 s, then every 45 s; G30): an
+    unavoidable burn on everyone, 25% of max HP over 30 s. Run it off (each
+    metre walked takes 0.5 s off), get cleansed (paladin Cleanse, priest
+    Dispel Magic) or be healed through it.
 - **Controls:** WoW Classic's; the camera starts behind you.
 - **The verdict:** rating, your score per second against a same-class bot
   (`MmoClasses.PAR`), with -400 per mechanic failed and -1000 per death (G23).
+  Shelved by the author until the fight is solved (G31).
 - **Numbers:** `MmoTune` (F1).
 
 ## The Gauntlet Kit (assets for modules)

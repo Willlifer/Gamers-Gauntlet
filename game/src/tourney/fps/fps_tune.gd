@@ -29,6 +29,8 @@ const ENTRIES := {
 	"bob": ["Weapon bob (x)", 1.0, 0.0, 3.0, 0.05, "Weapon"],
 	"sway": ["Weapon sway (x)", 1.0, 0.0, 3.0, 0.05, "Weapon"],
 	"recoil": ["Recoil kick (x)", 1.0, 0.0, 3.0, 0.05, "Weapon"],
+	"bullet_speed": ["Bullet speed (x the slingshot ball)", 5.0, 1.0, 20.0, 0.5, "Weapon"],
+	"bullet_trail": ["Bullet trail length (m)", 8.0, 0.0, 30.0, 0.5, "Weapon"],
 	"bot_reaction": ["Bot reaction time (s)", 0.6, 0.1, 2.0, 0.05, "Bot"],
 	"bot_accuracy": ["Bot accuracy (0-1)", 0.5, 0.0, 1.0, 0.05, "Bot"],
 	"bot_speed": ["Bot run speed (m/s)", 4.6, 1.0, 10.0, 0.1, "Bot"],

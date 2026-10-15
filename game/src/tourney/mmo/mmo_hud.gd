@@ -474,6 +474,9 @@ func _timers_update() -> void:
 	if me and me.has_aura("bomb"):
 		var ba := me.aura("bomb")
 		rows.append(["BOMB ON YOU: spread!", float(ba.t), float(ba.dur), Color("#ff3010")])
+	if me and me.has_aura(MmoSim.BRAND):
+		var br := me.aura(MmoSim.BRAND)
+		rows.append(["CINDERBRAND: run, cleanse or heal", float(br.t), float(br.dur), Color("#e06018")])
 	var y := 0.0
 	for r: Array in rows:
 		var bar := TimerBar.new(self, str(r[0]), float(r[1]), float(r[2]), r[3])

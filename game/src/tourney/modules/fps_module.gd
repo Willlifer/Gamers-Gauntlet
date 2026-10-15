@@ -11,6 +11,11 @@ static func info() -> Dictionary:
 		"blurb": "First person on the rooftops. Sniper, shotgun, slingshot. First to 5." }
 
 
+## The kit map this duel is on (FpsMidModule: the Dust hallway).
+func map_id() -> String:
+	return "rooftop"
+
+
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	rng.seed = int(m.seed)
 	var p: Array = m.players
@@ -30,6 +35,7 @@ func setup(m: Dictionary) -> void:
 		if p != human:
 			other = p
 	var world := FpsWorld.new()
+	world.map_id = map_id()
 	world.match_over.connect(func(won: bool, summary: String) -> void:
 		finished.emit({ "winner": human.id if won else other.id, "summary": summary, "stats": {} }))
 	add_child(world)

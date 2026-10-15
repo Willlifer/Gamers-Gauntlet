@@ -5,6 +5,8 @@ extends SceneTree
 ##     the ring spares the grouped, cracks and meteors hit who stands in them)
 ##   - the Giant never starts a spell sooner than spell_gap after the last ended
 ##   - bot raids end (the Giant dies or the raid wipes) at a sane length
+##   - Cinderbrand (G30): lands on all six; left alone it deals brand_pct of
+##     max HP over brand_dur; a cleanse takes it off; running burns it down
 ##   - the same seed replays to the same state
 ##   [RUNS=n] godot --headless --path . --script res://tools/mmo_probe.gd
 
@@ -16,6 +18,7 @@ func _initialize() -> void:
 	MmoTune.use_defaults()
 	_abilities()
 	_mechanics()
+	_brand()
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 6
 	_raids(runs)
 	if _replay(4242) != _replay(4242):
@@ -166,6 +169,79 @@ func _mechanics() -> void:
 	if outs != 1:
 		_fail("ring: %d fails, expected 1 (the one outside)" % outs)
 	print("ring: %d outside" % outs)
+
+
+# ------------------------------------------------------------ Cinderbrand
+
+## Players far from the Giant, no orders, nothing else cast: the burn alone.
+func _brand_run(seed: int, each_tick: Callable) -> Dictionary:
+	var s := _raid(seed)
+	s._pull()
+	var ps := s.players()
+	for i in ps.size():
+		(ps[i] as MmoUnit).pos = Vector2(sin(TAU * i / 6.0), cos(TAU * i / 6.0)) * 20.0
+	s.next_spell_at = 0.0
+	s.next_brand_at = 0.0
+	var took := {}
+	var branded := {}
+	var t := 0.0
+	while t < MmoTune.value("brand_dur") + MmoSim.SPELL_CAST.brand + 3.0:
+		var orders: Dictionary = each_tick.call(s)
+		for e: Dictionary in s.step(orders):
+			if e.type == "dmg" and str(e.what) == "Cinderbrand":
+				took[e.tgt] = float(took.get(e.tgt, 0.0)) + float(e.n)
+			if e.type == "aura" and str(e.aura) == MmoSim.BRAND and e.on:
+				branded[e.id] = true
+		if s.spell.is_empty():
+			s.next_spell_at = INF                    # nothing else this test
+		t += MmoSim.TICK
+	return { "sim": s, "took": took, "branded": branded }
+
+
+func _brand() -> void:
+	# left alone: all six branded, each takes brand_pct of max HP (rounding: ±1%)
+	var r := _brand_run(31, func(_s: MmoSim) -> Dictionary: return {})
+	var s: MmoSim = r.sim
+	if (r.branded as Dictionary).size() != 6:
+		_fail("brand: %d of 6 branded" % (r.branded as Dictionary).size())
+	var worst := 0.0
+	for p: MmoUnit in s.players():
+		var want := p.max_hp * MmoTune.value("brand_pct")
+		var got := float(r.took.get(p.id, 0.0))
+		worst = maxf(worst, absf(got - want) / want)
+		if absf(got - want) > want * 0.01:
+			_fail("brand: %s took %.0f, want %.0f (25%% of %.0f)" % [p.cls, got, want, p.max_hp])
+	print("brand left alone: 6 x %.0f%% of max HP (worst off by %.2f%%)" % [MmoTune.value("brand_pct") * 100.0, worst * 100.0])
+	# running: one player runs the whole time; the brand burns off early
+	var runner := ""
+	r = _brand_run(32, func(sim: MmoSim) -> Dictionary:
+		var w: MmoUnit = sim.players()[3]
+		return { w.id: { "mv": Vector2(0, 1), "turn": 1.0 } })
+	s = r.sim
+	runner = (s.players()[3] as MmoUnit).id
+	var ran := float(r.took.get(runner, 0.0))
+	var full := (s.players()[3] as MmoUnit).max_hp * MmoTune.value("brand_pct")
+	if ran > full * 0.5:
+		_fail("brand: running only cut it to %.0f of %.0f" % [ran, full])
+	print("brand run off: %.0f of %.0f (%.0f%%)" % [ran, full, ran / full * 100.0])
+	# cleanse: the priest's Dispel Magic takes it off an ally
+	s = _raid(33)
+	s._pull()
+	var pr: MmoUnit
+	var al: MmoUnit
+	for p: MmoUnit in s.players():
+		if p.cls == "priest":
+			pr = p
+		elif p.cls == "mage":
+			al = p
+	s.brand(al)
+	pr.target = al.id
+	pr.pos = al.pos + Vector2(3, 0)
+	var went := s.try_cast(pr, "dispel")
+	if not went or al.has_aura(MmoSim.BRAND):
+		_fail("brand: Dispel Magic didn't take it off (went=%s)" % went)
+	else:
+		print("brand cleansed: OK")
 
 
 # ------------------------------------------------------------------ raids

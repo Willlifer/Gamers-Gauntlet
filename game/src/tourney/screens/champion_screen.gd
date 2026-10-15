@@ -9,12 +9,6 @@ var state: TourneyState
 
 func _ready() -> void:
 	var root := TourneyUI.root(self)
-	var bg := ColorRect.new()
-	bg.color = Color(0.09, 0.09, 0.12)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(bg)
-	root.move_child(bg, 0)
 	var champ := state.player(state.bracket.champion)
 	var v := TourneyUI.panel(root, Rect2(100, 60, 600, 780), "Champion")
 	var st := TourneyUI.stage(v, state.unit_for(champ), Vector2(560, 520), true, Color(0.14, 0.12, 0.08))

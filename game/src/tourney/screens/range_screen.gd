@@ -25,12 +25,6 @@ func _ready() -> void:
 	_binds = TourneyState.load_binds()
 	_sens = TourneyState.load_sens()
 	_root = TourneyUI.root(self)
-	var bg := ColorRect.new()
-	bg.color = Color(0.12, 0.12, 0.15)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(bg)
-	_root.move_child(bg, 0)
 	var v := TourneyUI.panel(_root, Rect2(20, 20, 620, 860), "MOBA range" if kind == "moba" else "Shooter range")
 	TourneyUI.label(v, "Click a bind, then press the key you want.", BWStyle.F_SMALL, TourneyUI.DIM)
 	_list = VBoxContainer.new()

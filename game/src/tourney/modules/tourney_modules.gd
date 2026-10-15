@@ -4,7 +4,7 @@ extends RefCounted
 ## here and its `info()` fills the roll. `enabled` lists what the lobby
 ## turned on.
 
-static var POOL: Array = [BWFightModule, AramModule, PitModule, FpsModule, MmoModule]
+static var POOL: Array = [BWFightModule, AramModule, PitModule, FpsModule, FpsMidModule, MmoModule]
 
 
 static func infos() -> Array:

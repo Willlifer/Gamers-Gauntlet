@@ -176,7 +176,7 @@ func on_event(e: Dictionary) -> void:
 		"boss_spell":
 			var at := Vector3(s.boss.pos.x, 3.0, s.boss.pos.y)
 			if str(e.stage) == "cast":
-				BWSfx.play("ph_cast_%s" % { "upheaval": "wind", "meteors": "fire", "bombs": "fire", "gather": "light" }.get(str(e.spell), "dark"), at, { "gain_db": 3.0, "pitch": 0.75 })
+				BWSfx.play("ph_cast_%s" % { "upheaval": "wind", "meteors": "fire", "bombs": "fire", "gather": "light", "brand": "fire" }.get(str(e.spell), "dark"), at, { "gain_db": 3.0, "pitch": 0.75 })
 			else:
 				match str(e.spell):
 					"upheaval":
@@ -184,6 +184,8 @@ func on_event(e: Dictionary) -> void:
 						BWSfx.play("ko_thud", at, { "gain_db": 4.0, "pitch": 0.5 })
 					"bombs":
 						BWSfx.play("bolt_fizz", at, { "gain_db": 0.0 })
+					"brand":
+						BWSfx.play("bolt_fizz", at, { "gain_db": 2.0, "pitch": 0.7 })
 					"gather":
 						BWSfx.play("ph_colossus_thrust", at, { "gain_db": 4.0, "pitch": 0.6 })
 		"explode":

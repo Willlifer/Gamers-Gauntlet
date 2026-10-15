@@ -11,6 +11,13 @@ extends RefCounted
 
 const ORDER := ["sniper", "shotgun", "slingshot"]
 
+
+## Bullets fly (G28): the rifle's and shotgun's rounds travel at FpsTune
+## bullet_speed times the slingshot ball's full-draw speed (author: 5x), in a
+## straight line, with a trail.
+static func bullet_speed() -> float:
+	return FpsTune.value("bullet_speed") * float(SPECS.slingshot.ball_speed)
+
 const SPECS := {
 	"sniper": { "name": "Bolt rifle", "asset": "sniper", "params": { "scale": 1.0, "bipod": "folded" },
 		"damage": 85.0, "head": 2.5, "pellets": 1, "cycle": 1.25, "mag": 5, "reload": 2.4,

@@ -80,10 +80,20 @@ func _go() -> void:
 			break
 	await _wait(1.5)
 	await _shot("fight")
-	var want := ["upheaval", "meteors", "bombs", "gather"]
+	var want := ["upheaval", "meteors", "bombs", "gather", "brand"]
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 4000:
 		guard += 1
+		# Cinderbrand (G30): a frame of the raid burning, a couple of seconds in
+		var burning: Array = s.living().filter(func(p: MmoUnit) -> bool: return p.has_aura(MmoSim.BRAND))
+		if "brand" in want and burning.size() >= 3:
+			var ba: Dictionary = (burning[0] as MmoUnit).aura(MmoSim.BRAND)
+			if float(ba.dur) - float(ba.t) > 0.8:
+				await _shot("brand")
+				want.erase("brand")
+				continue
+			await process_frame
+			continue
 		# run fast until a spell is about to start, then in real time
 		if s.spell.is_empty() and s.next_spell_at - s.time > 1.2:
 			v._tick()

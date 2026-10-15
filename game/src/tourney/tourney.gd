@@ -1,10 +1,17 @@
 extends Node
 ## The tournament's entry point and flow: lobby → bracket (rolls) → for each
-## match: vote → matchup and bets → the game → result → bracket … → champion.
+## match: up next → matchup and bets → the game → result → bracket … →
+## champion. Quick play (lobby) opens one game against a bot and comes back.
+## Behind every screen the backdrop circles a game's map (G27); it switches
+## off while a game runs. F10 leaves a game early (quick play: to the lobby;
+## a tournament match: counted as a loss).
 ## Args after `--`: --bots n (seat n bots at once), --autostart (ready and go).
 
 var state: TourneyState
 var screen: Node
+var backdrop: TourneyBackdrop
+var _game_match := ""                       # the match being played ("" in menus)
+var _quick := false
 ## Tools: roll every game's result instead of playing it.
 static var simulate_all := false
 
@@ -20,6 +27,10 @@ func _ready() -> void:
 	for n in [BWMusic._inst, BWSfx._inst]:
 		if n and is_instance_valid(n):
 			n.process_mode = Node.PROCESS_MODE_ALWAYS
+	backdrop = TourneyBackdrop.new()
+	add_child(backdrop)
+	backdrop.show_map()
+	TourneyPortraits.ensure(self)
 	state = TourneyState.new()
 	state.add_local(TourneyState.load_profile())
 	var bots := int(_arg(args, "--bots", "3"))
@@ -40,6 +51,24 @@ func _swap(next: Node) -> void:
 		screen.queue_free()
 	screen = next
 	add_child(next)
+	var game := next is TourneyModule
+	backdrop.set_active(not game)
+	if not game:
+		_game_match = ""
+		_quick = false
+
+
+func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.physical_keycode == KEY_F10:
+		if _quick:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			go_lobby()
+		elif _game_match != "":
+			var m := state.bracket.get_match(_game_match)
+			var me: String = str(state.me().id)
+			if m.p1 == me or m.p2 == me:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				_record(_game_match, { "winner": m.p2 if m.p1 == me else m.p1, "summary": "%s left the game." % state.me().name, "stats": {} })
 
 
 # ------------------------------------------------------------------ flow
@@ -49,6 +78,7 @@ func go_lobby(autostart: bool = false) -> void:
 	s.state = state
 	s.start.connect(start_tournament)
 	s.open_range.connect(go_range)
+	s.quick_play.connect(go_quick)
 	_swap(s)
 	TourneyMusic.play("lobby")
 	if autostart:
@@ -61,6 +91,30 @@ func go_range(kind: String) -> void:
 	s.back.connect(func(): go_lobby())
 	_swap(s)
 	TourneyMusic.play("lobby")
+
+
+## Quick play: one game, you against a bot, straight from the lobby; nothing
+## counts and it comes back to the lobby when the game ends (or on F10).
+func go_quick(module_id: String) -> void:
+	var script := TourneyModules.script_for(module_id)
+	if script == null:
+		return
+	var rival: Dictionary = {}
+	for p in state.players:
+		if p.bot:
+			rival = p
+			break
+	if rival.is_empty():
+		rival = { "id": "rival", "name": "Rival", "bot": true }
+	var mod: TourneyModule = script.new()
+	mod.finished.connect(func(_r):
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		go_lobby())
+	_swap(mod)
+	_quick = true
+	TourneyMusic.play("hype")
+	mod.setup({ "id": "quick", "seed": int(state.rng.randi()), "players": [state.me(), rival],
+		"binds": TourneyState.load_binds(), "sens": TourneyState.load_sens() })
 
 
 func start_tournament() -> void:
@@ -92,6 +146,9 @@ func go_matchup(match_id: String) -> void:
 	s.match_id = match_id
 	s.start.connect(func(): go_game(match_id))
 	_swap(s)
+	var map := str(TourneyBackdrop.FOR_GAME.get(state.bracket.get_match(match_id).game, ""))
+	if map != "":
+		backdrop.show_map(map)
 	TourneyMusic.play("hype")
 
 
@@ -106,8 +163,11 @@ func go_game(match_id: String) -> void:
 		_record(match_id, r)
 		return
 	var mod: TourneyModule = script.new()
-	mod.finished.connect(func(r): _record(match_id, r))
+	mod.finished.connect(func(r):
+		if _game_match == match_id:
+			_record(match_id, r))
 	_swap(mod)
+	_game_match = match_id
 	TourneyMusic.play("hype")                       # loading in and picking: the game cues "fight" when it starts
 	mod.setup(cfg)
 

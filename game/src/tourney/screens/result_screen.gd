@@ -19,12 +19,6 @@ var _entry: LineEdit
 func _ready() -> void:
 	var m := state.bracket.get_match(match_id)
 	_root = TourneyUI.root(self)
-	var bg := ColorRect.new()
-	bg.color = Color(0.09, 0.09, 0.12)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(bg)
-	_root.move_child(bg, 0)
 	var w := state.player(m.winner)
 	var l := state.player(m.loser)
 	var v := TourneyUI.panel(_root, Rect2(300, 60, 1000, 780), TourneyBracket.label(m))

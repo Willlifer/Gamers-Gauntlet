@@ -21,6 +21,13 @@ extends RefCounted
 ##   bombs     a bomb on everyone; each blows up on its carrier: spread out
 ##   gather    a ring on the ground; outside it takes heavy damage, inside
 ##             shares a smaller hit: group up
+## On its own clock, taking the next spell slot when due (G30, the author's
+## chip damage):
+##   brand     Cinderbrand: a short cast, then a burn on every raid member,
+##             unavoidable. Left alone it deals MmoTune.brand_pct of max HP
+##             over brand_dur s. Three ways out: run it off (every metre you
+##             move burns brand_run s off it), a cleanse (Cleanse, Dispel
+##             Magic), or healing through it.
 
 const TICK := 1.0 / 30.0
 const ARENA_R := 25.0
@@ -29,8 +36,9 @@ const BOSS_WALK := 3.4
 const PULL_R := 16.0
 const FIRST_SPELL := 7.0
 const SPELLS := ["upheaval", "meteors", "bombs", "gather"]
-const SPELL_NAMES := { "upheaval": "Upheaval", "meteors": "Meteor Rain", "bombs": "Giant's Bombs", "gather": "Earthshatter" }
-const SPELL_CAST := { "upheaval": 2.0, "meteors": 5.0, "bombs": 1.6, "gather": 1.8 }
+const SPELL_NAMES := { "upheaval": "Upheaval", "meteors": "Meteor Rain", "bombs": "Giant's Bombs", "gather": "Earthshatter", "brand": "Cinderbrand" }
+const SPELL_CAST := { "upheaval": 2.0, "meteors": 5.0, "bombs": 1.6, "gather": 1.8, "brand": 1.5 }
+const BRAND := "cinderbrand"     ## the burn's aura id
 const CRIT := 0.1
 const QUEUE := 0.4              # a key pressed this close to the end of a cast / the GCD fires when it ends
 
@@ -45,6 +53,7 @@ var pull_time := 0.0
 var enraged := false
 var spell := {}                 # the Giant's spell in progress: { id, t, total, stage, ... }
 var next_spell_at := INF
+var next_brand_at := INF        # Cinderbrand's own clock (G30)
 var resolving := 0              # spell effects still pending (bomb fuses, the ring)
 var _bag: Array = []
 var _events: Array = []
@@ -200,6 +209,16 @@ func _regen(u: MmoUnit) -> void:
 
 
 func _move(u: MmoUnit, o: Dictionary) -> void:
+	var was := u.pos
+	_move_body(u, o)
+	var ran := u.pos.distance_to(was)
+	if ran > 0.0001 and (u.moving or u.airborne):
+		var a := u.aura(BRAND)
+		if not a.is_empty():
+			a.t = float(a.t) - ran * MmoTune.value("brand_run")       # running it off (G30)
+
+
+func _move_body(u: MmoUnit, o: Dictionary) -> void:
 	var still := u.frozen()
 	if o.has("yaw") and not still:
 		u.yaw = wrapf(float(o.yaw), -PI, PI)
@@ -752,7 +771,7 @@ func add_aura(u: MmoUnit, a: Dictionary) -> void:
 	a["t"] = float(a.dur)
 	if a.has("dot") or a.has("hot"):
 		var every := float(a.get("every", 3.0))
-		var n := maxi(1, int(round(float(a.dur) / every)))
+		var n := int(a.get("ticks", maxi(1, int(round(float(a.dur) / every)))))
 		a["per"] = float(a.get("dot", a.get("hot", 0.0))) / n
 		a["tick_t"] = every
 	u.auras.append(a)
@@ -790,6 +809,7 @@ func _pull() -> void:
 	pulled = true
 	pull_time = time
 	next_spell_at = time + FIRST_SPELL
+	next_brand_at = time + MmoTune.value("brand_first")
 	_emit({ "type": "pull" })
 	_emit({ "type": "warn", "text": "The Giant wakes!", "col": "#ff4a3a" })
 
@@ -855,7 +875,10 @@ func _tick_boss() -> void:
 func _tick_spell() -> void:
 	if spell.is_empty():
 		if time >= next_spell_at and resolving <= 0:
-			_begin_spell()
+			if time >= next_brand_at and MmoTune.value("brand_pct") > 0.0:
+				_begin_brand()                       # its clock is due: it takes this slot
+			else:
+				_begin_spell()
 		return
 	spell.t = float(spell.t) + TICK
 	match str(spell.id):
@@ -863,6 +886,7 @@ func _tick_spell() -> void:
 		"meteors": _meteors()
 		"bombs": _bombs()
 		"gather": _gather()
+		"brand": _brand()
 
 
 func _begin_spell() -> void:
@@ -909,6 +933,41 @@ func _begin_spell() -> void:
 			if at.length() > ARENA_R - 6.0:
 				at = at.normalized() * (ARENA_R - 6.0)
 			spell["at"] = at
+
+
+## Cinderbrand (G30): not in the bag; on its own clock it takes the next
+## spell slot (spell_gap still holds before and after it).
+func _begin_brand() -> void:
+	next_brand_at = time + MmoTune.value("brand_every")
+	var total := float(SPELL_CAST.brand)
+	spell = { "id": "brand", "t": 0.0, "total": total, "stage": "cast" }
+	boss.cast = { "ab": "brand", "t": 0.0, "total": total, "channel": false }
+	boss.cast_serial += 1
+	boss.last_ab = "brand"
+	_emit({ "type": "boss_spell", "spell": "brand", "stage": "cast" })
+	_emit({ "type": "warn", "text": "Cinderbrand! Run it off, get cleansed or get healed!", "col": "#ff7a2a" })
+
+
+func _brand() -> void:
+	if _spell_after():
+		return
+	if boss.cast.has("ab"):
+		boss.cast.t = spell.t
+	if float(spell.t) >= float(spell.total):
+		for u: MmoUnit in living():
+			brand(u)
+		_emit({ "type": "boss_spell", "spell": "brand", "stage": "fire" })
+		_end_spell(0.4)
+
+
+## Put the burn on one raid member: brand_pct of their max HP over brand_dur,
+## a tick every brand_tick s. Cleansable; moving burns it down (_move).
+func brand(u: MmoUnit) -> void:
+	var dur := MmoTune.value("brand_dur")
+	var every := MmoTune.value("brand_tick")
+	add_aura(u, { "id": BRAND, "name": "Cinderbrand", "src": "boss", "dur": dur + TICK * 0.5, "every": every,
+		"dot": u.max_hp * MmoTune.value("brand_pct"), "ticks": maxi(1, int(round(dur / every))),
+		"school": "fire", "debuff": true, "cleanse": true, "glyph": "flame", "col": "#ff7a2a" })
 
 
 func _end_spell(stage_after := 0.6) -> void:

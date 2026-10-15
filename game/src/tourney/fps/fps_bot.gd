@@ -199,17 +199,15 @@ func _fire() -> void:
 	acc *= clampf(1.15 - dist / 140.0, 0.35, 1.0)
 	var muzzle := gun.global_transform * gun_asset.marker("muzzle").origin
 	world.muzzle_flash(muzzle, (to - muzzle).normalized())
+	# the roll picks where it aims; the bullet still has to get there (G28):
+	# a good roll aims at the chest (or the head, 12%), a bad one beside you
+	var aim := to
 	if _rng.randf() < acc:
-		var head := _rng.randf() < 0.12
-		world.tracer(muzzle, to, Color(1.0, 0.75, 0.45))
-		target.take_damage(100.0 if head else 34.0)
-		world.player_hit(head)
+		if _rng.randf() < 0.12:
+			aim = target.cam.global_position
 	else:
-		var miss := to + Vector3(_rng.randf_range(-1.2, 1.2), _rng.randf_range(-0.6, 1.4), _rng.randf_range(-1.2, 1.2))
-		var hit := world.trace(muzzle, muzzle + (miss - muzzle).normalized() * 300.0, [get_rid()])
-		world.tracer(muzzle, hit.position if not hit.is_empty() else miss, Color(1.0, 0.75, 0.45))
-		if not hit.is_empty():
-			world.impact(hit.position, hit.normal)
+		aim = to + Vector3(_rng.randf_range(-1.2, 1.2), _rng.randf_range(-0.6, 1.4), _rng.randf_range(-1.2, 1.2))
+	world.fire_bullet(muzzle, (aim - muzzle).normalized(), self, 34.0, 100.0 / 34.0, 300.0, Color(1.0, 0.75, 0.45), muzzle)
 	world.shot_near_player(muzzle)
 
 

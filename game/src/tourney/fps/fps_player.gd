@@ -223,7 +223,9 @@ func _weapon(delta: float) -> void:
 var _reload_pending := false
 
 
-## Fire: hitscan pellets inside the current cone (the slingshot looses a ball).
+## Fire: bullets (one per pellet) inside the current cone, flown by the world
+## from the eye so the reticle stays true, drawn from the muzzle (G28); the
+## slingshot looses a ball.
 func _shoot(power: float) -> void:
 	var sp := spec()
 	_cool = float(sp.cycle)
@@ -240,16 +242,11 @@ func _shoot(power: float) -> void:
 		var dir := _cone(fwd, spread_deg)
 		world.loose_ball(vm.muzzle_global(), dir * float(sp.ball_speed) * lerpf(0.55, 1.0, power), self, float(sp.damage) * lerpf(0.35, 1.0, power))
 		return
-	var hits := []
+	var muzzle := vm.muzzle_global() if not scoped else from + fwd * 0.3 + Vector3(0, -0.15, 0)
 	for k in int(sp.pellets):
 		var dir := _cone(fwd, spread_deg)
-		var hit := world.trace(from, from + dir * float(sp.range), [get_rid()])
-		hits.append(hit)
-		var end: Vector3 = hit.position if not hit.is_empty() else from + dir * float(sp.range)
-		world.tracer(vm.muzzle_global() if not scoped else from + fwd * 0.3 + Vector3(0, -0.15, 0), end, sp.tracer)
-		if not hit.is_empty():
-			world.on_hit(self, hit, float(sp.damage), float(sp.head))
-	fired.emit(from, hits)
+		world.fire_bullet(from, dir, self, float(sp.damage), float(sp.head), float(sp.range), sp.tracer, muzzle)
+	fired.emit(from, [])
 
 
 static func _cone(fwd: Vector3, deg: float) -> Vector3:

@@ -25,14 +25,7 @@ var _done := false
 func _ready() -> void:
 	_m = state.bracket.get_match(match_id)
 	_root = TourneyUI.root(self)
-	var bg := ColorRect.new()
-	bg.color = Color(0.09, 0.09, 0.12)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(bg)
-	_root.move_child(bg, 0)
-	var head := TourneyUI.big(_root, "%s  ·  %s" % [TourneyBracket.label(_m), TourneyModules.name_of(_m.game)], 32)
-	head.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_KEEP_SIZE, 16)
+	TourneyUI.header(_root, TourneyModules.name_of(_m.game).to_upper(), TourneyBracket.label(_m))
 	var sides := [["p1", TourneyUI.BLUE, 60], ["p2", TourneyUI.RED, 1040]]
 	for s in sides:
 		var p := state.player(_m[s[0]])

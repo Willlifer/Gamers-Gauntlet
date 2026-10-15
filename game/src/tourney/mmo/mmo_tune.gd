@@ -40,8 +40,15 @@ const ENTRIES := {
 	"gather_radius": ["Gather ring radius (m)", 5.0, 2.0, 12.0, 0.25, "Giant"],
 	"gather_fuse": ["Gather: time to get in (s)", 7.0, 2.0, 14.0, 0.25, "Giant"],
 	"enrage": ["Enrage after (s)", 300.0, 60.0, 900.0, 10.0, "Giant"],
+	"brand_first": ["Cinderbrand: first after the pull (s)", 20.0, 5.0, 120.0, 1.0, "Cinderbrand"],
+	"brand_every": ["Cinderbrand: every (s)", 45.0, 15.0, 180.0, 1.0, "Cinderbrand"],
+	"brand_pct": ["Cinderbrand: share of max HP if left alone (0 = off)", 0.25, 0.0, 1.0, 0.01, "Cinderbrand"],
+	"brand_dur": ["Cinderbrand: lasts (s)", 30.0, 5.0, 60.0, 1.0, "Cinderbrand"],
+	"brand_tick": ["Cinderbrand: a tick every (s)", 1.5, 0.5, 5.0, 0.1, "Cinderbrand"],
+	"brand_run": ["Cinderbrand: seconds burned off per metre run", 0.5, 0.0, 3.0, 0.05, "Cinderbrand"],
 	"bot_react": ["Bot reaction to mechanics (s)", 0.7, 0.0, 3.0, 0.05, "Bots"],
 	"bot_slip": ["Bot chance to fumble a mechanic (0-1)", 0.12, 0.0, 1.0, 0.01, "Bots"],
+	"bot_run_off": ["Bots run the brand off below this HP (0-1)", 0.6, 0.0, 1.0, 0.05, "Bots"],
 }
 
 static var _values := {}

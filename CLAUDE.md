@@ -35,8 +35,9 @@ a `history/` summary when the session was long.
 
 - **The shell** (`game/src/tourney/`): lobby with join code and the character
   creator (hair style + colour, name, title, experience), the testing ranges
-  (keybinds, sensitivity; `user://tourney.cfg`), the double-elimination
-  bracket with visible rolls and a 10 s vote on which match goes first, the
+  (keybinds, sensitivity; `user://tourney.cfg`), Quick play (any game vs a
+  bot, F10 leaves), the double-elimination bracket with slot-reel rolls (the
+  top ready match plays next), the
   matchup with bets (house 5 a side, bets 5–25, winners split by stake), the
   result with comments, the champion. Offline with bots for now; online is
   stage 3 (deterministic lockstep over WebRTC, see the plan).
@@ -52,11 +53,13 @@ a `history/` summary when the session was long.
     other, then you. League's locked camera, click to move/attack, QWER,
     flash + ignite. 1 world unit = 100 League units. Unset numbers are
     League-ish defaults marked OPEN in `moba_champs.gd`.
-  - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops.
+  - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops; bullets fly (G28).
+  - `fps_mid`: FPS: Mid duel (`FpsMidModule`, G29), the same duel on the kit's Dust2-mid hallway.
   - `mmo_raid`: MMO: Raid night (`src/tourney/mmo/`, G22-G23): a WoW Classic raid of six on the Giant, WoW controls and HUD; contestants compared by rating.
   - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
     plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
-- **Scope:** G11 narrowed it to the two MOBA games; the author has since asked for the FPS (G20) and MMO (G22) modules. Next steps wait on the author (PLAN, LEDGER L-8/L-9).
+- **Scope:** more modules first, online last (G32).
+- **The look** (G27, `src/tourney/ui/`): `TourneyTile` (menu tiles), `SlotReel` (the rolls), `TourneyBackdrop` (a game's map circling behind every screen), `TourneyPortraits` (plate portraits); palette and builders in `TourneyUI`.
 - **The range** (`RangeScreen`): binds plus a live practice MobaView with a dummy.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
@@ -72,11 +75,12 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `[MODULE=pit] --path . --script res://tools/aram_shots.gd`: ARAM (or the pit) on autopilot plus the range, frames to `design/shots/`; exit 0.
 - `[TAG=r6] --path . --script res://tools/moba_ref_shots.gd`: the reference-review frames (duel wave, duel fight, red side, pit) at fixed seeded moments, to `design/shots/ref/<tag>_*.png`; compare against `design/ref/league_aram_hud.jpg` (G15).
   The review loop itself is the `reference-gauntlet` skill (G16): shoot, score, fix, repeat.
+- `--headless --path . --script res://tools/fps_probe.gd`: FPS bullets (speed, flight, hits both ways, walls) on both maps; exit 0.
 - `--headless --path . --script res://tools/kit_probe.gd`: the Gauntlet kit (G17): every asset at defaults, presets and parameter extremes; inverted/inward faces; determinism; export round trip; the bench's undo/redo; exit 0.
 - `[ASSETS=sniper,rooftop] [TAG=r5] [FULL=1] --path . --script res://tools/kit_ref_shots.gd`: kit review sheets beside `design/ref/kit/*` to `design/shots/kit/`.
 - `--path . res://scenes/kit_bench.tscn`: the kit bench (shape assets, presets, export .glb).
 - `--path . res://scenes/fps_proto.tscn`: the FPS prototype alone (G20); `--path . --script res://tools/fps_shots.gd` shoots its frames to `design/shots/fps/`.
-- `--path . res://scenes/module.tscn -- --module pit` (or aram, fps_roof, mmo_raid, bw_twins): any tournament game alone vs a bot. Music everywhere in the tournament is the author's Chris loops (`TourneyMusic`, G25).
+- `--path . res://scenes/module.tscn -- --module pit` (or aram, fps_roof, fps_mid, mmo_raid, bw_twins): any tournament game alone vs a bot. Music everywhere in the tournament is the author's Chris loops (`TourneyMusic`, G25).
 - `--path . res://scenes/mmo_proto.tscn`: the MMO raid alone (class pick, then the fight). Checks: `--headless --path . --script res://tools/mmo_probe.gd` (all 96 abilities, the mechanics, the 5 s spell gap, bot raids, replay), `--headless ... tools/mmo_input.gd` (the WoW controls through real input events); frames: `[TAG=r4] [CLASS=priest] --path . --script res://tools/mmo_shots.gd` and `tools/mmo_moves_sheet.gd` (the Giant's poses) to `design/shots/mmo/`. Audio: `--headless ... tools/mmo_audio_check.gd`; re-trim the author's takes with `python tools/audio/trim_chris.py` (G24).
 - F1 in a MOBA match / the range / the FPS / the raid: the live feel-number panels (G19), saved to `user://moba_tune.cfg` / `user://fps_tune.cfg` / `user://mmo_tune.cfg`.
 - Black | White's self-test still runs and must stay green: `--headless --path . res://scenes/main.tscn -- --self-test` (the main scene is the tournament now, so name Black | White's; ~8 min).

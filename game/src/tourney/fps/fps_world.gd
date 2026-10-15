@@ -1,15 +1,17 @@
 class_name FpsWorld
 extends Node3D
-## The FPS prototype: you against a bot on the Gauntlet kit's apartment
-## rooftops (G17), first to FpsTune.kills_to_win. Builds the map from the
-## kit (its colliders are the level), seats the player on roof A and the bot
-## on roof B, and owns the shared effects (traces, tracers, flashes, impacts,
+## The FPS prototype: you against a bot on a Gauntlet kit map, first to
+## FpsTune.kills_to_win. `map_id` picks it: "rooftop" (the apartment roofs,
+## G20) or "dust_mid" (the Dust2-mid hallway, G29). Builds the map from the
+## kit (its colliders are the level), seats the player at side A and the bot
+## at side B, and owns the shared effects (bullets, traces, flashes, impacts,
 ## slingshot balls) and the score. Run it alone:
 ##   godot --path . res://scenes/fps_proto.tscn
 ## or inside the tournament as FpsModule.
 
 signal match_over(human_won: bool, summary: String)
 
+var map_id := "rooftop"
 var map: GKAsset
 var player: FpsPlayer
 var bot: FpsBot
@@ -17,11 +19,12 @@ var hud: FpsHud
 var score := Vector2i.ZERO
 var _over := false
 var _balls: Array[Dictionary] = []
+var _bullets: Array[Dictionary] = []
 var _tune: FpsTunePanel
 
 
 func _ready() -> void:
-	map = GKRegistry.build("rooftop")
+	map = GKRegistry.build(map_id)
 	var stage := GKStage.outdoor(map.lights)
 	add_child(stage)
 	var sun := stage.get_node_or_null("Sun") as DirectionalLight3D
@@ -36,8 +39,7 @@ func _ready() -> void:
 	bot = FpsBot.new()
 	bot.world = self
 	bot.target = player
-	for r in (map.meta.roofs.b as Array):
-		bot.roof.append(Rect2(float(r[0]), float(r[1]), float(r[2]) - float(r[0]), float(r[3]) - float(r[1])))
+	bot.roof = _bot_area()
 	add_child(bot)
 	bot.global_transform = _spawn("b")
 	bot.respawn(bot.global_transform)
@@ -47,7 +49,20 @@ func _ready() -> void:
 	add_child(hud)
 	player.cam.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	hud.note("First to %d. The bot is on the far roof." % int(FpsTune.value("kills_to_win")))
+	hud.note("First to %d. The bot is %s." % [int(FpsTune.value("kills_to_win")), "on the far roof" if map_id == "rooftop" else "at the tower end"])
+
+
+## Where the bot may walk: roof B, or the far half of the hallway.
+func _bot_area() -> Array:
+	var out: Array = []
+	if map.meta.has("roofs"):
+		for r in (map.meta.roofs.b as Array):
+			out.append(Rect2(float(r[0]), float(r[1]), float(r[2]) - float(r[0]), float(r[3]) - float(r[1])))
+		return out
+	var pa: Array = map.meta.play_area                 # [x0, z0, x1, z1]: the tower end is z0
+	var zm := (float(pa[1]) + float(pa[3])) * 0.5
+	out.append(Rect2(float(pa[0]), float(pa[1]), float(pa[2]) - float(pa[0]), zm - float(pa[1])))
+	return out
 
 
 func _exit_tree() -> void:
@@ -100,8 +115,72 @@ func on_hit(_shooter: Node, hit: Dictionary, damage: float, head_mult: float) ->
 		puff(hit.position, Color(0.75, 0.2, 0.15))
 		if head:
 			hud.note("Headshot")
+	elif hit.collider == player and player.alive:
+		var head: bool = hit.position.y > player.cam.global_position.y - 0.25
+		player.take_damage(damage * (head_mult if head else 1.0))
+		player_hit(head)
 	else:
 		impact(hit.position, hit.normal)
+
+
+## A bullet (G28): flown from `from` along `dir` at FpsWeapons.bullet_speed()
+## with a ray per tick (so nothing is skipped), hitting whatever it meets:
+## the level, the bot, or you. Its trail starts at `vis_from` (the muzzle) and
+## converges on the true path within a few metres.
+func fire_bullet(from: Vector3, dir: Vector3, shooter: Node, damage: float, head_mult: float, reach: float, col: Color, vis_from: Vector3) -> void:
+	var m := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.03, 0.03, 1.0)
+	m.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(col, 0.95)
+	m.material_override = mat
+	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.visible = false
+	add_child(m)
+	_bullets.append({ "pos": from, "dir": dir.normalized(), "shooter": shooter, "damage": damage, "head": head_mult,
+		"left": reach, "col": col, "mesh": m, "mat": mat, "off": vis_from - from, "went": 0.0, "dead": false, "fade": 0.1 })
+
+
+func _fly_bullets(delta: float) -> void:
+	var speed := FpsWeapons.bullet_speed()
+	var trail := FpsTune.value("bullet_trail")
+	for b in _bullets.duplicate():
+		var mesh: MeshInstance3D = b.mesh
+		if b.dead:
+			b.fade -= delta
+			(b.mat as StandardMaterial3D).albedo_color.a = maxf(0.0, b.fade / 0.1) * 0.95
+			if b.fade <= 0.0:
+				mesh.queue_free()
+				_bullets.erase(b)
+			continue
+		var step := minf(speed * delta, float(b.left))
+		var from: Vector3 = b.pos
+		var to: Vector3 = from + b.dir * step
+		var shooter := b.shooter as CollisionObject3D
+		var hit := trace(from, to, [shooter.get_rid()] if shooter else [])
+		if not hit.is_empty():
+			to = hit.position
+			b.dead = true
+			on_hit(b.shooter, hit, float(b.damage), float(b.head))
+		b.went += from.distance_to(to)
+		b.left -= step
+		b.pos = to
+		if b.left <= 0.0:
+			b.dead = true
+		# the trail: from the muzzle-offset head back along the path
+		var head: Vector3 = to + (b.off as Vector3) * exp(-float(b.went) / 4.0)
+		var ln := minf(trail, float(b.went))
+		if ln < 0.05:
+			continue
+		var tail: Vector3 = head - b.dir * ln
+		var d: Vector3 = head - tail
+		var n := d.normalized()
+		mesh.visible = true
+		mesh.global_transform = Transform3D(Basis.looking_at(n, Vector3.UP if absf(n.y) < 0.99 else Vector3.RIGHT).scaled_local(Vector3(1, 1, d.length())), tail + d * 0.5)
 
 
 func player_hit(head: bool) -> void:
@@ -127,6 +206,7 @@ func loose_ball(at: Vector3, vel: Vector3, owner: Node, damage: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_fly_bullets(delta)
 	for b in _balls.duplicate():
 		var n: Node3D = b.node
 		var from := n.global_position

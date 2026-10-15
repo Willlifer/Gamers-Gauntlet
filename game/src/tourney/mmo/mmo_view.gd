@@ -597,7 +597,7 @@ func _boss_spell(e: Dictionary) -> void:
 		"cast":
 			_hud.log_line("The Giant begins to cast %s." % MmoSim.SPELL_NAMES.get(str(e.spell), ""), Color("#ff9040"))
 			if not v.is_empty():
-				v.move = str(e.spell)
+				v.move = "bombs" if str(e.spell) == "brand" else str(e.spell)      # Cinderbrand reuses the fling
 				v.move_t = 0.0
 		"fire":
 			match str(e.spell):
@@ -610,6 +610,10 @@ func _boss_spell(e: Dictionary) -> void:
 						_fx.release_at("fire", _v3(u.pos) + Vector3(0, 2.6, 0), 0.5)
 				"gather":
 					_fx.release_at("light", _v3(e.at as Vector2), 1.6)
+				"brand":
+					for u: MmoUnit in sim.living():
+						_fx.release_at("fire", _v3(u.pos) + Vector3(0, 1.2, 0), 0.8)
+					_hud.log_line("Cinderbrand burns the raid. Run it off, cleanse it or heal through it.", Color("#ff9040"))
 
 
 # ------------------------------------------------------------------- draw
@@ -646,6 +650,12 @@ func _draw_units(alpha: float, delta: float) -> void:
 		(v.name as Label3D).visible = id != me_id and (u.alive or u.kind == "player")
 		if u.kind == "boss":
 			(v.name as Label3D).visible = false
+		# Cinderbrand (G30): the branded smoulder, a lick of fire every so often
+		if u.alive and u.kind == "player" and u.has_aura(MmoSim.BRAND):
+			v["brand_t"] = float(v.get("brand_t", 0.0)) - delta
+			if float(v.brand_t) <= 0.0:
+				v.brand_t = 0.55
+				_fx.release_at("fire", root.position + Vector3(0, 1.1, 0), 0.32)
 	if tgt and _views.has(tgt.id):
 		_sel.visible = tgt.alive
 		var r := tgt.radius + 0.35

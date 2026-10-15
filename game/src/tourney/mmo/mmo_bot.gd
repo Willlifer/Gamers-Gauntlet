@@ -3,7 +3,8 @@ extends RefCounted
 ## A raid member played by the computer: the tank holds the Giant at the
 ## north mark, melee stand behind it, ranged and healers in an arc to the
 ## south. Mechanics: step out of cracks and meteor circles, run to a spread
-## slot with a bomb, run into the ring for Earthshatter. They react after
+## slot with a bomb, run into the ring for Earthshatter, run Cinderbrand off
+## when it hurts (healers cleanse it instead). They react after
 ## MmoTune.bot_react seconds and fumble a mechanic now and then
 ## (MmoTune.bot_slip), so a human can beat them on the meter.
 ## Abilities by priority of their `ai` tag (MmoClasses).
@@ -87,6 +88,11 @@ func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 		return _safe(s, u.pos, home)
 	if s.danger_at(home, 0.8):
 		return _safe(s, home, home)
+	# Cinderbrand (G30): low and still branded, a non-healer runs it off in a
+	# small circle around its spot (the healers keep healing and cleansing)
+	if u.role != "tank" and u.role != "healer" and u.has_aura(MmoSim.BRAND) and u.hp_pct() < MmoTune.value("bot_run_off") 			and _react(s, "brand%d" % int(s.next_brand_at)):
+		var w := s.time * 2.2 + idx
+		return (home + Vector2(sin(w), cos(w)) * 3.0).limit_length(MmoSim.ARENA_R - 1.5)
 	return home
 
 
