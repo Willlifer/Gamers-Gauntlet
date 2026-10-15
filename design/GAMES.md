@@ -57,10 +57,13 @@ in the tower half of the lane. Same guns, bullets, bot and `FpsTune`.
 
 ## mmo_raid: MMO Raid night
 A WoW Classic raid of six against the Giant in a round courtyard (G22).
-- **Seats:** both contestants on different classes; the other four seats are bots.
+- **Seats:** a raid of eight. Both contestants (any classes, the same one allowed)
+  and one bot of each class; the Giant scales with the raid's size (G39).
 - **Classes:** warrior (tank, rage), paladin (hammer + heals), priest (healer),
-  mage, hunter (Auto Shot), rogue (energy + combo points). 16 abilities each on
-  1–8 and Shift+1–8: `MmoClasses.CLASSES`.
+  mage, hunter, rogue (energy). **Eight abilities each on 1–8** (G39), in the
+  same order for every class: spammable, strong, self steroid, team steroid,
+  self heal, self cleanse, super, the class's pick. `MmoClasses.CLASSES`
+  (the old sixteen on `shelf`).
 - **Rules:** WoW Classic's global cooldown, cast bars broken by moving, the
   180° facing rule, threat and taunts, auras, resurrection.
 - **The Giant:** 300,000 HP; 360 a swing every 2.2 s; enrage at 300 s. One spell

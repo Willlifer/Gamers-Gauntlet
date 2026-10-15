@@ -1,8 +1,18 @@
 class_name MmoClasses
 extends RefCounted
 ## The raid's six classes after WoW Classic: their looks (Black | White's
-## armour, clothes, hair and weapons), stats, resource and sixteen
-## abilities each, bound to 1-8 and Shift+1-8 (slots 0-15).
+## armour, clothes, hair and weapons), stats, resource and eight abilities
+## each on 1-8 (G39), one per slot of the author's template (`kind`):
+##   1 spam          instant, ~3 s cooldown, beats auto-attacking
+##   2 strong        instant, 10-12 s cooldown
+##   3 self_steroid  1 s cast, 30 s; recast off cooldown to keep your damage up
+##   4 team_steroid  instant, 30 s; recast off cooldown to keep the raid's up
+##   5 self_heal     20 s cooldown
+##   6 self_cleanse  30 s cooldown (every burn and curse on you)
+##   7 super         1 s cast, big damage (the priest: a big group heal), 40 s
+##   8 pick          the class's own: Taunt, Flash of Light, Dispel, Blink,
+##                   Disengage, Sprint
+## The sixteen-ability kits from G22 wait on each class's `shelf`, unused.
 ##
 ## An ability is data; MmoSim runs its `fx` list:
 ##   dmg n            damage to the target (crit 10%)          school = ab.school
@@ -32,7 +42,7 @@ extends RefCounted
 ## behind (must be behind the target), exec (target under 20%), threat (x).
 ## `ai` tells the bots when to press it.
 
-const SLOTS := 16
+const SLOTS := 8
 const MELEE := 5.0
 const RANGED := 36.0
 const HEAL_R := 40.0
@@ -40,8 +50,8 @@ const HEAL_R := 40.0
 const ORDER := ["warrior", "paladin", "priest", "mage", "hunter", "rogue"]
 ## A bot's meter score per second of the fight, per class (tools/mmo_probe.gd
 ## prints it as "par"): the tournament rates a player against their class's.
-## Re-measured 2026-10-15 over 20 bot raids with Cinderbrand in (G30).
-const PAR := { "warrior": 288.0, "paladin": 416.0, "priest": 225.0, "mage": 223.0, "hunter": 370.0, "rogue": 366.0 }
+## Re-measured 2026-10-15 over 20 bot raids of eight with the 8-spell kits (G39).
+const PAR := { "warrior": 336.0, "paladin": 283.0, "priest": 357.0, "mage": 540.0, "hunter": 457.0, "rogue": 396.0 }
 
 const CLASSES := {
 	"warrior": {
@@ -51,8 +61,34 @@ const CLASSES := {
 			"top": "sweater", "bottom": "tight_pants", "hair": "high_and_tight", "hair_hex": "#3b2a1e", "gender": "m",
 			"tint": "#b08a5a", "accent": "fire" },
 		"names": ["Gorehowl", "Brakkus", "Thrall-ish"],
-		"blurb": "Tank. Hold the Giant's eye with threat; shield up when it hurts.",
+		"blurb": "Tank. Hold the Giant's eye: Revenge on cooldown, Taunt if it turns.",
 		"abilities": [
+			{ "id": "revenge", "name": "Revenge", "glyph": "fist", "col": "#c24a3a", "school": "phys", "cost": 5.0, "cd": 3.0, "range": MELEE,
+				"tgt": "enemy", "anim": "strike", "threat": 2.4, "fx": [{ "dmg": 320.0 }], "ai": "filler", "kind": "spam",
+				"desc": "Strike back: 320 damage and lots of threat. Every 3 s." },
+			{ "id": "shield_slam", "name": "Shield Slam", "glyph": "shield", "col": "#7aa0d6", "school": "phys", "cost": 15.0, "cd": 10.0,
+				"range": MELEE, "tgt": "enemy", "anim": "strike", "threat": 2.2, "fx": [{ "dmg": 950.0 }], "ai": "dps", "kind": "strong",
+				"desc": "Slam the target with your shield: 950 damage." },
+			{ "id": "battle_trance", "name": "Battle Trance", "glyph": "rage", "col": "#ff5a2a", "school": "phys", "cast": 1.0, "cd": 30.0,
+				"range": 0.0, "tgt": "self", "anim": "cast", "fx": [{ "buff": { "dmg": 1.2, "threat": 1.3 }, "dur": 30.0, "who": "self", "id": "battle_trance" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: 20% more damage and threat for 30 s. Keep it up." },
+			{ "id": "battle_shout", "name": "Battle Shout", "glyph": "banner", "col": "#e0b84a", "school": "phys", "cd": 30.0, "range": 0.0,
+				"tgt": "none", "anim": "cast", "fx": [{ "buff": { "dmg": 1.05 }, "dur": 30.0, "who": "raid", "id": "battle_shout" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid deals 5% more damage for 30 s." },
+			{ "id": "enraged_regen", "name": "Enraged Regeneration", "glyph": "heart", "col": "#d04848", "school": "phys", "cd": 20.0, "gcd": false,
+				"range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "heal_pct": 0.25 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Heal 25% of your health at once." },
+			{ "id": "shake_it_off", "name": "Shake It Off", "glyph": "wave", "col": "#bfe8ff", "school": "phys", "cd": 30.0, "gcd": false,
+				"range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Shrug off every burn and curse on you." },
+			{ "id": "colossus_smash", "name": "Colossus Smash", "glyph": "axe", "col": "#ff9b3a", "school": "phys", "cost": 20.0, "cast": 1.0, "cd": 40.0,
+				"range": MELEE, "tgt": "enemy", "anim": "strike", "threat": 2.0, "fx": [{ "dmg": 2600.0 }], "ai": "nuke", "kind": "super",
+				"desc": "1 s: a colossal blow for 2600." },
+			{ "id": "taunt", "name": "Taunt", "glyph": "eye", "col": "#e05a3c", "school": "phys", "cd": 8.0, "gcd": false, "range": 30.0,
+				"tgt": "enemy", "anim": "cast", "fx": [{ "taunt": true }], "ai": "taunt", "kind": "pick",
+				"desc": "The target turns on you. (Your pick: the tank's job.)" },
+		],
+		"shelf": [
 			{ "id": "heroic_strike", "name": "Heroic Strike", "glyph": "sword", "col": "#d9a441", "school": "phys", "cost": 15.0, "range": MELEE,
 				"tgt": "enemy", "anim": "strike", "threat": 1.8, "fx": [{ "dmg": 280.0 }], "ai": "filler",
 				"desc": "A strong attack that draws attention: 280 damage, high threat." },
@@ -112,6 +148,32 @@ const CLASSES := {
 		"names": ["Uthera", "Lightbringa"],
 		"blurb": "Hammer and healer. Crusade in melee; heal whoever's falling.",
 		"abilities": [
+			{ "id": "crusader_strike", "name": "Crusader Strike", "glyph": "hammer", "col": "#f2c94c", "school": "light", "cost": 60.0, "cd": 3.0,
+				"range": MELEE, "tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 380.0 }], "ai": "filler", "kind": "spam",
+				"desc": "A holy strike: 380 damage. Every 3 s." },
+			{ "id": "judgement", "name": "Judgement", "glyph": "scales", "col": "#ffd36b", "school": "light", "cost": 110.0, "cd": 10.0,
+				"range": 20.0, "tgt": "enemy", "anim": "cast", "fx": [{ "dmg": 1000.0 }, { "debuff": { "taken": 1.03 }, "dur": 20.0, "id": "judgement" }],
+				"ai": "dps", "kind": "strong", "desc": "Judge the target: 1000 holy damage; it takes 3% more damage for 20 s." },
+			{ "id": "seal", "name": "Seal of Righteousness", "glyph": "sun", "col": "#ffe9a8", "school": "light", "cost": 80.0, "cast": 1.0, "cd": 30.0,
+				"range": 0.0, "tgt": "self", "anim": "cast", "fx": [{ "buff": { "proc": 160.0, "heal": 1.15 }, "dur": 30.0, "who": "self", "id": "seal" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: for 30 s your swings deal 160 extra holy damage and you heal 15% more." },
+			{ "id": "bless_might", "name": "Blessing of Might", "glyph": "fist", "col": "#e88a3a", "school": "light", "cost": 100.0, "cd": 30.0, "range": 0.0,
+				"tgt": "none", "anim": "cast", "fx": [{ "buff": { "dmg": 1.05 }, "dur": 30.0, "who": "raid", "id": "bless_might" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid deals 5% more damage for 30 s." },
+			{ "id": "word_of_glory", "name": "Word of Glory", "glyph": "cross", "col": "#fff1b8", "school": "light", "cd": 20.0, "gcd": false,
+				"range": 0.0, "tgt": "self", "anim": "cast", "fx": [{ "heal_pct": 0.3 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Heal yourself for 30% of your health." },
+			{ "id": "cleanse", "name": "Cleanse", "glyph": "wave", "col": "#bfe8ff", "school": "light", "cd": 30.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "cast", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Remove every burn and curse on you." },
+			{ "id": "hammer_of_wrath", "name": "Hammer of Wrath", "glyph": "hammer", "col": "#ff9b3a", "school": "light", "cost": 160.0, "cast": 1.0, "cd": 40.0,
+				"range": 30.0, "tgt": "enemy", "anim": "cast", "fx": [{ "dmg": 2800.0 }], "ai": "nuke", "kind": "super",
+				"desc": "1 s: hurl a hammer of light for 2800." },
+			{ "id": "flash_of_light", "name": "Flash of Light", "glyph": "spark", "col": "#ffe27a", "school": "light", "cost": 130.0, "cast": 1.5,
+				"range": HEAL_R, "tgt": "ally", "anim": "cast", "fx": [{ "heal": 900.0 }], "ai": "heal", "kind": "pick",
+				"desc": "A quick heal on an ally: 900. (Your pick: the hybrid's heal.)" },
+		],
+		"shelf": [
 			{ "id": "crusader_strike", "name": "Crusader Strike", "glyph": "hammer", "col": "#f2c94c", "school": "light", "cost": 90.0, "cd": 6.0,
 				"range": MELEE, "tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 420.0 }], "ai": "dps",
 				"desc": "A holy strike: 420 damage." },
@@ -163,13 +225,39 @@ const CLASSES := {
 		] },
 	"priest": {
 		"name": "Priest", "col": "#ffffff", "role": "healer", "res": "mana", "res_max": 6400.0, "hp": 4000.0,
-		"auto": {}, "armor": 1.0, "threat": 0.7,
+		"auto": { "dmg": 110.0, "speed": 2.0, "range": RANGED, "ranged": true }, "armor": 1.0, "threat": 0.7,
 		"look": { "weapon": "divine_staff", "chest": "silken_robe", "legs": "robe_bottoms", "head": "tiara",
 			"top": "tshirt", "bottom": "tight_pants", "hair": "waterfall", "hair_hex": "#e8e2ff", "gender": "f",
 			"tint": "#f4f0ff", "accent": "light" },
 		"names": ["Anduinne", "Benedicta"],
-		"blurb": "Healer. Keep everyone standing; shield the tank, renew the rest.",
+		"blurb": "Healer. Renew everyone, Penance the falling, Dispel the burns.",
 		"abilities": [
+			{ "id": "renew", "name": "Renew", "glyph": "drop", "col": "#9ff0b0", "school": "light", "cost": 90.0, "cd": 3.0, "range": HEAL_R, "tgt": "ally",
+				"anim": "cast", "fx": [{ "hot": 1000.0, "dur": 12.0 }], "ai": "hot", "kind": "spam",
+				"desc": "1000 healing over 12 s on an ally. Every 3 s." },
+			{ "id": "penance", "name": "Penance", "glyph": "cross", "col": "#fff1b8", "school": "light", "cost": 200.0, "cd": 10.0,
+				"range": HEAL_R, "tgt": "ally", "anim": "cast", "fx": [{ "heal": 2000.0 }], "ai": "heal", "kind": "strong",
+				"desc": "Instant: heal an ally for 2000." },
+			{ "id": "inner_focus", "name": "Inner Focus", "glyph": "flame", "col": "#ffd36b", "school": "light", "cast": 1.0, "cd": 30.0, "range": 0.0,
+				"tgt": "self", "anim": "cast", "fx": [{ "buff": { "heal": 1.25, "dmg": 1.25 }, "dur": 30.0, "who": "self", "id": "inner_focus" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: 25% more healing and damage for 30 s." },
+			{ "id": "power_infusion", "name": "Power Infusion", "glyph": "sun", "col": "#ffe27a", "school": "light", "cost": 100.0, "cd": 30.0, "range": 0.0,
+				"tgt": "none", "anim": "cast", "fx": [{ "buff": { "dmg": 1.04, "heal": 1.05 }, "dur": 30.0, "who": "raid", "id": "power_infusion" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid deals 4% more damage and heals 5% more for 30 s." },
+			{ "id": "desperate_prayer", "name": "Desperate Prayer", "glyph": "hands", "col": "#ffd0a0", "school": "light", "cd": 20.0,
+				"gcd": false, "range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "heal_pct": 0.35 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Heal yourself for 35% of your health." },
+			{ "id": "purify", "name": "Purify", "glyph": "wave", "col": "#bfe8ff", "school": "light", "cd": 30.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "cast", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Remove every burn and curse on you." },
+			{ "id": "divine_hymn", "name": "Divine Hymn", "glyph": "nova", "col": "#fff07a", "school": "light", "cost": 400.0, "cast": 1.0, "cd": 40.0,
+				"range": 0.0, "tgt": "none", "anim": "channel", "fx": [{ "group_heal": 1800.0, "r": 40.0 }], "ai": "group_heal", "kind": "super",
+				"desc": "1 s: heal every ally within 40 m for 1800." },
+			{ "id": "dispel", "name": "Dispel Magic", "glyph": "wave", "col": "#bfe8ff", "school": "light", "cost": 70.0, "range": HEAL_R,
+				"tgt": "ally", "anim": "cast", "fx": [{ "cleanse": true }], "ai": "cleanse", "kind": "pick",
+				"desc": "Remove a burn or a curse from an ally. (Your pick: the healer's cleanse.)" },
+		],
+		"shelf": [
 			{ "id": "smite", "name": "Smite", "glyph": "sun", "col": "#ffe27a", "school": "light", "cost": 120.0, "cast": 2.0, "range": RANGED,
 				"tgt": "enemy", "anim": "cast", "fx": [{ "dmg": 440.0 }], "ai": "filler", "desc": "Holy damage: 440." },
 			{ "id": "sw_pain", "name": "Shadow Word: Pain", "glyph": "skull", "col": "#8a5ad8", "school": "dark", "cost": 140.0, "range": RANGED,
@@ -214,13 +302,38 @@ const CLASSES := {
 		] },
 	"mage": {
 		"name": "Mage", "col": "#69ccf0", "role": "dps", "res": "mana", "res_max": 6600.0, "hp": 3700.0,
-		"auto": {}, "armor": 1.0, "threat": 1.0,
+		"auto": { "dmg": 130.0, "speed": 2.0, "range": RANGED, "ranged": true }, "armor": 1.0, "threat": 1.0,
 		"look": { "weapon": "orb_scepter", "chest": "silken_robe", "legs": "robe_bottoms", "head": "wizard_hat",
 			"top": "sweater_scarf", "bottom": "tight_pants", "hair": "ringlets", "hair_hex": "#ff6a3d", "gender": "m",
 			"tint": "#5aa8e8", "accent": "ice" },
 		"names": ["Jainara", "Kel'Thuzzle"],
-		"blurb": "Ranged caster. Fire, frost and arcane; blink out of trouble.",
+		"blurb": "Ranged caster. Ice Lance on cooldown, Pyroblast big; blink out of fire.",
 		"abilities": [
+			{ "id": "ice_lance", "name": "Ice Lance", "glyph": "frost", "col": "#7fd0ff", "school": "ice", "cost": 80.0, "cd": 3.0,
+				"range": RANGED, "tgt": "enemy", "anim": "cast", "proj": 30.0, "fx": [{ "dmg": 480.0 }], "ai": "filler", "kind": "spam",
+				"desc": "Instant: 480 frost damage. Every 3 s." },
+			{ "id": "fire_blast", "name": "Fire Blast", "glyph": "burst", "col": "#ff9b3a", "school": "fire", "cost": 160.0, "cd": 10.0,
+				"range": RANGED, "tgt": "enemy", "anim": "cast", "fx": [{ "dmg": 1250.0 }], "ai": "dps", "kind": "strong", "desc": "Instant: 1250 fire damage." },
+			{ "id": "arcane_power", "name": "Arcane Power", "glyph": "star", "col": "#ff8aff", "school": "dark", "cast": 1.0, "cd": 30.0,
+				"range": 0.0, "tgt": "self", "anim": "cast", "fx": [{ "buff": { "dmg": 1.25 }, "dur": 30.0, "who": "self", "id": "arcane_power" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: 25% more damage for 30 s. Keep it up." },
+			{ "id": "arcane_brilliance", "name": "Arcane Brilliance", "glyph": "brain", "col": "#a0c8ff", "school": "dark", "cost": 140.0, "cd": 30.0,
+				"range": 0.0, "tgt": "none", "anim": "cast", "fx": [{ "buff": { "crit": 0.06 }, "dur": 30.0, "who": "raid", "id": "arcane_brilliance" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid crits 6% more often for 30 s." },
+			{ "id": "cauterize", "name": "Cauterize", "glyph": "flame", "col": "#ffb347", "school": "fire", "cd": 20.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "heal_pct": 0.3 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Sear your wounds shut: heal 30% of your health." },
+			{ "id": "remove_curse", "name": "Remove Curse", "glyph": "wave", "col": "#c0a0ff", "school": "dark", "cd": 30.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "cast", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Remove every burn and curse on you." },
+			{ "id": "pyroblast", "name": "Pyroblast", "glyph": "meteor", "col": "#ff4a1a", "school": "fire", "cost": 300.0, "cast": 1.0, "cd": 40.0,
+				"range": RANGED, "tgt": "enemy", "anim": "cast", "proj": 22.0, "fx": [{ "dmg": 2600.0 }, { "dot": 400.0, "dur": 12.0 }], "ai": "nuke", "kind": "super",
+				"desc": "1 s: a huge fireball, 2600 and 400 more over 12 s." },
+			{ "id": "blink", "name": "Blink", "glyph": "blink", "col": "#a8d8ff", "school": "dark", "cost": 90.0, "cd": 15.0, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "dash": 14.0, "dir": "forward" }], "ai": "escape", "kind": "pick",
+				"desc": "Teleport 14 m forward. (Your pick: out of the fire.)" },
+		],
+		"shelf": [
 			{ "id": "fireball", "name": "Fireball", "glyph": "flame", "col": "#ff7a2a", "school": "fire", "cost": 260.0, "cast": 3.0,
 				"range": RANGED, "tgt": "enemy", "anim": "cast", "proj": 26.0, "fx": [{ "dmg": 900.0 }, { "dot": 160.0, "dur": 8.0 }], "ai": "filler",
 				"desc": "900 fire damage and 160 more over 8 s." },
@@ -276,8 +389,34 @@ const CLASSES := {
 			"top": "hoodie", "bottom": "tight_pants", "hair": "long_ponytail", "hair_hex": "#5a3a1e", "gender": "f",
 			"tint": "#7ea84a", "accent": "wind" },
 		"names": ["Sylvanna", "Rexxa"],
-		"blurb": "Ranged marksman. Auto Shot, stings and big aimed shots.",
+		"blurb": "Ranged marksman. Auto Shot, Arcane Shot on cooldown, a big Aimed Shot.",
 		"abilities": [
+			{ "id": "arcane_shot", "name": "Arcane Shot", "glyph": "arrow", "col": "#c08aff", "school": "dark", "cost": 60.0, "cd": 3.0,
+				"range": RANGED, "tgt": "enemy", "anim": "strike", "proj": 50.0, "fx": [{ "dmg": 420.0 }], "ai": "filler", "kind": "spam",
+				"desc": "Instant: 420 arcane damage. Every 3 s." },
+			{ "id": "chimera_shot", "name": "Chimera Shot", "glyph": "snake", "col": "#6fd05a", "school": "phys", "cost": 140.0, "cd": 10.0,
+				"range": RANGED, "tgt": "enemy", "anim": "strike", "proj": 55.0, "fx": [{ "dmg": 1150.0 }], "ai": "dps", "kind": "strong",
+				"desc": "Instant: a venomous shot for 1150." },
+			{ "id": "aspect_hawk", "name": "Aspect of the Hawk", "glyph": "wing", "col": "#e0a050", "school": "phys", "cost": 40.0, "cast": 1.0, "cd": 30.0,
+				"range": 0.0, "tgt": "self", "anim": "cast", "fx": [{ "buff": { "dmg": 1.2, "haste": 1.1 }, "dur": 30.0, "who": "self", "id": "aspect_hawk" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: 20% more damage and 10% faster shots for 30 s." },
+			{ "id": "trueshot", "name": "Trueshot Aura", "glyph": "eye", "col": "#c0e090", "school": "phys", "cost": 80.0, "cd": 30.0, "range": 0.0,
+				"tgt": "none", "anim": "cast", "fx": [{ "buff": { "haste": 1.06 }, "dur": 30.0, "who": "raid", "id": "trueshot" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid attacks 6% faster for 30 s." },
+			{ "id": "exhilaration", "name": "Exhilaration", "glyph": "heart", "col": "#9ccf6a", "school": "phys", "cd": 20.0, "gcd": false,
+				"range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "heal_pct": 0.3 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Heal 30% of your health." },
+			{ "id": "masters_call", "name": "Master's Call", "glyph": "paw", "col": "#e8d070", "school": "phys", "cd": 30.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Break free of every burn and curse on you." },
+			{ "id": "aimed_shot", "name": "Aimed Shot", "glyph": "target", "col": "#e8e8e8", "school": "phys", "cost": 200.0, "cast": 1.0, "cd": 40.0,
+				"range": RANGED, "tgt": "enemy", "anim": "strike", "proj": 60.0, "fx": [{ "dmg": 2800.0 }], "ai": "nuke", "kind": "super",
+				"desc": "1 s: a careful shot for 2800." },
+			{ "id": "disengage", "name": "Disengage", "glyph": "boot", "col": "#9ccf6a", "school": "phys", "cost": 50.0, "cd": 20.0, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "dash": 12.0, "dir": "back" }], "ai": "escape", "kind": "pick",
+				"desc": "Leap 12 m backwards. (Your pick: out of the fire.)" },
+		],
+		"shelf": [
 			{ "id": "arcane_shot", "name": "Arcane Shot", "glyph": "arrow", "col": "#c08aff", "school": "dark", "cost": 110.0, "cd": 6.0,
 				"range": RANGED, "tgt": "enemy", "anim": "strike", "proj": 50.0, "fx": [{ "dmg": 340.0 }], "ai": "dps", "desc": "Instant: 340 arcane damage." },
 			{ "id": "serpent_sting", "name": "Serpent Sting", "glyph": "snake", "col": "#6fd05a", "school": "phys", "cost": 120.0, "range": RANGED,
@@ -330,8 +469,33 @@ const CLASSES := {
 			"top": "crop_hoodie", "bottom": "tight_pants", "hair": "bob", "hair_hex": "#1a1a22", "gender": "f",
 			"tint": "#3a3446", "accent": "dark" },
 		"names": ["Valeera", "Shivvy"],
-		"blurb": "Melee. Build combo points, spend them on finishers. Stand behind it.",
+		"blurb": "Melee. Sinister Strike on cooldown, Ambush big; sprint out of fire.",
 		"abilities": [
+			{ "id": "sinister_strike", "name": "Sinister Strike", "glyph": "dagger", "col": "#d8d8d8", "school": "phys", "cost": 30.0, "cd": 3.0,
+				"range": MELEE, "tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 400.0 }], "ai": "filler", "kind": "spam",
+				"desc": "400 damage. Every 3 s." },
+			{ "id": "mutilate", "name": "Mutilate", "glyph": "blades", "col": "#d03a3a", "school": "phys", "cost": 40.0, "cd": 10.0, "range": MELEE,
+				"tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 1150.0 }], "ai": "dps", "kind": "strong", "desc": "Two poisoned blades: 1150 damage." },
+			{ "id": "slice_dice", "name": "Slice and Dice", "glyph": "dice", "col": "#ffd040", "school": "phys", "cost": 25.0, "cast": 1.0, "cd": 30.0,
+				"range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "buff": { "haste": 1.3, "dmg": 1.1 }, "dur": 30.0, "who": "self", "id": "slice_dice" }],
+				"ai": "self_buff", "kind": "self_steroid", "desc": "1 s: swing 30% faster and hit 10% harder for 30 s." },
+			{ "id": "tricks", "name": "Tricks of the Trade", "glyph": "hand", "col": "#c8a0ff", "school": "phys", "cd": 30.0, "range": 0.0,
+				"tgt": "none", "anim": "cast", "fx": [{ "buff": { "dmg": 1.05 }, "dur": 30.0, "who": "raid", "id": "tricks" }],
+				"ai": "raid_buff", "kind": "team_steroid", "desc": "The raid deals 5% more damage for 30 s." },
+			{ "id": "crimson_vial", "name": "Crimson Vial", "glyph": "drop", "col": "#d03a3a", "school": "phys", "cd": 20.0, "gcd": false,
+				"range": 0.0, "tgt": "self", "anim": "none", "fx": [{ "heal_pct": 0.3 }], "ai": "self_heal", "kind": "self_heal",
+				"desc": "Drink up: heal 30% of your health." },
+			{ "id": "cloak", "name": "Cloak of Shadows", "glyph": "ghost", "col": "#8080a0", "school": "dark", "cd": 30.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "cleanse": true, "all": true }], "ai": "self_cleanse", "kind": "self_cleanse",
+				"desc": "Shadows wash off every burn and curse on you." },
+			{ "id": "ambush", "name": "Ambush", "glyph": "skull", "col": "#8a1d1d", "school": "phys", "cost": 40.0, "cast": 1.0, "cd": 40.0,
+				"range": MELEE, "tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 2700.0 }], "ai": "nuke", "kind": "super",
+				"desc": "1 s: strike from the shadows for 2700." },
+			{ "id": "sprint", "name": "Sprint", "glyph": "boot", "col": "#ffe080", "school": "phys", "cd": 45.0, "gcd": false, "range": 0.0,
+				"tgt": "self", "anim": "none", "fx": [{ "buff": { "speed": 1.7 }, "dur": 6.0, "who": "self", "id": "sprint" }], "ai": "escape", "kind": "pick",
+				"desc": "Run 70% faster for 6 s. (Your pick: outrun the fire.)" },
+		],
+		"shelf": [
 			{ "id": "sinister_strike", "name": "Sinister Strike", "glyph": "dagger", "col": "#d8d8d8", "school": "phys", "cost": 40.0,
 				"range": MELEE, "tgt": "enemy", "anim": "strike", "fx": [{ "dmg": 360.0 }, { "cp": 1 }], "ai": "builder",
 				"desc": "360 damage. Builds a combo point." },
@@ -392,6 +556,9 @@ static func abilities(id: String) -> Array:
 
 static func ability(cls_id: String, ab_id: String) -> Dictionary:
 	for a: Dictionary in CLASSES[cls_id].abilities:
+		if str(a.id) == ab_id:
+			return a
+	for a: Dictionary in CLASSES[cls_id].get("shelf", []):        # an old id still named somewhere
 		if str(a.id) == ab_id:
 			return a
 	return {}

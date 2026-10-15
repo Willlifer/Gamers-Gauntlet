@@ -97,6 +97,14 @@ func add_player(cls_id: String, pname: String) -> MmoUnit:
 	return u
 
 
+## Scale the Giant to the raid: MmoTune.boss_hp is for six (G39: raids of up to 8).
+func scale_boss() -> void:
+	var n := players().size()
+	boss.base_hp = MmoTune.value("boss_hp") * float(n) / 6.0
+	boss.max_hp = boss.base_hp
+	boss.hp = boss.max_hp
+
+
 func add_boss() -> MmoUnit:
 	var u := MmoUnit.new()
 	u.id = "boss"
@@ -596,13 +604,14 @@ func _effect(u: MmoUnit, ab: Dictionary, f: Dictionary, tgt: MmoUnit, school: St
 		return
 	if f.has("cleanse"):
 		var who := tgt if tgt else u
-		for a: Dictionary in who.auras:
+		for a: Dictionary in who.auras.duplicate():
 			if a.get("cleanse", false):
 				who.auras.erase(a)
 				if who != u and str(a.get("src", "")) == "boss" or who != u and str(a.id) in ["shattered"]:
 					u.cleanses += 1
 				_emit({ "type": "cleansed", "id": who.id, "name": str(a.name), "by": u.id })
-				break
+				if not f.get("all", false):
+					break
 		return
 	if f.has("mana"):
 		u.res = minf(u.res_max, u.res + u.res_max * float(f.mana))

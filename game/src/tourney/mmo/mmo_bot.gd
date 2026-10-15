@@ -13,12 +13,12 @@ const TANK_SPOT := Vector2(0, -9)
 const SPREAD_R := 16.5
 
 const PRIO := {
-	"tank": ["def", "taunt", "tank_cd", "resource", "raid_buff", "debuff", "exec", "dps", "burst", "filler", "filler2"],
-	"healer": ["def", "emergency", "save", "cleanse", "shield", "big_heal", "heal", "hot", "group_heal", "group_heal_near",
+	"tank": ["self_heal", "self_cleanse", "def", "taunt", "tank_cd", "resource", "raid_buff", "debuff", "exec", "dps", "burst", "filler", "filler2"],
+	"healer": ["self_heal", "self_cleanse", "def", "emergency", "save", "cleanse", "shield", "big_heal", "heal", "hot", "group_heal", "group_heal_near",
 		"rez", "raid_buff", "self_buff", "threat", "mana", "dot", "dps", "filler"],
-	"hybrid": ["def", "emergency", "save", "heal_fast", "heal", "big_heal", "rez", "cleanse", "raid_buff", "self_buff",
+	"hybrid": ["self_heal", "self_cleanse", "def", "emergency", "save", "heal_fast", "heal", "big_heal", "rez", "cleanse", "raid_buff", "self_buff",
 		"burst", "exec", "dps", "dps_aoe"],
-	"dps": ["def", "threat", "self_shield", "raid_buff", "self_buff", "mana", "burst", "pom", "exec", "snd", "finisher_dot",
+	"dps": ["self_heal", "self_cleanse", "def", "threat", "self_shield", "raid_buff", "self_buff", "mana", "burst", "pom", "exec", "snd", "finisher_dot",
 		"finisher", "debuff", "dot", "nuke", "dps", "dps_close", "builder_behind", "builder", "filler", "filler2", "dps_aoe", "bandage"],
 }
 
@@ -77,9 +77,13 @@ func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 	if u.has_aura("bomb") and _react(s, "bomb%d" % int(s.time / 20.0)):
 		if not s.scorch.is_empty():
 			# Scorched Earth (G37): fan the bombs across the safe half instead of the whole circle
-			var fa := float(s.scorch.ang) + PI * 0.5 + 0.25 + idx * (PI * 0.85 / 5.0)
-			return (b.pos + Vector2(cos(fa), sin(fa)) * 14.0).limit_length(MmoSim.ARENA_R - 1.5)
-		var a := TAU * idx / 6.0 + 0.4
+			# two rings (inner 12.5 m, outer 21 m), half the raid on each: slots 7.5 m+ apart, clear of a 6 m bomb
+			var per := maxi(1, (s.players().size() + 1) / 2)
+			var slot := idx / 2
+			var fa := float(s.scorch.ang) + PI * 0.5 + 0.3 + (float(slot) + (0.5 if idx % 2 else 0.0)) * (PI * 0.8 / float(per))
+			var rr := 21.0 if idx % 2 == 0 else 12.5
+			return (b.pos + Vector2(cos(fa), sin(fa)) * rr).limit_length(MmoSim.ARENA_R - 1.5)
+		var a := TAU * idx / float(s.players().size()) + 0.4
 		return Vector2(sin(a), cos(a)) * SPREAD_R
 	# the ring: get in
 	for ar: Dictionary in s.areas:
@@ -222,6 +226,13 @@ func _want(s: MmoSim, u: MmoUnit, ab: Dictionary, tag: String) -> Dictionary:
 	match tag:
 		"def":
 			return go if u.hp_pct() < 0.35 and fight else {}
+		"self_heal":
+			return go if u.hp_pct() < 0.5 and fight else {}
+		"self_cleanse":
+			for a: Dictionary in u.auras:
+				if a.get("cleanse", false) and str(a.get("src", "")) == "boss":
+					return go
+			return {}
 		"taunt":
 			return go if b.target != u.id and fight else {}
 		"tank_cd":
@@ -286,7 +297,7 @@ func _want(s: MmoSim, u: MmoUnit, ab: Dictionary, tag: String) -> Dictionary:
 		"group_heal":
 			var hurt := 0
 			for p: MmoUnit in s.living():
-				if p.hp_pct() < 0.7 and p.pos.distance_to(u.pos) < 30.0:
+				if p.hp_pct() < 0.7 and p.pos.distance_to(u.pos) < 40.0:
 					hurt += 1
 			return go if hurt >= 3 else {}
 		"group_heal_near":

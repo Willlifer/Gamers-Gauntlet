@@ -121,14 +121,26 @@ func _go() -> void:
 	_key(KEY_1, true)
 	_key(KEY_1, false)
 	await _frames(3)
-	_ok(me.casting() and str(me.cast.ab) == "fireball", "1 casts Fireball")
-	await create_timer(3.3).timeout
+	_ok(float(me.cd.get("ice_lance", 0.0)) > 0.0, "1 fires Ice Lance (instant, on a 3 s cooldown)")
+	await create_timer(1.6).timeout
+	me.gcd = 0.0
+	_key(KEY_7, true)
+	_key(KEY_7, false)
+	await _frames(3)
+	_ok(me.casting() and str(me.cast.ab) == "pyroblast", "7 casts Pyroblast (1 s)")
+	await create_timer(1.4).timeout
 	me.gcd = 0.0
 	var cd0 := float(me.cd.get("blink", 0.0))
+	_key(KEY_8, true)
+	_key(KEY_8, false)
+	await _frames(3)
+	_ok(float(me.cd.get("blink", 0.0)) > cd0, "8 uses Blink")
+	var casts0 := me.cast_serial
+	me.gcd = 0.0
 	_key(KEY_1, true, true)
 	_key(KEY_1, false, true)
 	await _frames(3)
-	_ok(float(me.cd.get("blink", 0.0)) > cd0, "Shift+1 uses Blink (the second bar)")
+	_ok(me.cast_serial == casts0, "Shift+1 does nothing (one bar of eight)")
 	var d0 := v.cam_dist
 	_btn(MOUSE_BUTTON_WHEEL_UP, true)
 	_btn(MOUSE_BUTTON_WHEEL_UP, false)

@@ -119,9 +119,9 @@ func _build() -> void:
 	_tdebuffs = Control.new()
 	_tdebuffs.position = Vector2(282, 116)
 	_root.add_child(_tdebuffs)
-	for i in 5:
-		var f := UnitFrame.new(self, false, 0.74)
-		f.position = Vector2(4, 140 + i * 88)
+	for i in 7:                                         # a raid of eight: you + seven (G39)
+		var f := UnitFrame.new(self, false, 0.6)
+		f.position = Vector2(4, 140 + i * 66)
 		f.party = true
 		_root.add_child(f)
 		_party.append(f)
@@ -165,7 +165,7 @@ func _build() -> void:
 	_threat.size = Vector2(340, 150)
 	_root.add_child(_threat)
 	_meter = Meter.new(self, "Current", ["DPS"])
-	_meter.position = Vector2(W - 312, H - 462)
+	_meter.position = Vector2(W - 312, H - 506)        # eight rows (G39)
 	_meter.size = Vector2(300, 166)
 	_root.add_child(_meter)
 	# chat
@@ -826,14 +826,13 @@ class MainBar extends Control:
 
 	func _draw() -> void:
 		# the stone slab under the buttons
-		var slab := Rect2(X0 - 6, 4, size.x - X0 * 2 + 12, size.y - 4)
+		var slab := Rect2(X0 - 6, 56, size.x - X0 * 2 + 12, size.y - 56)      # one bar of eight (G39)
 		draw_rect(slab, Color(0.07, 0.065, 0.06, 0.95))
 		draw_rect(Rect2(slab.position, Vector2(slab.size.x, 3)), MmoHud.STONE_HI)
 		draw_rect(slab, MmoHud.STONE, false, 2.0)
 		# empty button wells
-		for row in 2:
-			for i in 8:
-				draw_rect(Rect2(X0 + i * 46, 8 + row * 52, 46, 46), Color(0, 0, 0, 0.6))
+		for i in MmoClasses.SLOTS:
+			draw_rect(Rect2(X0 + i * 46, 60, 46, 46), Color(0, 0, 0, 0.6))
 		# micro menu and bags on the right of the lower row
 		var mx := X0 + 8 * 46 + 20
 		var micro := ["Character", "Spellbook", "Talents", "Quests", "Social", "Map", "Menu", "Help"]

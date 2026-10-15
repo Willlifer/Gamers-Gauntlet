@@ -1,6 +1,6 @@
 extends SceneTree
 ## Headless checks for the MMO raid (G22):
-##   - every class's 16 abilities go off in a set-up situation (no errors)
+##   - every class's 8 abilities go off in a set-up situation (no errors)
 ##   - each Giant mechanic does what it says (bombs hurt the stacked,
 ##     the ring spares the grouped, cracks and meteors hit who stands in them)
 ##   - the Giant never starts a spell sooner than spell_gap after the last ended
@@ -32,12 +32,9 @@ func _fail(t: String) -> void:
 	print("FAIL ", t)
 
 
+## A raid of eight bots (G39): one of each class, then a second warrior and paladin.
 func _raid(seed: int) -> MmoSim:
-	var s := MmoSim.new(seed)
-	s.add_boss()
-	for c: String in MmoClasses.ORDER:
-		s.add_player(c, c)
-	return s
+	return MmoModule.build_seats(seed, [])
 
 
 # ------------------------------------------------------------- abilities
@@ -47,7 +44,7 @@ func _abilities() -> void:
 	for c: String in MmoClasses.ORDER:
 		var abs: Array = MmoClasses.abilities(c)
 		if abs.size() != MmoClasses.SLOTS:
-			_fail("%s has %d abilities, not 16" % [c, abs.size()])
+			_fail("%s has %d abilities, not %d" % [c, abs.size(), MmoClasses.SLOTS])
 		for ab: Dictionary in abs:
 			var s := _raid(1)
 			var u: MmoUnit
@@ -77,6 +74,10 @@ func _abilities() -> void:
 				for f: Dictionary in ab.fx:
 					if f.has("cleanse"):
 						s.add_aura(ally, { "id": "burning", "name": "Burning", "dur": 6.0, "debuff": true, "cleanse": true })
+			if kind == "self":
+				for f: Dictionary in ab.fx:
+					if f.has("cleanse"):
+						s.add_aura(u, { "id": "burning", "name": "Burning", "src": "boss", "dur": 6.0, "debuff": true, "cleanse": true })
 			if kind == "dead":
 				ally.hp = 1.0
 				s.damage(b, ally, 9999.0, "phys", "test", "mech")
@@ -127,7 +128,7 @@ func _mechanics() -> void:
 		var ps := s.players()
 		for i in ps.size():
 			var p: MmoUnit = ps[i]
-			p.pos = Vector2(4, 12) if not spread else Vector2(sin(TAU * i / 6.0), cos(TAU * i / 6.0)) * 17.0
+			p.pos = Vector2(4, 12) if not spread else Vector2(sin(TAU * i / ps.size()), cos(TAU * i / ps.size())) * 17.0
 		s._bag = ["bombs"]
 		s.next_spell_at = 0.0
 		var t := 0.0
@@ -138,7 +139,7 @@ func _mechanics() -> void:
 			for p: MmoUnit in ps:
 				if spread:
 					var i := ps.find(p)
-					p.pos = Vector2(sin(TAU * i / 6.0), cos(TAU * i / 6.0)) * 17.0
+					p.pos = Vector2(sin(TAU * i / ps.size()), cos(TAU * i / ps.size())) * 17.0
 				else:
 					p.pos = Vector2(4, 12)
 		var fails_n := 0
@@ -179,7 +180,7 @@ func _brand_run(seed: int, each_tick: Callable) -> Dictionary:
 	s._pull()
 	var ps := s.players()
 	for i in ps.size():
-		(ps[i] as MmoUnit).pos = Vector2(sin(TAU * i / 6.0), cos(TAU * i / 6.0)) * 20.0
+		(ps[i] as MmoUnit).pos = Vector2(sin(TAU * i / ps.size()), cos(TAU * i / ps.size())) * 20.0
 	s.next_spell_at = 0.0
 	s.next_brand_at = 0.0
 	var took := {}
@@ -202,8 +203,8 @@ func _brand() -> void:
 	# left alone: all six branded, each takes brand_pct of max HP (rounding: ±1%)
 	var r := _brand_run(31, func(_s: MmoSim) -> Dictionary: return {})
 	var s: MmoSim = r.sim
-	if (r.branded as Dictionary).size() != 6:
-		_fail("brand: %d of 6 branded" % (r.branded as Dictionary).size())
+	if (r.branded as Dictionary).size() != s.players().size():
+		_fail("brand: %d of %d branded" % [(r.branded as Dictionary).size(), s.players().size()])
 	var worst := 0.0
 	for p: MmoUnit in s.players():
 		var want := p.max_hp * MmoTune.value("brand_pct")
@@ -251,6 +252,7 @@ func _raids(runs: int) -> void:
 	var wins := 0
 	var totals := {}
 	var grade_c := {}
+	var seats_c := {}
 	var parts_c := {}
 	var grades: Array = []
 	var frenzy_gaps: Array = []
@@ -294,6 +296,7 @@ func _raids(runs: int) -> void:
 		elif s.winner == "":
 			_fail("raid %d never ended" % i)
 		for p: MmoUnit in s.players():
+			seats_c[p.cls] = int(seats_c.get(p.cls, 0)) + 1
 			totals[p.cls] = float(totals.get(p.cls, 0.0)) + p.dmg_done + p.heal_done
 			fails_c[p.cls] = int(fails_c.get(p.cls, 0)) + p.fails
 			deaths_c[p.cls] = int(deaths_c.get(p.cls, 0)) + p.deaths
@@ -311,12 +314,13 @@ func _raids(runs: int) -> void:
 	avg /= maxf(1.0, lens.size())
 	print("raids: %d / %d kills, mean %.0f s" % [wins, runs, avg])
 	for c: String in MmoClasses.ORDER:
-		print("  %-8s score/run %7.0f  par %5.0f/s (table %3.0f)  fails/run %.1f  deaths/run %.1f" % [c, float(totals[c]) / runs, float(totals[c]) / runs / avg,
-			float(MmoClasses.PAR[c]), float(fails_c[c]) / runs, float(deaths_c[c]) / runs])
-		var gs := float(grade_c[c]) / runs
+		var n_c := float(seats_c[c])
+		print("  %-8s score/seat %7.0f  par %5.0f/s (table %3.0f)  fails/seat %.1f  deaths/seat %.1f" % [c, float(totals[c]) / n_c, float(totals[c]) / n_c / avg,
+			float(MmoClasses.PAR[c]), float(fails_c[c]) / n_c, float(deaths_c[c]) / n_c])
+		var gs := float(grade_c[c]) / n_c
 		var line := "  %-8s grade %5.1f %s  " % [c, gs, MmoGrade.letter_for(gs)]
 		for part in MmoGrade.PARTS:
-			line += " %s %.2f" % [part.substr(0, 4), float(parts_c[c + "." + part]) / runs]
+			line += " %s %.2f" % [part.substr(0, 4), float(parts_c[c + "." + part]) / n_c]
 		print(line)
 		grades.append(gs)
 	# the grade is fair across classes: a bot of every class lands within 8 points of the others

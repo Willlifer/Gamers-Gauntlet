@@ -10,6 +10,7 @@ extends TourneyModule
 ## One human on this machine plays; the other contestant is a bot.
 
 const PICK_TIME := 30.0
+const RAID_SIZE := 8
 
 var _pick_root: Control
 var _picks := {}               # player id -> class id
@@ -30,9 +31,8 @@ static func info() -> Dictionary:
 
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	rng.seed = int(m.seed)
-	var order := MmoClasses.ORDER.duplicate()
-	var a := str(order.pop_at(rng.randi() % order.size()))
-	var b := str(order.pop_at(rng.randi() % order.size()))
+	var a := str(MmoClasses.ORDER[rng.randi() % MmoClasses.ORDER.size()])
+	var b := str(MmoClasses.ORDER[rng.randi() % MmoClasses.ORDER.size()])
 	var s := build_raid(int(m.seed), a, str(m.players[0].name), b, str(m.players[1].name))
 	var bots := {}
 	var k := 0
@@ -52,18 +52,29 @@ static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	return { "winner": w.id, "summary": _summary(s, m.players[0], ua, ga, m.players[1], ub, gb), "stats": {} }
 
 
-## The raid: the two contestants first (seats 0 and 1), then the other
-## four classes as bots with names off the class lists.
+## The raid (G39): the two contestants first (seats 0 and 1, any classes,
+## the same one allowed), then one bot of every class, eight in all. The
+## Giant scales with the raid's size.
 static func build_raid(seed: int, cls_a: String, name_a: String, cls_b: String, name_b: String) -> MmoSim:
+	return build_seats(seed, [[cls_a, name_a], [cls_b, name_b]])
+
+
+## Any raid of up to 8: `seats` is [[class, name], ...] for the people; the
+## rest of the eight are bots, one of each class, then repeats. Every seat
+## takes orders the same way (MmoSim.step), human or bot, so the same raid
+## runs online in lockstep with eight people (stage 3).
+static func build_seats(seed: int, seats: Array, size := RAID_SIZE) -> MmoSim:
 	var s := MmoSim.new(seed)
 	s.add_boss()
-	s.add_player(cls_a, name_a)
-	s.add_player(cls_b, name_b)
-	for c: String in MmoClasses.ORDER:
-		if c == cls_a or c == cls_b:
-			continue
+	for seat: Array in seats.slice(0, size):
+		s.add_player(str(seat[0]), str(seat[1]))
+	var k := 0
+	while s.players().size() < size:
+		var c: String = MmoClasses.ORDER[k % MmoClasses.ORDER.size()]
 		var names: Array = MmoClasses.CLASSES[c].names
-		s.add_player(c, str(names[seed % names.size()]))
+		s.add_player(c, str(names[(seed + k / MmoClasses.ORDER.size()) % names.size()]))
+		k += 1
+	s.scale_boss()
 	return s
 
 
@@ -177,8 +188,7 @@ func _figure(parent: Control, cls_id: String) -> void:
 
 
 func _bot_pick() -> String:
-	var left := MmoClasses.ORDER.filter(func(c: String) -> bool: return c != str(_picks.get(_human.id, "")))
-	return str(left[_rng.randi() % left.size()])
+	return str(MmoClasses.ORDER[_rng.randi() % MmoClasses.ORDER.size()])
 
 
 func _lock(pid: String, cls_id: String) -> void:
@@ -186,12 +196,8 @@ func _lock(pid: String, cls_id: String) -> void:
 		return
 	if pid == _human.id:
 		BWSfx.ui("ui_confirm")
-	if pid == _other.id and _picks.get(_human.id, "") == cls_id:
-		cls_id = _bot_pick()
-	if pid == _human.id and _picks.get(_other.id, "") == cls_id:
-		_picks[_other.id] = _bot_pick()                       # the bot steps aside: one of each class
 	_picks[pid] = cls_id
-	if _picks.size() >= 2 and _picks[_human.id] != _picks[_other.id]:
+	if _picks.size() >= 2:
 		_start()
 
 
@@ -200,11 +206,11 @@ func _process(delta: float) -> void:
 		return
 	_pick_t -= delta
 	var mine := str(_picks.get(_human.id, ""))
-	_timer_l.text = "%d s  ·  %s" % [ceili(maxf(_pick_t, 0.0)), ("you: " + MmoClasses.CLASSES[mine].name) if mine != "" else "pick one; the raid has one of each"]
+	_timer_l.text = "%d s  ·  %s" % [ceili(maxf(_pick_t, 0.0)), ("you: " + MmoClasses.CLASSES[mine].name) if mine != "" else "pick any class; a raid of eight"]
 	if _pick_t <= 0.0:
 		if not _picks.has(_human.id):
 			_picks[_human.id] = MmoClasses.ORDER[_rng.randi() % MmoClasses.ORDER.size()]
-		if not _picks.has(_other.id) or _picks[_other.id] == _picks[_human.id]:
+		if not _picks.has(_other.id):
 			_picks[_other.id] = _bot_pick()
 		_start()
 
