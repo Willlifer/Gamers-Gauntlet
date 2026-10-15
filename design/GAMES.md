@@ -70,7 +70,8 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
   at a time, at least 5 s after the last ended:
   - Upheaval: three cracks toward players
   - Meteor Rain: 14 marked impacts
-  - Giant's Bombs: a 6 m bomb on everyone; spread
+  - Giant's Bombs: a 6 m bomb on everyone; spread. Half of them leave burning
+    ground (4 m, 15 s, 350 a second; G40)
   - Earthshatter: a 5 m ring; group in
   - **Cinderbrand** (its own clock: 20 s, then every 45 s; G30): an
     unavoidable burn on everyone, 25% of max HP over 30 s. Run it off (each
@@ -78,7 +79,8 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
     Dispel Magic) or be healed through it.
 - **Scorched Earth** (G37): an 8 s warning, then at 45 s the half of the
   courtyard behind the Giant (from the tank) burns, 25% of max HP a second;
-  from 1:30 it turns counter-clockwise about the Giant, 9 deg/s. Red chevrons
+  from 1:30 it turns about the Giant at 9 deg/s in bursts: 15 s turning, 30 s
+  resting; the first burst counter-clockwise, then a random way each time (G40). Red chevrons
   out of the fire mark the advancing edge, gold chevrons into it the retreating one (G38).
 - **Below 50%:** no more text warnings, only "You're on your own now." **Below 25%:**
   the spell rotation runs twice as fast (G35). Timer enrage at 300 s: 5x damage.

@@ -80,7 +80,7 @@ func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 			# two rings (inner 12.5 m, outer 21 m), half the raid on each: slots 7.5 m+ apart, clear of a 6 m bomb
 			var per := maxi(1, (s.players().size() + 1) / 2)
 			var slot := idx / 2
-			var fa := float(s.scorch.ang) + PI * 0.5 + 0.3 + (float(slot) + (0.5 if idx % 2 else 0.0)) * (PI * 0.8 / float(per))
+			var fa := float(s.scorch.ang) + float(s.scorch.get("dir", 1.0)) * (PI * 0.5 + 0.3 + (float(slot) + (0.5 if idx % 2 else 0.0)) * (PI * 0.8 / float(per)))
 			var rr := 21.0 if idx % 2 == 0 else 12.5
 			return (b.pos + Vector2(cos(fa), sin(fa)) * rr).limit_length(MmoSim.ARENA_R - 1.5)
 		var a := TAU * idx / float(s.players().size()) + 0.4
@@ -137,7 +137,7 @@ func _scorch_home(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
 	var b := s.boss
 	var melee: bool = float(MmoClasses.CLASSES[u.cls].auto.get("range", 0.0)) <= MmoClasses.MELEE and MmoClasses.CLASSES[u.cls].auto.has("dmg")
 	var r := b.radius + 1.8 if u.role == "tank" else (b.radius + 2.0 if melee else 8.5)
-	var a := float(s.scorch.ang) + PI * 0.5 + 0.6 + float(idx % 3) * 0.32
+	var a := float(s.scorch.ang) + float(s.scorch.get("dir", 1.0)) * (PI * 0.5 + 0.6 + float(idx % 3) * 0.32)
 	return (b.pos + Vector2(cos(a), sin(a)) * r).limit_length(MmoSim.ARENA_R - 1.5)
 
 

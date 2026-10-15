@@ -82,11 +82,16 @@ func _go() -> void:
 	await _shot("fight")
 	# SCORCH=1: Scorched Earth (G37) frames, warning, burning, turning, then quit
 	if OS.get_environment("SCORCH") != "":
-		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [100.0, "scorch_spin"]]:
+		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [100.0, "scorch_spin"], [128.0, "scorch_rest"]]:
 			while s.winner == "" and s.time - s.pull_time < float(mark[0]):
 				v._tick()
 			await _wait(1.0)
 			await _shot(str(mark[1]))
+		# burning ground left by a bomb (G40)
+		while s.winner == "" and not s.areas.any(func(a: Dictionary) -> bool: return str(a.get("look", "")) == "fire_pool"):
+			v._tick()
+		await _wait(1.2)
+		await _shot("fire_pool")
 		print("mmo_shots: %d frames to %s" % [shots.size(), out])
 		quit(0)
 		return

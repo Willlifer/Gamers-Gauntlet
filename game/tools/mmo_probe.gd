@@ -359,6 +359,38 @@ func _raids(runs: int) -> void:
 	var burnt := 0.0
 	for p: MmoUnit in sc.players():
 		burnt += p.scorch_t
+	# G40: the fire turns in bursts (15 s), holds (30 s); bombs leave burning ground about half the time
+	var gr := _raid(7171)
+	var gb := {}
+	for p: MmoUnit in gr.players():
+		gb[p.id] = MmoBot.new(7171 + gb.size(), 1.0)
+	var at := {}
+	var pools := 0
+	var bombs := 0
+	var on := MmoTune.value("scorch_spin_at")
+	var marks := [on + 2.0, on + 12.0, on + MmoTune.value("scorch_spin_on") + 3.0, on + MmoTune.value("scorch_spin_on") + 25.0]
+	while gr.winner == "" and gr.time < 900.0:
+		var orders := {}
+		for id: String in gb:
+			orders[id] = (gb[id] as MmoBot).think(gr, gr.unit(id))
+		for e: Dictionary in gr.step(orders):
+			if e.type == "explode" and str(e.what) == "bomb":
+				bombs += 1
+			if e.type == "area" and str(e.area.get("look", "")) == "fire_pool":
+				pools += 1
+		var el := gr.time - gr.pull_time
+		for m in marks:
+			if not at.has(m) and el >= float(m) and not gr.scorch.is_empty():
+				at[m] = float(gr.scorch.ang)
+	if at.size() == 4:
+		var turning := absf(angle_difference(float(at[marks[0]]), float(at[marks[1]])))
+		var resting := absf(angle_difference(float(at[marks[2]]), float(at[marks[3]])))
+		print("  G40: turned %.0f deg in 10 s of a burst, %.1f deg in 22 s of rest" % [rad_to_deg(turning), rad_to_deg(resting)])
+		if turning < deg_to_rad(30.0) or resting > 0.001:
+			_fail("Scorched Earth doesn't turn in bursts")
+	print("  G40: %d of %d bombs left burning ground" % [pools, bombs])
+	if bombs >= 8 and (pools == 0 or pools == bombs):
+		_fail("burning ground isn't a coin flip per bomb")
 	print("  G37: warned %s, raid %s in %.0f s, %.1f raider-seconds in the fire" % [warned, sc.winner, sc.time - sc.pull_time, burnt])
 	if not warned:
 		_fail("Scorched Earth never warned")

@@ -971,7 +971,7 @@ func _begin_spell() -> void:
 			var ang := rng.randf() * TAU
 			if not scorch.is_empty():
 				# Scorched Earth (G37): the ring lands behind the fire's trailing edge
-				ang = float(scorch.ang) + PI * 0.5 + 0.5 + (ang / TAU) * 1.0
+				ang = float(scorch.ang) + float(scorch.get("dir", 1.0)) * (PI * 0.5 + 0.5 + (ang / TAU) * 1.0)
 			var at := boss.pos + Vector2(cos(ang), sin(ang)) * 11.0
 			if at.length() > ARENA_R - 6.0:
 				at = at.normalized() * (ARENA_R - 6.0)
@@ -1018,7 +1018,9 @@ func brand(u: MmoUnit) -> void:
 ## Scorched Earth (G37), on the fight's clock: scorch_warn seconds of warning,
 ## then the half of the courtyard on one side of the Giant (a line through
 ## it) burns for scorch_pct of max HP a second; from scorch_spin_at the
-## burning half turns counter-clockwise (seen from above) about the Giant.
+## burning half turns about the Giant in bursts (G40): scorch_spin_on seconds,
+## then still for scorch_spin_off; the first burst counter-clockwise (seen
+## from above), every later one a coin flip, decided when the fire stops.
 func _tick_scorch(b: MmoUnit) -> void:
 	var el := time - pull_time
 	var at := MmoTune.value("scorch_at")
@@ -1026,7 +1028,7 @@ func _tick_scorch(b: MmoUnit) -> void:
 		if MmoTune.value("scorch_pct") > 0.0 and el >= at - MmoTune.value("scorch_warn"):
 			# the burning half: the side away from the tank's spot, a little off, so the raid has room
 			var tank_side := (TANK_SPOT_HINT - b.pos).angle()
-			scorch = { "state": "warn", "ang": wrapf(tank_side + PI + rng.randf_range(-0.6, 0.6), -PI, PI), "t": 0.0, "spinning": false }
+			scorch = { "state": "warn", "ang": wrapf(tank_side + PI + rng.randf_range(-0.6, 0.6), -PI, PI), "t": 0.0, "spinning": false, "dir": 1.0 }
 			_emit({ "type": "warn", "text": "The ground behind the Giant begins to smoulder!", "col": "#ff6a20" })
 			_emit({ "type": "scorch", "stage": "warn" })
 		return
@@ -1042,12 +1044,51 @@ func _tick_scorch(b: MmoUnit) -> void:
 			scorch.spinning = true
 			_emit({ "type": "warn", "text": "The fire begins to turn! Keep moving!", "col": "#ff3a10" })
 			_emit({ "type": "scorch", "stage": "spin" })
-		scorch.ang = wrapf(float(scorch.ang) - deg_to_rad(MmoTune.value("scorch_spin")) * TICK, -PI, PI)
+		# G40: it turns in bursts, scorch_spin_on seconds, then holds scorch_spin_off
+		var moving := scorch_moving_at(el)
+		if moving != bool(scorch.get("moving", false)):
+			scorch["moving"] = moving
+			if not moving:
+				scorch.dir = 1.0 if rng.randf() < 0.5 else -1.0      # the next burst's way, known through the rest
+			_emit({ "type": "scorch", "stage": "turn" if moving else "hold", "dir": scorch.dir })
+		if moving:
+			scorch.ang = wrapf(float(scorch.ang) - float(scorch.dir) * deg_to_rad(MmoTune.value("scorch_spin")) * TICK, -PI, PI)
 	var dps := MmoTune.value("scorch_pct")
 	for u: MmoUnit in living():
 		if in_scorch(u.pos):
 			damage(boss, u, u.max_hp * dps * TICK, "fire", "Scorched Earth", "mech")
 			u.scorch_t += TICK
+
+
+## Is the fire turning at `el` seconds into the fight (G40: bursts and holds)?
+func scorch_moving_at(el: float) -> bool:
+	var t := el - MmoTune.value("scorch_spin_at")
+	if t < 0.0:
+		return false
+	var on := MmoTune.value("scorch_spin_on")
+	var cycle := on + MmoTune.value("scorch_spin_off")
+	return cycle <= on or fmod(t, cycle) < on
+
+
+## Seconds of turning in the next `secs` (what the bots look ahead by).
+func scorch_turn_in(secs: float) -> float:
+	var el := time - pull_time
+	var n := 0.0
+	var k := 0.0
+	while k < secs:
+		if scorch_moving_at(el + k):
+			n += TICK
+		k += TICK
+	return n
+
+
+## Seconds until the fire next starts turning (0 while it turns).
+func scorch_next_turn() -> float:
+	var el := time - pull_time
+	var k := 0.0
+	while k < 60.0 and not scorch_moving_at(el + k):
+		k += TICK
+	return k
 
 
 ## Is `p` in the burning half (live, or `ahead` seconds of turning ahead)?
@@ -1056,7 +1097,7 @@ func in_scorch(p: Vector2, pad := 0.0, ahead := 0.0) -> bool:
 		return false
 	var ang := float(scorch.ang)
 	if scorch.spinning and ahead > 0.0:
-		ang -= deg_to_rad(MmoTune.value("scorch_spin")) * ahead
+		ang -= float(scorch.get("dir", 1.0)) * deg_to_rad(MmoTune.value("scorch_spin")) * scorch_turn_in(ahead)
 	var d := p - boss.pos
 	return d.dot(Vector2(cos(ang), sin(ang))) > -pad
 
@@ -1191,6 +1232,11 @@ func _bomb_pop(c: MmoUnit) -> void:
 			_bomb_failed(c)
 			damage(boss, u, dmg, "fire", "Giant's Bomb", "mech")
 	_emit({ "type": "explode", "pos": at, "r": r, "what": "bomb" })
+	# G40: half the bombs leave burning ground behind
+	if rng.randf() < MmoTune.value("bomb_pool_chance"):
+		var dur := MmoTune.value("bomb_pool_dur")
+		_add_area({ "kind": "ground", "pos": at, "r": MmoTune.value("bomb_pool_r"), "t": dur, "dur": dur, "every": 1.0, "tick_t": 1.0,
+			"dmg": MmoTune.value("bomb_pool_dps"), "school": "fire", "name": "Burning Ground", "owner": "boss", "look": "fire_pool" })
 
 
 var _bomb_fault := {}           # this wave's bomb failures (one per raider)
@@ -1288,6 +1334,9 @@ func _tick_areas() -> void:
 
 ## Is `p` inside a live hazard (the bots dodge with this)?
 func danger_at(p: Vector2, pad := 0.6) -> bool:
+	for a: Dictionary in areas:
+		if str(a.kind) == "ground" and str(a.get("owner", "")) == "boss" and p.distance_to(a.pos as Vector2) <= float(a.r) + pad:
+			return true
 	# Scorched Earth: the burning half, from the last 3 s of the warning, and where it will be in 2.5 s while turning
 	if not scorch.is_empty() and (scorch.state == "live" or time - pull_time >= MmoTune.value("scorch_at") - 3.0):
 		if in_scorch(p, pad + 1.0) or in_scorch(p, pad + 1.0, 2.5):

@@ -1149,7 +1149,8 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 uniform vec2 dir = vec2(1.0, 0.0);
 uniform float warn = 0.0;        // 0..1 through the warning
 uniform float live = 0.0;        // 0 or 1
-uniform float spin = 0.0;        // 0 or 1
+uniform float spin = 0.0;        // 0..1: the chevrons' strength
+uniform float turn = 1.0;        // 1 counter-clockwise from above, -1 clockwise
 uniform float radius = 26.0;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -1188,6 +1189,7 @@ void fragment() {
 			// advances into safe ground, the edge on the t > 0 ray retreats.
 			// Advancing: red chevrons on the safe side, pointing out of the fire, marching away.
 			// Retreating: gold chevrons on the fire side, pointing into the fire, marching in.
+			t *= turn;                                             // clockwise: the edges swap roles
 			float wc = (fract(abs(t) / 2.0) - 0.5) * 2.0;          // across the chevron, repeating along the edge
 			float adv_band = step(1.5, -t) * (1.0 - smoothstep(0.0, 0.4, -s - 3.4)) * smoothstep(0.2, 0.6, -s);
 			float fa = fract((-s + abs(wc) * 1.4) * 0.5 - TIME * 0.9);
@@ -1287,10 +1289,17 @@ func _sync_scorch(_delta: float) -> void:
 	var warn_len := MmoTune.value("scorch_warn")
 	_scorch_mat.set_shader_parameter("warn", clampf(float(sc.t) / maxf(0.1, warn_len), 0.0, 1.0))
 	_scorch_mat.set_shader_parameter("live", 1.0 if sc.state == "live" else 0.0)
-	# full chevrons while turning; a flashing preview in the 10 s before it starts
+	# full chevrons while it turns; dim while it holds, flashing in the 2 s before the next burst;
+	# a flashing preview in the 10 s before it first turns (G38, G40)
 	var to_spin := MmoTune.value("scorch_spin_at") - (sim.time - sim.pull_time)
-	var spin_k := 1.0 if sc.spinning else (0.35 + 0.25 * sin(Time.get_ticks_msec() / 160.0) if sc.state == "live" and to_spin <= 10.0 else 0.0)
+	var flash := 0.35 + 0.25 * sin(Time.get_ticks_msec() / 160.0)
+	var spin_k := 0.0
+	if sc.spinning:
+		spin_k = 1.0 if sc.get("moving", false) else (flash if sim.scorch_next_turn() <= 2.0 else 0.22)
+	elif sc.state == "live" and to_spin <= 10.0:
+		spin_k = flash
 	_scorch_mat.set_shader_parameter("spin", spin_k)
+	_scorch_mat.set_shader_parameter("turn", float(sc.get("dir", 1.0)))
 	# embers over the burning half
 	_scorch_fire.emitting = sc.state == "live"
 	var d := Vector3(cos(ang), 0, sin(ang))
@@ -1319,7 +1328,7 @@ func _add_area(a: Dictionary) -> void:
 			if str(a.kind) == "bomb":
 				c = Color(1.0, 0.12, 0.05, 0.6)
 			elif str(a.kind) == "ground":
-				c = Color("#ffd040") if str(a.look) == "consecration" else Color("#9fd8ff")
+				c = Color("#ffd040") if str(a.look) == "consecration" else (Color("#ff4a12") if str(a.look) == "fire_pool" else Color("#9fd8ff"))
 			q.material_override = _tele_mat(c, 3 if str(a.kind) == "ground" else 0)
 			q.position.y = 0.05
 		"ring":

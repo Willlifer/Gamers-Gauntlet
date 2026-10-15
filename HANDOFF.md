@@ -11,6 +11,7 @@
 - **FPS:** bullets travel at 5× the slingshot ball with a trail and damage what they hit, both ways (G28). New module **FPS: Mid duel** on the Dust hallway (G29).
 - **Raid: Cinderbrand (G30):** an unavoidable burn worth 25% HP over 30 s; run it off, get cleansed or be healed through it.
 - **New module: OSRS: Warden's Trial (G34).** Game squares and 0.6 s ticks. You pray against projectiles and dodge lightning, boulders, slams and the row tear-out. The twist is the Sun Sigil. The fastest kill wins.
+- **Raid, later (G35-G40):** silent below 50%, frenzy below 25%. Scorched Earth: half the courtyard burns at 45 s, then turns in 15 s bursts with 30 s rests, a random way each time, with chevrons on the edges. Bombs can leave burning ground. **Eight spells a class** on one bar (the old 16 shelved). Raids of eight with duplicate classes allowed.
 - **Raid verdict: a grade (G33):** output, mechanics, AoEs avoided, survival and activity, weighted into S-F. The higher grade wins. There is a report card at the end.
 
 ## Do this first
