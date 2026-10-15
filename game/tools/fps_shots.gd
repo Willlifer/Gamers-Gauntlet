@@ -3,7 +3,7 @@ extends SceneTree
 ## running with the reticle open, crouch, prone, shotgun mid-pump, slingshot
 ## drawn, the bot up close, the bolt mid-cycle), saved to design/shots/fps/
 ## and as one sheet. Exit 0.
-##   godot --path . --script res://tools/fps_shots.gd
+##   [MAP=campus] godot --path . --script res://tools/fps_shots.gd
 
 var out := ""
 var w: FpsWorld
@@ -12,7 +12,10 @@ var shots: Array[Image] = []
 
 func _initialize() -> void:
 	FpsTune.use_defaults()
+	FpsWorld.ask_loadout = false
 	out = ProjectSettings.globalize_path("res://").path_join("../design/shots/fps").simplify_path()
+	if OS.get_environment("MAP") != "":
+		out = out.path_join(OS.get_environment("MAP"))         # MAP=campus: that map's frames in their own folder
 	DirAccess.make_dir_recursive_absolute(out)
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1600, 900))
@@ -42,11 +45,14 @@ func _look_at(p: Vector3) -> void:
 
 func _go() -> void:
 	w = FpsWorld.new()
+	if OS.get_environment("MAP") != "":
+		w.map_id = OS.get_environment("MAP")
 	root.add_child(w)
 	await _wait(1.0)
 	var pl := w.player
 	var bot := w.bot
 	bot.set_physics_process(false)          # hold the bot still for framing
+	pl.shielded = true                      # and keep the player alive through the walk
 	_look_at(bot.eye())
 	await _wait(0.6)
 	await _shot("1_hip")
@@ -97,8 +103,28 @@ func _go() -> void:
 	_look_at(bot.eye() + Vector3(0, -0.5, 0))
 	await _wait(1.6)
 	await _shot("10_bot_close")
-	# sheet: 5 x 2 thumbnails
-	var sheet := Image.create(1600, 360, false, Image.FORMAT_RGB8)
+	# G43: the radial loadout, then the dual Berettas and their trick reload
+	bot.set_physics_process(false)
+	FpsWorld.ask_loadout = true
+	w.open_loadout()
+	await _wait(1.0)
+	await _shot("11_radial")
+	if w._menu:
+		w._menu._pick("dual_berettas" if FpsWeapons.available("dual_berettas") else "sniper")
+	FpsWorld.ask_loadout = false
+	await _wait(0.8)
+	await _shot("12_loadout_in_hand")
+	if pl.weapon == "dual_berettas":
+		pl.ammo.dual_l = 0
+		pl._reload()
+		await _wait(0.12)
+		await _shot("13_duals_mags_drop")
+		await _wait(0.55)
+		await _shot("14_duals_flip")
+		await _wait(0.6)
+		await _shot("15_duals_catch")
+	# sheet: 5 x 3 thumbnails
+	var sheet := Image.create(1600, 540, false, Image.FORMAT_RGB8)
 	for i in shots.size():
 		var t := shots[i].duplicate() as Image
 		t.convert(Image.FORMAT_RGB8)

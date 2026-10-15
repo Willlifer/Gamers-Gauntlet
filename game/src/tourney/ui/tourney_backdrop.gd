@@ -10,7 +10,7 @@ extends CanvasLayer
 const MAPS := ["rooftop", "dust_mid", "courtyard"]
 const SPEED := TAU / 160.0                  ## one lap in ~2.7 minutes
 ## Which backdrop each game's matchup shows (games without a kit map keep the current one).
-const FOR_GAME := { "fps_roof": "rooftop", "fps_mid": "dust_mid", "mmo_raid": "courtyard" }
+const FOR_GAME := { "fps_roof": "rooftop", "fps_mid": "dust_mid", "fps_campus": "campus", "mmo_raid": "courtyard" }
 
 var current := ""
 var _vp: SubViewport
@@ -57,7 +57,9 @@ func _ready() -> void:
 
 ## Show a map (built on first use). "" or an unknown id: a random one.
 func show_map(id: String = "") -> void:
-	if not id in MAPS:
+	if id == "campus" and not GKGlb.exists("campus"):
+		id = ""
+	if not id in MAPS and id != "campus":
 		id = MAPS[randi() % MAPS.size()]
 	if id == current:
 		return
@@ -99,6 +101,13 @@ func _build(id: String) -> Dictionary:
 			var pa: Array = a.meta.play_area
 			var c := Vector3((float(pa[0]) + float(pa[2])) * 0.5, 0.0, (float(pa[1]) + float(pa[3])) * 0.5)
 			return { "node": root, "focus": c + Vector3(0, 3.0, 0), "radius": 34.0, "height": 22.0 }
+		"campus":
+			var a := GKRegistry.build("campus")
+			root.add_child(GKStage.outdoor(a.lights))
+			root.add_child(a.instantiate(false))
+			var pa: Array = a.meta.play_area
+			var c := Vector3((float(pa[0]) + float(pa[2])) * 0.5, 0.0, (float(pa[1]) + float(pa[3])) * 0.5)
+			return { "node": root, "focus": c + Vector3(0, 4.0, 0), "radius": 75.0, "height": 38.0 }
 		_:
 			root.add_child(GKStage.outdoor(MmoArena.lights()))
 			MmoArena.build(root)

@@ -7,7 +7,7 @@ extends FpsModule
 
 static func info() -> Dictionary:
 	return { "id": "fps_mid", "name": "FPS: Mid duel", "players": 2,
-		"blurb": "First person down the Dust hallway. Sniper, shotgun, slingshot. First to 5." }
+		"blurb": "First person down the Dust hallway. Pick a gun each life. First to 5." }
 
 
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:

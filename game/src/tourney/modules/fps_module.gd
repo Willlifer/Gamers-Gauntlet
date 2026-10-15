@@ -8,7 +8,7 @@ extends TourneyModule
 
 static func info() -> Dictionary:
 	return { "id": "fps_roof", "name": "FPS: Rooftop duel", "players": 2,
-		"blurb": "First person on the rooftops. Sniper, shotgun, slingshot. First to 5." }
+		"blurb": "First person on the rooftops. Pick a gun each life; pistol or Desert Eagle on the hip. First to 5." }
 
 
 ## The kit map this duel is on (FpsMidModule: the Dust hallway).

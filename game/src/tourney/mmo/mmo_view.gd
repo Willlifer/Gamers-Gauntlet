@@ -172,6 +172,11 @@ func _add_unit(u: MmoUnit) -> void:
 	add_child(root)
 	var ch := dress(u)
 	root.add_child(ch)
+	var vehicle := ""
+	if u.kind == "player":
+		vehicle = str(MmoClasses.CLASSES[u.cls].get("vehicle", ""))
+	if vehicle != "":
+		ride(root, ch, vehicle)
 	if u.kind == "boss":
 		root.scale = Vector3.ONE * MmoTune.value("boss_scale")
 	var name_l := Label3D.new()
@@ -191,6 +196,24 @@ func _add_unit(u: MmoUnit) -> void:
 	_views[u.id] = { "root": root, "char": ch, "pose": "", "cast": u.cast_serial, "strike": u.strike_serial, "hit": u.hit_serial,
 		"anim_t": 0.0, "name": name_l, "move": "", "move_t": 0.0, "glow": null }
 	ch.pose("idle")
+
+
+## A hidden class's vehicle (G44): the kit model shrunk to raid size around
+## the crewman, who stands in the hatch with only the top half showing.
+const VEHICLE_SCALE := 0.42
+
+
+static func ride(root: Node3D, ch: Node3D, vehicle_id: String) -> void:
+	if GKRegistry.def(vehicle_id) == null:
+		return
+	var a := GKRegistry.build(vehicle_id, { "scale": VEHICLE_SCALE })
+	var n := a.instantiate(false)
+	n.name = "Vehicle"
+	# the kit's front is +Z after the glTF flip; the characters face +Z too
+	root.add_child(n)
+	var hatch := a.marker("hatch").origin if a.markers.has("hatch") else Vector3(0, a.aabb().end.y, 0)
+	ch.scale = Vector3.ONE * 0.62
+	ch.position = hatch + Vector3(0, -0.72, 0)
 
 
 ## Round portraits for the frames: each unit dressed again in a little

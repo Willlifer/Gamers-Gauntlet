@@ -56,6 +56,7 @@ a `history/` summary when the session was long.
     League-ish defaults marked OPEN in `moba_champs.gd`.
   - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops; bullets fly (G28).
   - `fps_mid`: FPS: Mid duel (`FpsMidModule`, G29), the same duel on the kit's Dust2-mid hallway.
+  - `fps_campus`: FPS: Campus paintball (`FpsCampusModule`, G43), the duel on the Blender-built campus; paint, walk-through bushes. Every FPS life starts on the radial loadout (G43).
   - `mmo_raid`: MMO: Raid night (`src/tourney/mmo/`, G22-G23): a WoW Classic raid of six on the Giant, WoW controls and HUD; contestants compared by rating.
   - `osrs_raid`: OSRS: Warden's Trial (`src/tourney/osrs/`, G34): an OSRS raid boss on game squares and 0.6 s ticks; fastest kill wins.
   - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
@@ -82,7 +83,8 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `--headless --path . --script res://tools/kit_probe.gd`: the Gauntlet kit (G17): every asset at defaults, presets and parameter extremes; inverted/inward faces; determinism; export round trip; the bench's undo/redo; exit 0.
 - `[ASSETS=sniper,rooftop] [TAG=r5] [FULL=1] --path . --script res://tools/kit_ref_shots.gd`: kit review sheets beside `design/ref/kit/*` to `design/shots/kit/`.
 - `--path . res://scenes/kit_bench.tscn`: the kit bench (shape assets, presets, export .glb).
-- `--path . res://scenes/fps_proto.tscn`: the FPS prototype alone (G20); `--path . --script res://tools/fps_shots.gd` shoots its frames to `design/shots/fps/`.
+- Blender kit assets (G43): `"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python game/tools/blender/gauntlet/gg_<id>.py -- --views --tag r1` rebuilds `game/art/gauntlet/<id>.glb` (pistol, deagle, marksman, carbine, auto_rifle, tank, campus); `python game/tools/blender/gauntlet/sheet.py <id> r1` makes the review sheet beside `design/ref/kit/<id>.jpg`. The contract is the docstring of `gg_common.py`; then `--headless --path . --import` and the kit probe.
+- `--path . res://scenes/fps_proto.tscn`: the FPS prototype alone (G20); `[MAP=campus] --path . --script res://tools/fps_shots.gd` shoots its frames (the radial and the Dual Berettas' trick reload included) to `design/shots/fps/[map]/`.
 - `--path . res://scenes/module.tscn -- --module pit` (or aram, fps_roof, fps_mid, mmo_raid, osrs_raid, bw_twins): any tournament game alone vs a bot. Music everywhere in the tournament is the author's Chris loops (`TourneyMusic`, G25).
 - `--path . res://scenes/mmo_proto.tscn`: the MMO raid alone (class pick, then the fight). Checks: `--headless --path . --script res://tools/mmo_probe.gd` (all 96 abilities, the mechanics, the 5 s spell gap, bot raids, replay), `--headless ... tools/mmo_input.gd` (the WoW controls through real input events); frames: `[TAG=r4] [CLASS=priest] --path . --script res://tools/mmo_shots.gd` and `tools/mmo_moves_sheet.gd` (the Giant's poses) to `design/shots/mmo/`. Audio: `--headless ... tools/mmo_audio_check.gd`; re-trim the author's takes with `python tools/audio/trim_chris.py` (G24).
 - F1 in a MOBA match / the range / the FPS / the raid: the live feel-number panels (G19), saved to `user://moba_tune.cfg` / `user://fps_tune.cfg` / `user://mmo_tune.cfg`.

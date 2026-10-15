@@ -42,9 +42,23 @@ around the Giant (27,000 HP) in its pit. Slam every 8 s, nova every 12 s.
 Smite: 600 true damage, the boss only. The last hit wins (G12).
 
 ## fps_roof: FPS Rooftop duel (prototype)
-First person on the kit rooftops against a bot, first to 5. Sniper (4x
-scope), shotgun, slingshot. Shift tap crouch, hold prone; RMB aims; a
-CS:GO-style reticle drawn from the real spread (G20). Numbers: `FpsTune` (F1).
+First person on the kit rooftops against a bot, first to 5. Shift tap crouch,
+hold prone; RMB aims; a CS:GO-style reticle drawn from the real spread (G20).
+Numbers: `FpsTune` (F1); the guns: `FpsWeapons.SPECS`.
+- **Loadout** (G43): before every life, the radial (`FpsLoadoutMenu`, after
+  CS's buy wheel): pick a primary (bolt rifle, marksman rifle 2.5x, pump
+  shotgun, personal carbine, automatic rifle, Dual Berettas, or Random);
+  10 s, Esc keeps the last pick; you can't be hurt while picking. Price tags
+  are for show (the Berettas cost $1 for no reason). The sidearm is rolled:
+  the 92FS pistol, or 50% of the time the Desert Eagle (bigger boom: flash,
+  kick). The pistol replaces the slingshot. 1 primary, 2 sidearm.
+- **Triggers:** carbine and automatic rifle are full auto; pistols semi-auto
+  (one shot per pull). **Dual Berettas:** LMB fires the left gun, RMB the
+  right (no aiming in), 15 rounds each; R or an empty gun does the trick
+  reload: the mags drop, both guns backflip up, two fresh mags rise and the
+  guns land on them.
+- **The bot** picks a random primary each life and fires it the gun's way
+  (bursts, pellets, singles).
 - **Bullets fly** (G28): rifle and shotgun rounds (one per pellet), and the
   bot's, travel straight at 5x the slingshot ball's full-draw speed (375 m/s;
   `bullet_speed`) with a trail (`bullet_trail`, 8 m), and hurt whoever they
@@ -55,8 +69,24 @@ CS:GO-style reticle drawn from the real spread (G20). Numbers: `FpsTune` (F1).
 The same duel on the kit's Dust2-mid hallway (G29): you at the T end, the bot
 in the tower half of the lane. Same guns, bullets, bot and `FpsTune`.
 
+## fps_campus: FPS Campus paintball (G43)
+The same duel on the Blender-built autumn campus (`campus.glb`): a stone
+chapel with its tower in the middle, brick halls on the flanks, a curving
+road as the open lane, inflatable bunkers, 86 bushes. Spawns at the west
+(you) and east ends. **Paint:** every miss leaves a splat in the shooter's
+colour (you blue, the bot pink). **Bushes:** walk through them; past 3 m,
+more than a metre of leaves between hides you from the bot (and the bot
+likes to wait in them).
+
 ## mmo_raid: MMO Raid night
 A WoW Classic raid against the Giant in a round courtyard (G22).
+- **Hidden class: the Tank** (G44). A small, faint tank in the pick screen's
+  bottom-right corner ("???"); click it to drive. Plays exactly like the
+  hunter (same numbers, eight slots and PAR, renamed: Coax Burst, HEAT Round,
+  Autoloader, Overwatch, Field Repair, Pop Smoke, Main Gun, Full Reverse);
+  the kit tank at 0.42 scale with the crewman in the hatch. Never a bot:
+  bots and bot seats only draw from `MmoClasses.ORDER`; hidden classes are
+  `MmoClasses.HIDDEN`.
 - **Seats:** a raid of eight. Both contestants (any classes, the same one allowed)
   and one bot of each class; the Giant scales with the raid's size (G39).
 - **Classes:** warrior (tank, rage), paladin (hammer + heals), priest (healer),

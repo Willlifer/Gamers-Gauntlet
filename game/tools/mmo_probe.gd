@@ -18,6 +18,7 @@ func _initialize() -> void:
 	MmoTune.use_defaults()
 	_abilities()
 	_themes()
+	_hidden()
 	_mechanics()
 	_brand()
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 6
@@ -178,6 +179,41 @@ func _themes() -> void:
 		_fail("Vampiric Embrace laid no DoT on the Giant")
 	print("themes: checked")
 
+
+
+## G44: the hidden Tank. Never in ORDER (so no bot draws it), a person's seat
+## can take it, it is the hunter underneath, and every one of its spells goes off.
+func _hidden() -> void:
+	if "tank" in MmoClasses.ORDER:
+		_fail("the tank is in ORDER: bots could draw it")
+	var s := MmoModule.build_seats(3, [["tank", "Driver"]])
+	var tanks := s.players().filter(func(p: MmoUnit) -> bool: return p.cls == "tank")
+	if tanks.size() != 1 or tanks[0] != s.players()[0]:
+		_fail("the tank seat: %d tanks, first seat %s" % [tanks.size(), s.players()[0].cls])
+	var t: MmoUnit = s.players()[0]
+	var h: Dictionary = MmoClasses.CLASSES.hunter
+	if t.max_hp != float(h.hp) or MmoClasses.abilities("tank").size() != MmoClasses.SLOTS:
+		_fail("the tank isn't the hunter underneath")
+	var b := s.boss
+	s._pull()
+	s.next_spell_at = INF
+	var went := 0
+	for ab: Dictionary in MmoClasses.abilities("tank"):
+		t.pos = b.pos + Vector2(0, b.radius + 14.0)
+		t.yaw = atan2(b.pos.x - t.pos.x, b.pos.y - t.pos.y)
+		t.target = b.id
+		t.res = t.res_max
+		t.cd.clear()
+		t.gcd = 0.0
+		if str(ab.get("tgt", "")) == "self":
+			s.add_aura(t, { "id": "burning", "name": "Burning", "src": "boss", "dur": 6.0, "debuff": true, "cleanse": true })
+		if s.try_cast(t, str(ab.id)):
+			went += 1
+		for i in 45:
+			s.step({})
+	if went != MmoClasses.SLOTS:
+		_fail("tank: %d / %d spells went off" % [went, MmoClasses.SLOTS])
+	print("hidden tank: %d / %d spells" % [went, MmoClasses.SLOTS])
 
 # ------------------------------------------------------------- mechanics
 

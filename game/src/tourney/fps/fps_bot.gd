@@ -7,6 +7,11 @@ extends CharacterBody3D
 ## Behaviour, on its own roof: run to a cover spot, kneel, peek; when it sees
 ## you it turns, shoulders the rifle, waits its reaction time and fires
 ## (accuracy from FpsTune, worse when you move or lie down, at range).
+## G43: it carries a primary picked each life (set_weapon) and fires it the
+## gun's way: bursts from the automatics, pellets from the shotgun, single
+## shots otherwise, each bullet worth the gun's damage. Bushes (the map's
+## hide volumes) hide you past 3 m and hide it too; on the campus it likes
+## to wait in them.
 
 signal died
 
@@ -17,6 +22,9 @@ var world: FpsWorld
 var ch: BWCharacter
 var gun_asset: GKAsset
 var gun: Node3D
+var weapon := "sniper"
+var _burst := 0                            # bullets left in this burst
+var _burst_t := 0.0
 var hp := 100.0
 var alive := true
 var crouched := false
@@ -54,7 +62,19 @@ func _ready() -> void:
 	BWCharacter.animate = true
 	ch = BWCharacter.create(_unit())
 	add_child(ch)
-	gun_asset = GKRegistry.build("sniper", { "scale": 1.25, "bipod": "folded" })
+	set_weapon(weapon)
+
+
+## Hold `id` (a FpsWeapons gun) for this life.
+func set_weapon(id: String) -> void:
+	weapon = id if FpsWeapons.available(id) else "sniper"
+	if ch == null:
+		return
+	var sp: Dictionary = FpsWeapons.SPECS[weapon]
+	var params: Dictionary = (sp.params as Dictionary).duplicate()
+	if weapon == "sniper":
+		params = { "scale": 1.25, "bipod": "folded" }
+	gun_asset = GKRegistry.build(str(sp.asset), params)
 	gun = GKBWHold.swap_weapon(ch, gun_asset)
 	GKBWHold.hold_rifle(ch, gun_asset, "low")
 
@@ -112,15 +132,22 @@ func _physics_process(delta: float) -> void:
 			_stop()
 			crouched = _rng.randf() < 0.0           # stands to shoot; kneels again in hold
 			_face(target.global_position, delta)
-			if not sees and _seen <= 0.0:
+			_burst_t -= delta
+			if _burst > 0 and _burst_t <= 0.0 and sees:
+				_fire()
+				_burst -= 1
+				_burst_t = float(FpsWeapons.SPECS[weapon].cycle)
+			elif not sees and _seen <= 0.0:
+				_burst = 0
 				_goal = _pick_spot()
 				_set_state("move")
-			elif _seen >= FpsTune.value("bot_reaction") and _cool <= 0.0:
-				_fire()
-				_cool = 1.6 + _rng.randf() * 0.6
+			elif _burst <= 0 and _seen >= FpsTune.value("bot_reaction") and _cool <= 0.0:
+				var sp: Dictionary = FpsWeapons.SPECS[weapon]
+				_burst = _rng.randi_range(3, 6) if sp.get("auto", false) or sp.get("dual", false) else 1
+				_burst_t = 0.0
+				_cool = (1.6 + _rng.randf() * 0.6) * (0.7 if sp.get("auto", false) else (0.55 if sp.action == "slide" else 1.0))
 				if _rng.randf() < 0.3:
 					_goal = _pick_spot()
-					_set_state("move")
 	move_and_slide()
 	if velocity.length() < 0.3 and _state == "move":
 		_stuck += delta
@@ -165,9 +192,18 @@ func _face(p: Vector3, delta: float) -> void:
 	rotation.y = _yaw
 
 
-## A spot on its roof near cover (any low collider), clear of the edge.
+## A spot on its roof near cover (any low collider), clear of the edge; on a
+## map with bushes, half the time the middle of a bush on its side.
 func _pick_spot() -> Vector3:
 	var y := global_position.y
+	if not world.hide_volumes.is_empty() and _rng.randf() < 0.5:
+		var mine := world.hide_volumes.filter(func(h: Dictionary) -> bool:
+			var c: Vector3 = h.center
+			return roof.any(func(r: Rect2) -> bool: return r.has_point(Vector2(c.x, c.z))))
+		if not mine.is_empty():
+			var h: Dictionary = mine[_rng.randi() % mine.size()]
+			var c: Vector3 = h.center
+			return Vector3(c.x, y, c.z)
 	for i in 20:
 		var r: Rect2 = roof[_rng.randi() % roof.size()]
 		var p := Vector3(_rng.randf_range(r.position.x + 3.0, r.end.x - 3.0), y + 0.5, _rng.randf_range(r.position.y + 3.0, r.end.y - 3.0))
@@ -187,7 +223,10 @@ func _can_see() -> bool:
 		return false
 	var to: Vector3 = target.cam.global_position
 	var hit := world.trace(eye(), to, [get_rid()], 1 | 4)
-	return not hit.is_empty() and hit.collider == target
+	if hit.is_empty() or hit.collider != target:
+		return false
+	# bushes: past 3 m, more than a metre of leaves between hides you (G43)
+	return eye().distance_to(to) < 3.0 or world.bush_between(eye(), to) < 1.0
 
 
 func _fire() -> void:
@@ -198,7 +237,10 @@ func _fire() -> void:
 	acc *= { "stand": 1.0, "crouch": 0.85, "prone": 0.6 }[target.stance]
 	acc *= clampf(1.15 - dist / 140.0, 0.35, 1.0)
 	var muzzle := gun.global_transform * gun_asset.marker("muzzle").origin
+	var sp: Dictionary = FpsWeapons.SPECS[weapon]
 	world.muzzle_flash(muzzle, (to - muzzle).normalized())
+	if sp.get("boom", false):
+		world.boom(muzzle)
 	# the roll picks where it aims; the bullet still has to get there (G28):
 	# a good roll aims at the chest (or the head, 12%), a bad one beside you
 	var aim := to
@@ -207,7 +249,11 @@ func _fire() -> void:
 			aim = target.cam.global_position
 	else:
 		aim = to + Vector3(_rng.randf_range(-1.2, 1.2), _rng.randf_range(-0.6, 1.4), _rng.randf_range(-1.2, 1.2))
-	world.fire_bullet(muzzle, (aim - muzzle).normalized(), self, 34.0, 100.0 / 34.0, 300.0, Color(1.0, 0.75, 0.45), muzzle)
+	for k in int(sp.pellets):
+		var dir := (aim - muzzle).normalized()
+		if int(sp.pellets) > 1:
+			dir = FpsPlayer._cone(dir, float(sp.spread))
+		world.fire_bullet(muzzle, dir, self, float(sp.damage), float(sp.head), float(sp.range), Color(1.0, 0.75, 0.45), muzzle)
 	world.shot_near_player(muzzle)
 
 

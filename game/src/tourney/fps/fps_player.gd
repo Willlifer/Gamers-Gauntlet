@@ -4,7 +4,11 @@ extends CharacterBody3D
 ## eye height and carries the view model (FpsViewmodel).
 ##   WASD move · mouse look · Space jump (or stand up) · Shift tap: crouch /
 ##   stand · Shift hold: lie down · LMB fire (slingshot: hold to draw, release
-##   to loose) · RMB aim in · R reload · 1 2 3 / wheel: weapons · F1 tuning
+##   to loose) · RMB aim in · R reload · 1 primary, 2 sidearm / wheel · F1 tuning
+## The loadout (G43): a primary picked on the radial each life, and a rolled
+## sidearm (the 92FS, or half the time the Desert Eagle). Dual Berettas:
+## LMB fires the left gun, RMB the right; each has its own magazine; R (or
+## an empty gun) does the trick reload.
 ## Inaccuracy is one number per frame (spread_deg); the reticle draws it, the
 ## shots use it, so the crosshair never lies.
 
@@ -23,6 +27,8 @@ var hp := 100.0
 var alive := true
 var stance := "stand"
 var weapon := "sniper"
+var slots: Array = ["sniper", "pistol"]      ## [primary, sidearm]
+var shielded := false                       ## picking a loadout: can't be hurt
 var ammo := {}
 var spread_deg := 0.0
 var speed01 := 0.0
@@ -76,7 +82,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var sens := FpsTune.value("mouse_sens") * 0.001 * (FpsTune.value("ads_sens") if aiming else 1.0)
 		if scoped:
-			sens /= FpsTune.value("scope_zoom")
+			sens /= zoom()
 		rotate_y(-ev.relative.x * sens)
 		_pitch = clampf(_pitch - ev.relative.y * sens, -1.45, 1.45)
 		_look += ev.relative
@@ -89,12 +95,25 @@ func _unhandled_input(ev: InputEvent) -> void:
 					velocity.y = FpsTune.value("jump")
 			KEY_R:
 				_reload()
-			KEY_1, KEY_2, KEY_3:
-				_switch(FpsWeapons.ORDER[ev.physical_keycode - KEY_1])
+			KEY_1, KEY_2:
+				_switch(str(slots[ev.physical_keycode - KEY_1]))
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP or ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			var i := FpsWeapons.ORDER.find(weapon) + (1 if ev.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1)
-			_switch(FpsWeapons.ORDER[posmod(i, FpsWeapons.ORDER.size())])
+			var i := slots.find(weapon) + 1
+			_switch(str(slots[posmod(i, slots.size())]))
+
+
+## A new life's guns: full magazines, the primary in hand.
+func set_loadout(primary: String, sidearm: String) -> void:
+	slots = [primary, sidearm]
+	_fill()
+	weapon = ""
+	_switch(primary)
+
+
+## The scope's magnification for the gun in hand.
+func zoom() -> float:
+	return float(spec().get("zoom", FpsTune.value("scope_zoom")))
 
 
 func _switch(id: String) -> void:
@@ -106,8 +125,25 @@ func _switch(id: String) -> void:
 	_drawing = false
 
 
+## Full magazines for every gun (the duals: one per hand).
+func _fill() -> void:
+	for id in FpsWeapons.ORDER:
+		ammo[id] = int(FpsWeapons.SPECS[id].mag)
+	ammo["dual_l"] = int(FpsWeapons.SPECS.dual_berettas.mag)
+	ammo["dual_r"] = int(FpsWeapons.SPECS.dual_berettas.mag)
+
+
 func _reload() -> void:
 	var sp := spec()
+	if sp.get("dual", false):
+		if vm.reload_t >= 0.0 or (ammo.dual_l >= int(sp.mag) and ammo.dual_r >= int(sp.mag)):
+			return
+		vm.start_reload()
+		_cool = float(sp.reload)
+		_cool_l = _cool
+		ammo.dual_l = int(sp.mag)
+		ammo.dual_r = int(sp.mag)
+		return
 	if int(sp.mag) <= 0 or ammo[weapon] >= int(sp.mag) or vm.reload_t >= 0.0:
 		return
 	vm.start_reload()
@@ -168,14 +204,14 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	aiming = input_on and alive and (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or debug_aim)
+	aiming = input_on and alive and (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or debug_aim) and not spec().get("dual", false)
 	_punch = move_toward(_punch, 0.0, delta * 0.5)
 	cam.position.y = _eye
 	cam.rotation.x = _pitch + _punch
 	var sp := spec()
 	scoped = bool(sp.scope) and vm.ads > 0.97
 	var base := FpsTune.value("fov")
-	var div := FpsTune.value("scope_zoom") if scoped else lerpf(1.0, float(sp.ads_div), vm.ads)
+	var div := zoom() if scoped else lerpf(1.0, float(sp.ads_div), vm.ads)
 	cam.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(base) * 0.5) / div))
 	vm.visible = not scoped
 	vm.update(delta, aiming, speed01, is_on_floor(), stance, _look)
@@ -198,6 +234,9 @@ func _weapon(delta: float) -> void:
 		_drawing = false
 		return
 	var held := (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire
+	if sp.get("dual", false):
+		_duals(delta, held, (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire_r)
+		return
 	if sp.action == "draw":
 		if held and _cool <= 0.0:
 			_drawing = true
@@ -211,7 +250,9 @@ func _weapon(delta: float) -> void:
 	# shell-by-shell reload keeps going while the tube isn't full and you don't shoot
 	if sp.get("shell_reload", false) and vm.reload_t < 0.0 and _cool <= 0.0 and ammo[weapon] < int(sp.mag) and ammo[weapon] > 0 and not held and _reload_pending:
 		_reload()
-	if held and _cool <= 0.0 and vm.reload_t < 0.0:
+	var fresh := held and not _held_before
+	_held_before = held
+	if held and _cool <= 0.0 and vm.reload_t < 0.0 and (fresh or sp.get("auto", false) or sp.action in ["bolt", "pump"]):
 		if ammo[weapon] <= 0:
 			_reload_pending = true
 			_reload()
@@ -221,28 +262,62 @@ func _weapon(delta: float) -> void:
 
 
 var _reload_pending := false
+var _held_before := false                   # semi-automatics fire once per pull
+var _cool_l := 0.0                          # the left Beretta's own cycle
+var _held_r_before := false
+var debug_fire_r := false                   ## tools: hold the right trigger (duals)
+
+
+## Dual Berettas: each trigger its own gun, once per pull; an empty gun asks
+## for the trick reload (both at once).
+func _duals(delta: float, left: bool, right: bool) -> void:
+	_cool_l -= delta
+	var fl := left and not _held_before
+	var fr := right and not _held_r_before
+	_held_before = left
+	_held_r_before = right
+	if vm.reload_t >= 0.0:
+		return
+	for side: String in ["l", "r"]:
+		var pulled := fl if side == "l" else fr
+		var ready := (_cool_l if side == "l" else _cool) <= 0.0
+		if not pulled or not ready:
+			continue
+		var k: String = "dual_" + side
+		if int(ammo[k]) <= 0:
+			_reload()
+			return
+		ammo[k] = int(ammo[k]) - 1
+		if side == "l":
+			_cool_l = float(spec().cycle)
+		else:
+			_cool = float(spec().cycle)
+		_shoot(1.0, side)
 
 
 ## Fire: bullets (one per pellet) inside the current cone, flown by the world
 ## from the eye so the reticle stays true, drawn from the muzzle (G28); the
 ## slingshot looses a ball.
-func _shoot(power: float) -> void:
+func _shoot(power: float, side := "") -> void:
 	var sp := spec()
-	_cool = float(sp.cycle)
-	if int(sp.mag) > 0:
-		ammo[weapon] -= 1
-		if ammo[weapon] <= 0:
-			_reload_pending = true
-	vm.fire()
+	if side == "":
+		_cool = float(sp.cycle)
+		if int(sp.mag) > 0:
+			ammo[weapon] -= 1
+			if ammo[weapon] <= 0:
+				_reload_pending = true
+	vm.fire(side)
 	_bloom += float(sp.recoil) * 0.35
-	_punch += deg_to_rad(float(sp.recoil)) * 0.12 * FpsTune.value("recoil") * (0.4 if scoped else 1.0)
+	_punch += deg_to_rad(float(sp.recoil)) * 0.12 * FpsTune.value("recoil") * (0.4 if scoped else 1.0) * (1.8 if sp.get("boom", false) else 1.0)
+	if sp.get("boom", false):
+		world.boom(vm.muzzle_global())
 	var from := cam.global_position
 	var fwd := -cam.global_transform.basis.z
 	if sp.action == "draw":
 		var dir := _cone(fwd, spread_deg)
 		world.loose_ball(vm.muzzle_global(), dir * float(sp.ball_speed) * lerpf(0.55, 1.0, power), self, float(sp.damage) * lerpf(0.35, 1.0, power))
 		return
-	var muzzle := vm.muzzle_global() if not scoped else from + fwd * 0.3 + Vector3(0, -0.15, 0)
+	var muzzle := vm.muzzle_global(side) if not scoped else from + fwd * 0.3 + Vector3(0, -0.15, 0)
 	for k in int(sp.pellets):
 		var dir := _cone(fwd, spread_deg)
 		world.fire_bullet(from, dir, self, float(sp.damage), float(sp.head), float(sp.range), sp.tracer, muzzle)
@@ -260,7 +335,7 @@ static func _cone(fwd: Vector3, deg: float) -> Vector3:
 
 
 func take_damage(d: float) -> void:
-	if not alive:
+	if not alive or shielded:
 		return
 	hp -= d
 	if hp <= 0.0:
@@ -276,6 +351,6 @@ func respawn(at: Transform3D) -> void:
 	alive = true
 	stance = "stand"
 	_pitch = 0.0
-	for id in FpsWeapons.ORDER:
-		ammo[id] = int(FpsWeapons.SPECS[id].mag)
+	_fill()
 	vm.equip(weapon)
+	_held_before = true                      # a held button doesn't fire the new life's first shot

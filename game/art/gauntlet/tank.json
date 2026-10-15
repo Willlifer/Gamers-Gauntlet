@@ -1,0 +1,28 @@
+{
+ "colliders": 0,
+ "hide_volumes": 0,
+ "id": "tank",
+ "kind": "prop",
+ "markers": [
+  "cam",
+  "gun_pivot",
+  "hatch",
+  "muzzle",
+  "sight",
+  "turret_pivot"
+ ],
+ "meta": {
+  "class": "vehicle",
+  "hands": 0,
+  "notes": "tracked IFV, Redback-like",
+  "socket": "none"
+ },
+ "parts": {
+  "gun": 440,
+  "hull": 15620,
+  "tracks": 8512,
+  "turret": 2456
+ },
+ "tris": 27028,
+ "version": 1
+}

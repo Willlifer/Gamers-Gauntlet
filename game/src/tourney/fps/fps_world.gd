@@ -8,6 +8,11 @@ extends Node3D
 ## slingshot balls) and the score. Run it alone:
 ##   godot --path . res://scenes/fps_proto.tscn
 ## or inside the tournament as FpsModule.
+## Every life starts on the radial loadout (G43, FpsLoadoutMenu): pick a
+## primary; the sidearm is rolled (the 92FS, half the time the Desert Eagle).
+## You can't be hurt while you pick. "campus" (G43) is paintball: shots
+## leave paint, and the bushes (the map's hide volumes) can be walked
+## through and hide whoever is inside from the other side's eyes.
 
 signal match_over(human_won: bool, summary: String)
 
@@ -21,10 +26,21 @@ var _over := false
 var _balls: Array[Dictionary] = []
 var _bullets: Array[Dictionary] = []
 var _tune: FpsTunePanel
+var _menu: FpsLoadoutMenu
+var _last_pick := ""
+var _rng := RandomNumberGenerator.new()
+## Tools: skip the radial and take the first primary at once.
+static var ask_loadout := true
+var paintball := false
+var hide_volumes: Array = []                ## [{ center, half, basis }] from the map
+const PAINT := { "player": Color("#2a7ad8"), "bot": Color("#e0308a") }
 
 
 func _ready() -> void:
+	_rng.randomize()
 	map = GKRegistry.build(map_id)
+	paintball = map_id == "campus"
+	hide_volumes = map.meta.get("hide_volumes", [])
 	var stage := GKStage.outdoor(map.lights)
 	add_child(stage)
 	var sun := stage.get_node_or_null("Sun") as DirectionalLight3D
@@ -42,6 +58,7 @@ func _ready() -> void:
 	bot.roof = _bot_area()
 	add_child(bot)
 	bot.global_transform = _spawn("b")
+	_bot_loadout()
 	bot.respawn(bot.global_transform)
 	bot.died.connect(_on_bot_died)
 	hud = FpsHud.new()
@@ -49,20 +66,81 @@ func _ready() -> void:
 	add_child(hud)
 	player.cam.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	hud.note("First to %d. The bot is %s." % [int(FpsTune.value("kills_to_win")), "on the far roof" if map_id == "rooftop" else "at the tower end"])
+	hud.note("First to %d. The bot is %s." % [int(FpsTune.value("kills_to_win")), { "rooftop": "on the far roof", "dust_mid": "at the tower end" }.get(map_id, "at the far end")])
+	open_loadout()
 
 
-## Where the bot may walk: roof B, or the far half of the hallway.
+## The radial before a life: the player can't move, shoot or be hurt until
+## they pick (or the timer keeps their last pick).
+func open_loadout() -> void:
+	var side := FpsWeapons.roll_sidearm(_rng)
+	var prim := FpsWeapons.primaries()
+	if prim.is_empty():
+		prim = ["sniper"]
+	if not ask_loadout:
+		player.set_loadout(str(prim[0]), side)
+		return
+	player.input_on = false
+	player.shielded = true
+	_menu = FpsLoadoutMenu.new()
+	_menu.options = prim + ["random"]
+	_menu.sidearm = side
+	_menu.last = _last_pick
+	_menu.picked.connect(func(id: String) -> void:
+		_last_pick = id
+		_menu = null
+		player.set_loadout(id, side)
+		player.input_on = _tune == null
+		player.shielded = false
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		hud.note("%s  +  %s" % [FpsWeapons.SPECS[id].name, FpsWeapons.SPECS[side].name]))
+	add_child(_menu)
+
+
+## The bot's life: a random primary.
+func _bot_loadout() -> void:
+	var prim := FpsWeapons.primaries()
+	bot.set_weapon(str(prim[_rng.randi() % prim.size()]) if not prim.is_empty() else "sniper")
+
+
+## Where the bot may walk: roof B, or the half of the play area its spawns are in.
 func _bot_area() -> Array:
 	var out: Array = []
 	if map.meta.has("roofs"):
 		for r in (map.meta.roofs.b as Array):
 			out.append(Rect2(float(r[0]), float(r[1]), float(r[2]) - float(r[0]), float(r[3]) - float(r[1])))
 		return out
-	var pa: Array = map.meta.play_area                 # [x0, z0, x1, z1]: the tower end is z0
-	var zm := (float(pa[1]) + float(pa[3])) * 0.5
-	out.append(Rect2(float(pa[0]), float(pa[1]), float(pa[2]) - float(pa[0]), zm - float(pa[1])))
-	return out
+	var pa: Array = map.meta.play_area                 # [x0, z0, x1, z1]
+	var r := Rect2(float(pa[0]), float(pa[1]), float(pa[2]) - float(pa[0]), float(pa[3]) - float(pa[1]))
+	var b := map.marker("spawn_b0").origin
+	var a := map.marker("spawn_a0").origin
+	if absf(b.z - a.z) >= absf(b.x - a.x):               # the spawns face along z: split across z
+		var zm := r.get_center().y
+		return [Rect2(r.position.x, r.position.y, r.size.x, r.size.y * 0.5) if b.z < zm else Rect2(r.position.x, zm, r.size.x, r.size.y * 0.5)]
+	var xm := r.get_center().x
+	return [Rect2(r.position.x, r.position.y, r.size.x * 0.5, r.size.y) if b.x < xm else Rect2(xm, r.position.y, r.size.x * 0.5, r.size.y)]
+
+
+## Is `p` inside a bush (a hide volume)?
+func in_bush(p: Vector3) -> bool:
+	for h: Dictionary in hide_volumes:
+		var l: Vector3 = (h.basis as Basis).transposed() * (p - (h.center as Vector3))
+		var hf: Vector3 = h.half
+		if absf(l.x) <= hf.x and absf(l.y) <= hf.y and absf(l.z) <= hf.z:
+			return true
+	return false
+
+
+## How many metres of bush the segment runs through (sampled every 0.5 m).
+func bush_between(a: Vector3, b: Vector3) -> float:
+	if hide_volumes.is_empty():
+		return 0.0
+	var n := maxi(1, int(a.distance_to(b) / 0.5))
+	var inside := 0.0
+	for k in n:
+		if in_bush(a.lerp(b, (k + 0.5) / n)):
+			inside += a.distance_to(b) / n
+	return inside
 
 
 func _exit_tree() -> void:
@@ -79,9 +157,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		if ev.physical_keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		elif ev.physical_keycode == KEY_F1:
+		elif ev.physical_keycode == KEY_F1 and _menu == null:
 			_toggle_tune()
-	elif ev is InputEventMouseButton and ev.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and _tune == null:
+	elif ev is InputEventMouseButton and ev.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and _tune == null and _menu == null:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 
@@ -121,6 +199,8 @@ func on_hit(_shooter: Node, hit: Dictionary, damage: float, head_mult: float) ->
 		player_hit(head)
 	else:
 		impact(hit.position, hit.normal)
+		if paintball:
+			splat(hit.position, hit.normal, PAINT.player if _shooter == player else PAINT.bot)
 
 
 ## A bullet (G28): flown from `from` along `dir` at FpsWeapons.bullet_speed()
@@ -261,6 +341,49 @@ func muzzle_flash(at: Vector3, dir: Vector3) -> void:
 	tw.tween_callback(l.queue_free)
 
 
+## Paint on a wall or the ground (campus paintball): a flat blob that stays a while.
+func splat(at: Vector3, normal: Vector3, col: Color) -> void:
+	var d := Decal.new()
+	d.size = Vector3(0.5, 0.3, 0.5) * randf_range(0.7, 1.3)
+	d.texture_albedo = _splat_tex(col)
+	add_child(d)
+	var up := normal.normalized()
+	var side := up.cross(Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.FORWARD).normalized()
+	d.global_transform = Transform3D(Basis(side, up, side.cross(up)), at)
+	get_tree().create_timer(40.0).timeout.connect(d.queue_free)
+
+
+var _splats := {}
+
+
+func _splat_tex(col: Color) -> Texture2D:
+	var key := col.to_html()
+	if _splats.has(key):
+		return _splats[key]
+	var img := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	for y in 48:
+		for x in 48:
+			var v := Vector2(x - 23.5, y - 23.5)
+			var wob := 0.72 + 0.18 * sin(atan2(v.y, v.x) * 5.0) + 0.1 * sin(atan2(v.y, v.x) * 11.0 + 1.3)
+			img.set_pixel(x, y, Color(col, clampf((wob - v.length() / 23.5) * 6.0, 0.0, 1.0)))
+	_splats[key] = ImageTexture.create_from_image(img)
+	return _splats[key]
+
+
+## The Desert Eagle's bigger boom: a fat flash and a camera kick (G43).
+func boom(at: Vector3) -> void:
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.7, 0.35)
+	l.light_energy = 9.0
+	l.omni_range = 9.0
+	add_child(l)
+	l.global_position = at
+	puff(at, Color(1.0, 0.65, 0.25), 0.12)
+	var tw := create_tween()
+	tw.tween_property(l, "light_energy", 0.0, 0.14)
+	tw.tween_callback(l.queue_free)
+
+
 func impact(at: Vector3, normal: Vector3) -> void:
 	puff(at + normal * 0.03, Color(0.7, 0.66, 0.6))
 
@@ -302,7 +425,9 @@ func _on_bot_died() -> void:
 	hud.score = score
 	hud.note("Bot down.  %d – %d" % [score.x, score.y])
 	if not _check():
-		get_tree().create_timer(3.0).timeout.connect(func() -> void: bot.respawn(_spawn("b")))
+		get_tree().create_timer(3.0).timeout.connect(func() -> void:
+			_bot_loadout()
+			bot.respawn(_spawn("b")))
 
 
 func _on_player_died() -> void:
@@ -310,7 +435,9 @@ func _on_player_died() -> void:
 	hud.score = score
 	hud.note("You're down.  %d – %d" % [score.x, score.y])
 	if not _check():
-		get_tree().create_timer(3.0).timeout.connect(func() -> void: player.respawn(_spawn("a")))
+		get_tree().create_timer(3.0).timeout.connect(func() -> void:
+			player.respawn(_spawn("a"))
+			open_loadout())
 
 
 func _check() -> bool:
@@ -321,5 +448,5 @@ func _check() -> bool:
 	var won := score.x >= goal
 	hud.note("You win %d – %d" % [score.x, score.y] if won else "The bot wins %d – %d" % [score.y, score.x])
 	get_tree().create_timer(3.0).timeout.connect(func() -> void:
-		match_over.emit(won, "Rooftop duel, %d – %d." % [score.x, score.y]))
+		match_over.emit(won, "%s, %d – %d." % [{ "rooftop": "Rooftop duel", "dust_mid": "Mid duel", "campus": "Campus paintball" }.get(map_id, "Duel"), score.x, score.y]))
 	return true

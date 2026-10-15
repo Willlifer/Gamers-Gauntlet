@@ -15,6 +15,20 @@ static func _ensure() -> void:
 		return
 	for d in [GKSniper.new(), GKShotgun.new(), GKSlingshot.new(), GKDustMid.new(), GKRooftop.new()]:
 		_defs[(d as GKDef).id()] = d
+	# modelled in Blender (G43): listed once their .glb is built
+	for b: Array in BLENDER:
+		if GKGlb.exists(str(b[0])):
+			_defs[str(b[0])] = GKGlb.new(str(b[0]), str(b[1]), str(b[2]), float(b[3]))
+
+
+## The Blender-built assets: [id, title, kind, default scale]. Guns are real
+## size, so 1.25 fits them to the 2.2 m body like the procedural ones.
+const BLENDER := [
+	["pistol", "Pistol (92FS)", "item", 1.25], ["deagle", "Desert Eagle", "item", 1.25],
+	["marksman", "Marksman rifle", "item", 1.25], ["carbine", "Personal carbine", "item", 1.25],
+	["auto_rifle", "Automatic rifle", "item", 1.25], ["tank", "Tank (IFV)", "prop", 1.25],
+	["campus", "Campus paintball", "env", 1.0],
+]
 
 
 static func ids() -> PackedStringArray:

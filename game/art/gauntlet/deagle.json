@@ -1,0 +1,25 @@
+{
+ "colliders": 0,
+ "hide_volumes": 0,
+ "id": "deagle",
+ "kind": "item",
+ "markers": [
+  "eye",
+  "grip",
+  "muzzle",
+  "slide_pivot",
+  "support"
+ ],
+ "meta": {
+  "class": "pistol",
+  "hands": 1,
+  "notes": "Desert Eagle .50 AE style",
+  "socket": "hand_r"
+ },
+ "parts": {
+  "body": 3372,
+  "slide": 1200
+ },
+ "tris": 4572,
+ "version": 1
+}

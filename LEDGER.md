@@ -35,6 +35,9 @@ Last reviewed: 2026-10-15 (playtest rulings, the tournament look, FPS bullets an
 | L-12 | The FPS bot has no pathfinding (stays on its roof / its half of the hallway); FPS has no sounds yet. | WATCH | The author plays the FPS more (they liked it, G31): footsteps, shots, bullet whizz, navigation. |
 | L-14 | The tournament look (G27): tiles, reels, backdrop, two-sided bracket; the load-in (G42). | AWAITING PLAY | The author judges it ("I'll judge it"); frames in `design/shots/tourney_*.png`. |
 | L-15 | OSRS: Warden's Trial (G34): difficulty, the tick feel, the camera, the Sun Sigil twist, and the UI against the OSRS look. | AWAITING PLAY | The author plays it (Quick play or `--module osrs_raid`); all numbers on F1. |
+| L-16 | FPS G43: the radial loadout, the new guns' feel and numbers (Claude's), the Dual Berettas' triggers and trick reload, the Desert Eagle's boom, Campus paintball (layout, bushes, paint). | AWAITING PLAY | The author plays the three duels (Quick play); gun numbers in `FpsWeapons.SPECS`. |
+| L-17 | The hidden MMO Tank class (G44): is it hard enough to find, and fun. | AWAITING PLAY | Bottom-right corner of the class pick. |
+| L-18 | Kit art the procedural/Blender pass can't reach (G43 gauntlet "art" gaps): gun textures (checkering, roll marks, speckle), the carbine's see-through mag (the kit shader is opaque), track tread; campus: bunker clusters per lane, the chapel's stone detail. | DEFERRED | Waits for the author's go; the per-asset gap lists are in each agent's final sheet round (`design/shots/kit/r*_<id>_sheet.png`). |
 | L-13 | Black \| White's own code was touched three times for modules: `cosmetics.hair_hex`, `BWCharacterPose.override` + `override_w`, `BWAnimator.reverse`. | WATCH | Any further change under `src/game` or `src/core`: rerun the B/W self-test (~8 min). |
 
 ## Settled

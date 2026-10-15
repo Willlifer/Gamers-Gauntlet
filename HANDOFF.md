@@ -14,10 +14,12 @@
 - **Raid, later (G35-G40):** silent below 50%, frenzy below 25%. Scorched Earth: half the courtyard burns at 45 s, then turns in 15 s bursts with 30 s rests, a random way each time, with chevrons on the edges. Bombs can leave burning ground. **Eight spells a class** on one bar (the old 16 shelved). Raids of eight with duplicate classes allowed.
 - **Class themes (G41):** warrior charges, paladin group heals, priest HoTs and DoTs (Renew on the Giant = Shadow Word: Pain), mage burns, hunter and rogue dash in and out. Bots won't dash into hazards; PAR re-measured.
 - **Load-in (G42):** `VersusScreen` between the matchup and the game: black, left player, right player, then the map and challenge name slam in.
+- **Blender kit (G43):** pistol, Desert Eagle, marksman rifle, carbine, automatic rifle, tank, campus map, each from the author's photo through a blind-reviewed gauntlet (`gg_<id>.py` → `art/gauntlet/*.glb`, loaded by `GKGlb`). FPS: a radial loadout every life, rolled sidearm (92FS or 50% Desert Eagle), Dual Berettas ($1, LMB/RMB, trick reload), new module Campus paintball.
+- **Hidden MMO Tank (G44):** a faint tank in the pick screen's corner; the hunter underneath; never a bot.
 - **Raid verdict: a grade (G33):** output, mechanics, AoEs avoided, survival and activity, weighted into S-F. The higher grade wins. There is a report card at the end.
 
 ## Do this first
-1. **The author plays:** the look (L-14), the raid with Cinderbrand and the grade (L-3), and the OSRS Warden's Trial (L-15). Act on their notes.
+1. **The author plays:** the look (L-14), the raid with Cinderbrand and the grade (L-3), the OSRS Warden's Trial (L-15), the FPS loadouts / guns / campus (L-16), the hidden Tank (L-17). Act on their notes.
 2. **Rename the folder (L-1).** On 10-15 the lock was two hung headless `tourney_probe` runs from 10-14, 21:36 (not the editor). The auto-mode permission check blocked killing them. The author ends them in Task Manager, then `Rename-Item` and update the memory paths. The probe itself passes in ~46 s; the hang didn't reproduce.
 3. **Next module:** the author picks (G32).
 

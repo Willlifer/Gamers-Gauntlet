@@ -1,0 +1,57 @@
+{
+ "colliders": 164,
+ "hide_volumes": 86,
+ "id": "campus",
+ "kind": "env",
+ "markers": [
+  "ref_cam",
+  "spawn_a0",
+  "spawn_a1",
+  "spawn_a2",
+  "spawn_b0",
+  "spawn_b1",
+  "spawn_b2"
+ ],
+ "meta": {
+  "class": "map",
+  "lights": {
+   "ambient": 0.7,
+   "ambient_col": "#c8bfa8",
+   "contrast": 1.05,
+   "fog_col": "#d8dfe4",
+   "fog_density": 0.004,
+   "ground": "#6a6a4a",
+   "saturation": 1.08,
+   "shadow_dist": 120.0,
+   "sky_horizon": "#dfe6ea",
+   "sky_share": 0.35,
+   "sky_top": "#6a9ad0",
+   "ssao": 2.0,
+   "sun_col": "#ffe4c0",
+   "sun_dir": [
+    0.609,
+    -0.426,
+    -0.669
+   ],
+   "sun_energy": 1.8
+  },
+  "notes": "Campus paintball: spawn A (west, x=-51, blue) vs spawn B (east, x=+51, yellow); play area 110x80 m inside a stone wall + net. Chapel + tower at the centre blocks the long axis; brick halls on the north flank (back alley behind them); the curving road across the south is the open danger lane. Godot axes: north (halls) is -Z, the road is toward +Z. Gameplay mirrors about x=0; bushes are HIDE_ walk-through volumes, tree trunks thin COL_ cover.",
+  "play_area": [
+   -55.0,
+   -40.0,
+   55.0,
+   40.0
+  ],
+  "ref_cam_fov": 53.1
+ },
+ "parts": {
+  "buildings": 48892,
+  "bunkers": 21084,
+  "bushes": 9080,
+  "ground": 74482,
+  "props": 10180,
+  "trees": 16030
+ },
+ "tris": 179748,
+ "version": 1
+}

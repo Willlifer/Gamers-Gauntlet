@@ -51,9 +51,59 @@ const ORDER := ["warrior", "paladin", "priest", "mage", "hunter", "rogue"]
 ## A bot's meter score per second of the fight, per class (tools/mmo_probe.gd
 ## prints it as "par"): the tournament rates a player against their class's.
 ## Re-measured 2026-10-15 over 20 bot raids of eight with the 8-spell kits (G39).
-const PAR := { "warrior": 333.0, "paladin": 335.0, "priest": 524.0, "mage": 512.0, "hunter": 517.0, "rogue": 431.0 }
+const PAR := { "warrior": 333.0, "paladin": 335.0, "priest": 524.0, "mage": 512.0, "hunter": 517.0, "rogue": 431.0, "tank": 517.0 }
 
-const CLASSES := {
+## Every class: the six of ORDER, plus the hidden ones (HIDDEN).
+static var CLASSES: Dictionary = _with_hidden()
+
+## Hidden classes (G44): pickable by a person who finds them on the class
+## pick, never by a bot (bots and bot seats only ever draw from ORDER).
+const HIDDEN := ["tank"]
+
+## The Tank (G44): the Gauntlet kit's tank (design/ref/kit/tank.jpg), shrunk
+## to raid size, a crewman in the hatch. It plays exactly like the hunter
+## (same numbers, the same eight slots, the same PAR); only the names, the
+## look and the colour change.
+const TANK_NAMES := {
+	"arcane_shot": ["Coax Burst", "Instant: the coaxial machine gun, 420 damage. Every 3 s."],
+	"chimera_shot": ["HEAT Round", "Instant: a shaped charge for 1150, fired as you reverse 6 m."],
+	"aspect_hawk": ["Autoloader", "1 s: the loader catches up. 20% more damage and 10% faster fire for 30 s."],
+	"trueshot": ["Overwatch", "Call targets: the raid attacks 6% faster for 30 s."],
+	"exhilaration": ["Field Repair", "Bolt the plates back on: heal 30% of your health."],
+	"masters_call": ["Pop Smoke", "Smoke shakes off every burn and curse; lurch 10 m forward."],
+	"aimed_shot": ["Main Gun", "1 s: lay the main gun and fire for 2800."],
+	"disengage": ["Full Reverse", "Throw it in reverse 12 m; the next round crits. (Your pick: out of the fire.)"],
+}
+
+
+static func _with_hidden() -> Dictionary:
+	var all := BASE.duplicate(true)
+	var t: Dictionary = (BASE.hunter as Dictionary).duplicate(true)
+	t["name"] = "Tank"
+	t["col"] = "#8fa05a"
+	t["hidden"] = true
+	t["vehicle"] = "tank"                           # MmoView builds the kit tank around the crewman
+	t["names"] = ["Unit 8", "Big Bertha", "Sir Treads"]
+	t["blurb"] = "???  A tank. Plays like a hunter: Coax Burst on cooldown, a big Main Gun."
+	t["look"] = { "weapon": "longbow", "chest": "brigandine", "legs": "platelegs", "head": "dragoon_helm",
+		"top": "sweater", "bottom": "tight_pants", "hair": "buzzed", "hair_hex": "#3b2a1e", "gender": "m",
+		"tint": "#6f7f4a", "accent": "fire" }
+	var abs_: Array = []
+	for ab: Dictionary in t.abilities:
+		var a := ab.duplicate(true)
+		if TANK_NAMES.has(str(a.id)):
+			var n: Array = TANK_NAMES[str(a.id)]
+			a["name"] = str(n[0])
+			a["desc"] = str(n[1])
+		a["school"] = "phys" if str(a.school) == "dark" else str(a.school)
+		abs_.append(a)
+	t["abilities"] = abs_
+	t.erase("shelf")
+	all["tank"] = t
+	return all
+
+
+const BASE := {
 	"warrior": {
 		"name": "Warrior", "col": "#c79c6e", "role": "tank", "res": "rage", "res_max": 100.0, "hp": 8200.0,
 		"auto": { "dmg": 190.0, "speed": 2.6, "range": MELEE }, "armor": 0.72, "threat": 1.6,

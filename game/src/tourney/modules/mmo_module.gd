@@ -147,11 +147,56 @@ func _build_pick() -> void:
 		var b := TourneyUI.button(col, "Play %s" % c.name, func() -> void: _lock(_human.id, cls_id))
 		b.add_theme_font_size_override("font_size", BWStyle.F_SUB)
 		i += 1
+	_hidden_tank()
 	TourneyUI.after(self, _rng.randf_range(2.0, 6.0), func() -> void:
 		if not _picks.has(_other.id):
 			_lock(_other.id, _bot_pick()))
 	if autopilot:
 		TourneyUI.after(self, 0.6, func() -> void: _lock(_human.id, MmoClasses.ORDER[_rng.randi() % MmoClasses.ORDER.size()]))
+
+
+## The hidden class (G44): a small, faint tank parked in the bottom-right
+## corner of the pick screen, past the last card. Visible if you look; it
+## brightens under the mouse; click it to drive.
+func _hidden_tank() -> void:
+	if GKRegistry.def("tank") == null:
+		return
+	var svc := SubViewportContainer.new()
+	svc.position = Vector2(1528, 852)
+	svc.size = Vector2(64, 40)
+	svc.stretch = true
+	svc.modulate = Color(1, 1, 1, 0.4)
+	svc.tooltip_text = "???"
+	svc.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	_pick_root.add_child(svc)
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	svc.add_child(vp)
+	var we := WorldEnvironment.new()
+	var env := Environment.new()
+	env.background_mode = Environment.BG_CLEAR_COLOR
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.7, 0.68, 0.6)
+	we.environment = env
+	vp.add_child(we)
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(-40, 30, 0)
+	vp.add_child(sun)
+	var t := GKRegistry.build("tank").instantiate(false)
+	t.rotation.y = -2.3
+	vp.add_child(t)
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size = 5.5
+	vp.add_child(cam)
+	cam.position = Vector3(0, 6, 12)
+	cam.look_at(Vector3(0, 1.6, 0))
+	svc.mouse_entered.connect(func() -> void: svc.modulate.a = 1.0)
+	svc.mouse_exited.connect(func() -> void: svc.modulate.a = 0.4)
+	svc.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_lock(_human.id, "tank"))
 
 
 func _figure(parent: Control, cls_id: String) -> void:

@@ -8,8 +8,8 @@ extends SceneTree
 ## carries); instantiate() and free; envs have colliders and spawns.
 ## Then the export round trip (.glb + sidecar) and the bench's undo/redo.
 
-const BUDGET := { "item": 12000, "env": 260000 }
-const NEED := { "item": ["grip", "muzzle"], "env": ["ref_cam", "spawn_a0", "spawn_b0"] }
+const BUDGET := { "item": 12000, "prop": 40000, "env": 260000 }
+const NEED := { "item": ["grip", "muzzle"], "prop": ["muzzle"], "env": ["ref_cam", "spawn_a0", "spawn_b0"] }
 
 var fails := 0
 var checks := 0

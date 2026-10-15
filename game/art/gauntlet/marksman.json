@@ -1,0 +1,27 @@
+{
+ "colliders": 0,
+ "hide_volumes": 0,
+ "id": "marksman",
+ "kind": "item",
+ "markers": [
+  "bolt_pivot",
+  "butt",
+  "eye",
+  "grip",
+  "muzzle",
+  "support"
+ ],
+ "meta": {
+  "class": "rifle",
+  "hands": 2,
+  "notes": "Ruger American style bolt rifle, scoped",
+  "socket": "hand_r"
+ },
+ "parts": {
+  "body": 10388,
+  "bolt": 628,
+  "mag": 296
+ },
+ "tris": 11312,
+ "version": 1
+}

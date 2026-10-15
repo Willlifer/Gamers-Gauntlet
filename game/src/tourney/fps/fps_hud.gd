@@ -112,7 +112,7 @@ func _ready() -> void:
 	_hp_bar.size = Vector2(240, 12)
 	_hp_back.add_child(_hp_bar)
 	var hint := _label(Vector2(-260, -26), 13, Control.PRESET_BOTTOM_RIGHT)
-	hint.text = "F1 tune · Esc free mouse · 1 2 3 weapons"
+	hint.text = "F1 tune · Esc free mouse · 1 primary · 2 sidearm"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hint.size.x = 236
 	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
@@ -174,12 +174,15 @@ func _process(delta: float) -> void:
 	_scope.queue_redraw()
 	var sp := player.spec()
 	var mag := int(sp.mag)
-	_ammo.text = "%s   %s" % [sp.name, ("%d / %d" % [player.ammo[player.weapon], mag]) if mag > 0 else "∞"]
+	if sp.get("dual", false):
+		_ammo.text = "%s   %d  |  %d" % [sp.name, int(player.ammo.dual_l), int(player.ammo.dual_r)]
+	else:
+		_ammo.text = "%s   %s" % [sp.name, ("%d / %d" % [player.ammo[player.weapon], mag]) if mag > 0 else "∞"]
 	_status.text = "%d HP    %s" % [int(player.hp), player.stance.to_upper()]
 	_hp_bar.size.x = 240.0 * player.hp / 100.0
 	_hp_bar.color = Color("#7fd35a") if player.hp > 40.0 else Color("#ff6b5e")
 	_score_l.text = "You %d  –  %d Bot" % [score.x, score.y]
-	_paused.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED
+	_paused.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and player.input_on
 	_dead.visible = not player.alive
 
 
