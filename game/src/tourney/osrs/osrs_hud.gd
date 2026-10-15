@@ -55,7 +55,7 @@ func _ready() -> void:
 	_build_side()
 	_build_chat()
 	_build_boss_bar()
-	_top = _text(_root, "", Vector2(14, 40), 15, YELLOW)
+	_top = _text(_root, "", Vector2(14, 10), 15, YELLOW)
 
 
 func _text(parent: Control, s: String, at: Vector2, size: int, col: Color) -> Label:
@@ -73,12 +73,44 @@ func _text(parent: Control, s: String, at: Vector2, size: int, col: Color) -> La
 	return l
 
 
+## A row of seven stone tab buttons over / under the side panel (the classic layout's).
+func _tab_row(y: float) -> void:
+	var row := Control.new()
+	row.position = Vector2(PANEL_X - 6, y)
+	row.size = Vector2(1600 - PANEL_X + 2, 32)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var top := y < 400
+	row.draw.connect(func() -> void:
+		var w := row.size.x / 7.0
+		for i in 7:
+			var r := Rect2(i * w, 0, w - 1, 32)
+			row.draw_rect(r, STONE if not (top and i == 3) else Color("#6a2a1e"))
+			row.draw_rect(r, STONE_DARK, false, 2.0)
+			var c := r.get_center()
+			var col := Color("#c8b88a")
+			var k := (i + (0 if top else 3)) % 5
+			if k == 0:
+				row.draw_line(c + Vector2(-7, 7), c + Vector2(7, -7), col, 2.0)
+			elif k == 1:
+				row.draw_rect(Rect2(c - Vector2(6, 6), Vector2(12, 12)), col, false, 2.0)
+			elif k == 2:
+				row.draw_circle(c, 6.0, col)
+			elif k == 3:
+				row.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -8), c + Vector2(7, 6), c + Vector2(-7, 6)]), col)
+			else:
+				row.draw_arc(c, 7.0, 0, TAU, 12, col, 2.0))
+	_root.add_child(row)
+
+
 func _stone(rect: Rect2, parent: Control = null) -> Panel:
 	var p := Panel.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = STONE
 	sb.border_color = STONE_DARK
 	sb.set_border_width_all(3)
+	sb.border_color = Color("#6a5a42")
+	sb.border_width_bottom = 4
+	sb.border_width_right = 4
 	sb.set_corner_radius_all(4)
 	sb.shadow_color = Color(0, 0, 0, 0.4)
 	sb.shadow_size = 4
@@ -86,6 +118,19 @@ func _stone(rect: Rect2, parent: Control = null) -> Panel:
 	p.position = rect.position
 	p.size = rect.size
 	(parent if parent else _root).add_child(p)
+	# stone: a seeded speckle of lighter and darker flecks
+	var fleck := Control.new()
+	fleck.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fleck.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fleck.draw.connect(func() -> void:
+		var r := RandomNumberGenerator.new()
+		r.seed = int(rect.position.y)
+		for i in int(rect.size.x * rect.size.y / 160.0):
+			var at := Vector2(r.randf_range(4, rect.size.x - 6), r.randf_range(4, rect.size.y - 6))
+			var c := STONE_LIGHT if r.randf() < 0.5 else STONE_DARK
+			fleck.draw_rect(Rect2(at, Vector2(r.randf_range(2, 6), r.randf_range(1, 3))), Color(c, 0.35)))
+	p.add_child(fleck)
+	p.move_child(fleck, 0)
 	return p
 
 
@@ -108,7 +153,9 @@ func _build_side() -> void:
 			view.queue({ "run": not bool(_sim.me.run) }))
 	_root.add_child(_orbs)
 	# the panel: protect prayers beside the inventory
-	var panel := _stone(Rect2(PANEL_X - 6, 200, 1600 - PANEL_X + 2, 420))
+	_tab_row(200)
+	var panel := _stone(Rect2(PANEL_X - 6, 232, 1600 - PANEL_X + 2, 420))
+	_tab_row(652)
 	var head := _text(panel, "Inventory", Vector2(86, 8), 13, ORANGE)
 	head.size.x = 160
 	var pr := _text(panel, "Prayer", Vector2(8, 8), 13, ORANGE)
@@ -140,10 +187,7 @@ func _build_side() -> void:
 				_use(slot))
 		panel.add_child(s)
 		_inv.append(s)
-	var keys := _stone(Rect2(PANEL_X - 6, 626, 1600 - PANEL_X + 2, 70))
-	_text(keys, "Click a square: move · click the Warden: attack", Vector2(8, 8), 11, Color("#e0d6b8"))
-	_text(keys, "1 2 3: pray · arrows / middle-drag: camera", Vector2(8, 26), 11, Color("#e0d6b8"))
-	_text(keys, "wheel: zoom · F1: numbers", Vector2(8, 44), 11, Color("#e0d6b8"))
+	pass
 
 
 ## What the 28 slots hold, from the sim: the other weapon, sharks, potions.
@@ -301,13 +345,27 @@ func _build_chat() -> void:
 	sb.set_border_width_all(4)
 	sb.set_corner_radius_all(3)
 	box.add_theme_stylebox_override("panel", sb)
-	box.position = Vector2(8, 742)
-	box.size = Vector2(540, 150)
+	box.position = Vector2(8, 716)
+	box.size = Vector2(540, 152)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(box)
+	var input := _text(box, "You: *", Vector2(10, 128), 12, Color("#0000c0"))
+	input.size.x = 500
+	var tabs := Control.new()
+	tabs.position = Vector2(8, 868)
+	tabs.size = Vector2(540, 26)
+	tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tabs.draw.connect(func() -> void:
+		var names := ["All", "Game", "Public", "Private", "Clan", "Trade"]
+		for i in names.size():
+			var r := Rect2(i * 90, 0, 88, 26)
+			tabs.draw_rect(r, STONE)
+			tabs.draw_rect(r, STONE_DARK, false, 2.0)
+			tabs.draw_string(_font, Vector2(r.position.x, 17), str(names[i]), HORIZONTAL_ALIGNMENT_CENTER, 88, 11, ORANGE if i == 0 else Color("#e0d6b8")))
+	_root.add_child(tabs)
 	_chat = VBoxContainer.new()
 	_chat.position = Vector2(10, 6)
-	_chat.size = Vector2(520, 138)
+	_chat.size = Vector2(520, 118)
 	_chat.add_theme_constant_override("separation", 0)
 	_chat.alignment = BoxContainer.ALIGNMENT_END
 	box.add_child(_chat)
@@ -323,7 +381,7 @@ func chat(text: String, col := Color.BLACK) -> void:
 	l.custom_minimum_size.x = 510
 	_chat.add_child(l)
 	_lines.append(l)
-	while _lines.size() > 8:
+	while _lines.size() > 7:
 		(_lines.pop_front() as Label).queue_free()
 
 
@@ -331,8 +389,8 @@ func chat(text: String, col := Color.BLACK) -> void:
 
 func _build_boss_bar() -> void:
 	_boss_bar = Control.new()
-	_boss_bar.position = Vector2(500, 10)
-	_boss_bar.size = Vector2(600, 56)
+	_boss_bar.position = Vector2(500, 4)
+	_boss_bar.size = Vector2(600, 64)
 	_boss_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_boss_bar.draw.connect(_draw_boss_bar)
 	_root.add_child(_boss_bar)
@@ -342,13 +400,24 @@ func _draw_boss_bar() -> void:
 	if _sim == null:
 		return
 	var f := clampf(float(_sim.boss.hp) / float(_sim.boss.max_hp), 0.0, 1.0)
-	_boss_bar.draw_rect(Rect2(0, 0, 600, 24), Color("#1a1610"))
-	_boss_bar.draw_rect(Rect2(2, 2, 596, 20), Color("#b01010"))
-	_boss_bar.draw_rect(Rect2(2, 2, 596 * f, 20), Color("#18a818"))
-	_boss_bar.draw_string(_font, Vector2(0, 17), "Tumeken's Warden   %d / %d" % [int(ceilf(float(_sim.boss.hp))), int(_sim.boss.max_hp)],
-		HORIZONTAL_ALIGNMENT_CENTER, 600, 13, Color.WHITE)
+	_boss_bar.draw_string(_font, Vector2(0, 11), "Tumeken's Warden", HORIZONTAL_ALIGNMENT_CENTER, 600, 11, ORANGE)
+	_boss_bar.draw_rect(Rect2(0, 15, 600, 14), Color("#0e0c08"))
+	_boss_bar.draw_rect(Rect2(2, 17, 596, 10), Color("#9a0c0c"))
+	_boss_bar.draw_rect(Rect2(2, 17, 596 * f, 10), Color("#10a010"))
 	for m in [0.66, 0.33]:
-		_boss_bar.draw_line(Vector2(2 + 596 * m, 2), Vector2(2 + 596 * m, 22), Color(0, 0, 0, 0.6), 2.0)
+		_boss_bar.draw_line(Vector2(2 + 596 * m, 17), Vector2(2 + 596 * m, 27), Color(0, 0, 0, 0.7), 2.0)
+	var style := str(_sim.boss.last_style)
+	if style != "":
+		for i in 2:
+			var c := Vector2(282 + i * 36, 46)
+			_boss_bar.draw_circle(c, 14.0, STONE_DARK)
+			_boss_bar.draw_arc(c, 14.0, 0, TAU, 20, Color("#b89a5a"), 2.0)
+			if i == 0:
+				_boss_bar.draw_circle(c, 6.0, Color("#ff5a40"))
+			else:
+				var col := Color("#5ab0ff") if style == "magic" else Color("#7cff5a")
+				_boss_bar.draw_string(_font, c + Vector2(-10, 6), "✦" if style == "magic" else "➶", HORIZONTAL_ALIGNMENT_CENTER, 20, 16, col)
+	_boss_bar.draw_string(_font, Vector2(0, 26), "%d / %d" % [int(ceilf(float(_sim.boss.hp))), int(_sim.boss.max_hp)], HORIZONTAL_ALIGNMENT_CENTER, 600, 10, Color.WHITE)
 
 
 # ---------------------------------------------------------------- splats
@@ -394,8 +463,7 @@ func refresh(s: OsrsSim) -> void:
 	for c in _inv:
 		(c as Control).queue_redraw()
 	var emp := int(s.me.empowered)
-	_top.text = "Time %s   ·   Phase %d   ·   %s%s" % [clock(s.tick * OsrsSim.TICK), s.phase(), "Bow (10-45, 4 ticks)" if s.me.weapon == "bow" else "Staff (15-55, 5 ticks)",
-		("   ·   Sun-blessed x%d" % emp) if emp > 0 else ""]
+	_top.text = "%s%s" % [clock(s.tick * OsrsSim.TICK), ("    Sun-blessed x%d" % emp) if emp > 0 else ""]
 
 
 func finish(r: Dictionary) -> void:

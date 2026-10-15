@@ -25,8 +25,8 @@ var _acc := 0.0
 var _orders := {}
 var _cam: Camera3D
 var _yaw := 0.0
-var _pitch := deg_to_rad(44.0)
-var _dist := 25.0
+var _pitch := deg_to_rad(45.0)
+var _dist := 27.0
 var _drag := false
 var _player: BWCharacter
 var _player_root: Node3D
@@ -42,6 +42,7 @@ var _rocks := {}                                  # Vector2i -> Node3D
 var _projs := {}                                  # id -> { node, proj }
 var _shots: Array = []                            # your arrows / bolts in flight
 var _hover: MeshInstance3D
+var _true_tile: MeshInstance3D
 var _click: Node3D
 var _click_t := 0.0
 var _overhead: Label3D
@@ -72,7 +73,7 @@ func _ready() -> void:
 	hud = OsrsHud.new()
 	hud.view = self
 	add_child(hud)
-	hud.chat("Welcome to the Warden's Trial.", Color("#ffff00"))
+	hud.chat("Welcome to the Warden's Trial.", Color("#0000a0"))
 	hud.chat("Click a square to move; click the Warden to attack. 1 2 3 pray against magic, missiles, melee.", Color("#000000"))
 	hud.chat("Stand on a Sun Sigil as it ignites: your next shots hit twice as hard.", Color("#7a4a00"))
 	_place_camera(1.0)
@@ -120,17 +121,22 @@ func _build_world() -> void:
 	e.background_mode = Environment.BG_COLOR
 	e.background_color = Color("#06060b")
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color("#8a8296")
-	e.ambient_light_energy = 0.75
+	e.ambient_light_color = Color("#8e98b4")
+	e.ambient_light_energy = 1.0
 	e.tonemap_mode = Environment.TONE_MAPPER_AGX
 	e.glow_enabled = true
 	e.glow_intensity = 0.6
 	e.glow_bloom = 0.05
 	e.fog_enabled = true
 	e.fog_light_color = Color("#120e18")
-	e.fog_density = 0.006
+	e.fog_density = 0.0035
 	we.environment = e
 	add_child(we)
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-30, 200, 0)
+	fill.light_color = Color("#7f96d0")
+	fill.light_energy = 0.45
+	add_child(fill)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-58, 28, 0)
 	sun.light_color = Color("#ffe2b8")
@@ -140,53 +146,64 @@ func _build_world() -> void:
 	add_child(sun)
 	# the void: a far dark floor, rock shelves round the platform, floating chunks
 	_box(Vector3(400, 1, 400), Vector3(0, -26, 0), _mat("void", Color("#0c0b12")))
+	_box(Vector3(90, 1, 80), Vector3(0, -14.0, -2), _mat("rubble_floor", Color("#1a2030")))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9
-	var rock := _mat("rock", Color("#2a3140"))
-	var rock2 := _mat("rock2", Color("#343c4d"))
-	for i in 34:
+	var rock := _mat("rock", Color("#4a5878"))
+	var rock2 := _mat("rock2", Color("#5d6a88"))
+	for i in 46:
 		var a := rng.randf() * TAU
-		var r := rng.randf_range(17.0, 34.0)
-		var s := rng.randf_range(1.5, 5.0)
-		var b := _box(Vector3(s * rng.randf_range(0.8, 2.0), s * 0.6, s), Vector3(cos(a) * r, rng.randf_range(-14.0, -3.0), sin(a) * r - 4.0), rock if i % 2 else rock2)
+		var r := rng.randf_range(18.0, 34.0)
+		var s := rng.randf_range(0.6, 1.8)
+		var b := _box(Vector3(s * rng.randf_range(0.8, 2.0), s * 0.6, s), Vector3(cos(a) * r, rng.randf_range(-12.0, -4.0), sin(a) * r - 4.0), rock if i % 2 else rock2)
 		b.rotation = Vector3(rng.randf() * 0.6, rng.randf() * TAU, rng.randf() * 0.6)
+		b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# the cracked shelf the Warden stands on, falling away into the void
 	for i in 9:
-		var b := _box(Vector3(rng.randf_range(3, 7), rng.randf_range(1.5, 4.0), rng.randf_range(3, 6)),
-			BOSS_POS + Vector3(rng.randf_range(-8, 8), rng.randf_range(-3.0, -1.2), rng.randf_range(-4, 3)), rock if i % 2 else rock2)
+		var b := _box(Vector3(rng.randf_range(1.5, 3.5), rng.randf_range(1.0, 2.2), rng.randf_range(1.5, 3.0)),
+			BOSS_POS + Vector3(rng.randf_range(-8, 8), rng.randf_range(-3.0, -1.8), rng.randf_range(-4, 3)), rock if i % 2 else rock2)
 		b.rotation.y = rng.randf() * TAU
 	_box(Vector3(12, 1.2, 9), BOSS_POS + Vector3(0, -0.6, -0.5), _mat("dais", Color("#3b3a46")))
-	# sandstone pillars at the far corners
-	var sand := _mat("sand", Color("#b8925a"))
-	for x in [-14.5, 14.5]:
-		for z in [-20.0, 12.0]:
-			_box(Vector3(1.6, 14, 1.6), Vector3(x, 3, z), sand)
-			_box(Vector3(2.2, 0.6, 2.2), Vector3(x, 10.2, z), sand)
+	# jagged rock along the platform's sides and round the Warden's shelf
+	for i in 26:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var z := rng.randf_range(-16.0, 10.0)
+		var s := rng.randf_range(0.5, 1.3)
+		var b := _box(Vector3(s * 1.4, s * rng.randf_range(0.6, 1.4), s), Vector3(side * rng.randf_range(13.2, 15.5), rng.randf_range(-2.8, -1.0), z), rock if i % 3 else rock2)
+		b.rotation = Vector3(rng.randf_range(-0.4, 0.4), rng.randf() * TAU, rng.randf_range(-0.4, 0.4))
+	# stars far out
+	var star := _mat("star", Color("#cfd8ff"), 3.0)
+	var sm := SphereMesh.new()
+	sm.radius = 0.35
+	sm.height = 0.7
+	sm.radial_segments = 4
+	sm.rings = 2
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = sm
+	mm.instance_count = 260
+	for i in 260:
+		var d := Vector3(rng.randf_range(-1, 1), rng.randf_range(-0.6, 0.2), rng.randf_range(-1, 1)).normalized() * rng.randf_range(160.0, 240.0)
+		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3.ONE * rng.randf_range(0.5, 1.4)), d))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = star
+	add_child(mmi)
 
 
 func _build_floor() -> void:
-	var base := _mat("gap", Color("#1c1414"))
+	var base := _mat("gap", Color("#160f11"))
 	_box(Vector3(OsrsSim.W * TILE + 0.3, 0.6, OsrsSim.H * TILE + 0.3), Vector3(0, -0.42, (OsrsSim.H * 0.5 - 6.0) * TILE + 0.8), base)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4
-	var dimple := CylinderMesh.new()
-	dimple.top_radius = 0.2
-	dimple.bottom_radius = 0.2
-	dimple.height = 0.02
-	var dim_mat := _mat("dimple", Color("#5a342d"))
 	for y in OsrsSim.H:
 		for x in OsrsSim.W:
 			var t := Vector2i(x, y)
 			var light := (x + y) % 2 == 0
-			var col := Color("#7a4a40") if light else Color("#6b3f37")
-			col = col.lerp(Color("#5a3a33"), rng.randf() * 0.35)
-			var mi := _box(Vector3(TILE - 0.07, 0.3, TILE - 0.07), w(t) + Vector3(0, -0.15, 0), _mat("tile%d" % (x * 31 + y), col))
+			var col := Color("#674848") if light else Color("#5f4244")
+			col = col.lerp(Color("#55393c"), rng.randf() * 0.15)
+			var mi := _box(Vector3(TILE - 0.08, 0.3, TILE - 0.08), w(t) + Vector3(0, -0.15, 0), _mat("tile%d" % (x * 31 + y), col))
 			_tiles[t] = mi
-			var d := MeshInstance3D.new()
-			d.mesh = dimple
-			d.material_override = dim_mat
-			mi.add_child(d)
-			d.position = Vector3(0, 0.16, 0)
 			var g := MeshInstance3D.new()
 			var q := PlaneMesh.new()
 			q.size = Vector2(TILE - 0.1, TILE - 0.1)
@@ -207,8 +224,12 @@ func _build_floor() -> void:
 	# the hover square and the click cross
 	_hover = MeshInstance3D.new()
 	_hover.mesh = _square_outline(TILE - 0.12, 0.07)
-	_hover.material_override = _mat("hover", Color("#ffff40"), 1.0, 0.9)
+	_hover.material_override = _mat("hover", Color("#ffff40"), 1.0, 0.6)
 	add_child(_hover)
+	_true_tile = MeshInstance3D.new()
+	_true_tile.mesh = _square_outline(TILE - 0.1, 0.06)
+	_true_tile.material_override = _mat("true_tile", Color("#e8f4ff"), 1.5, 0.95)
+	add_child(_true_tile)
 	_click = Node3D.new()
 	add_child(_click)
 	for a in [45.0, -45.0]:
@@ -257,18 +278,35 @@ func _build_boss() -> void:
 	# the phantoms (decoration, after the reference: red ghosts on the flanks)
 	for side in [-1.0, 1.0]:
 		var ph := BWCharacter.create(MobaLook.boss_unit())
-		MobaLook.tint(ph, Color("#d83a2a"))
-		ph.scale = Vector3.ONE * 2.0
+		MobaLook.tint(ph, Color("#ff4a3a"))
+		_ghost(ph)
+		ph.scale = Vector3.ONE * 2.3
 		add_child(ph)
-		ph.position = Vector3(side * 13.5, -0.6, -9.5)
-		ph.rotation.y = -side * 0.7
+		ph.position = Vector3(side * 16.5, -0.4, -5.0)
+		ph.rotation.y = -side * PI * 0.5
 		ph.pose("idle")
 		var pl := OmniLight3D.new()
 		pl.light_color = Color("#ff3a2a")
-		pl.light_energy = 2.0
-		pl.omni_range = 7.0
+		pl.light_energy = 4.0
+		pl.omni_range = 11.0
 		add_child(pl)
 		pl.position = ph.position + Vector3(0, 3, 1)
+
+
+## A phantom: every mesh half see-through with a red glow laid over it.
+func _ghost(n: Node) -> void:
+	if n is GeometryInstance3D and not n is Label3D:
+		var g := n as GeometryInstance3D
+		g.transparency = 0.45
+		g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.albedo_color = Color(1.0, 0.12, 0.06, 0.75)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		g.material_overlay = m
+	for c in n.get_children():
+		_ghost(c)
 
 
 func _player_unit(weapon: String) -> BWUnit:
@@ -295,8 +333,8 @@ func _build_player() -> void:
 	_my_overhead = Label3D.new()
 	_my_overhead.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_my_overhead.fixed_size = true
-	_my_overhead.pixel_size = 0.0012
-	_my_overhead.font_size = 22
+	_my_overhead.pixel_size = 0.0016
+	_my_overhead.font_size = 30
 	_my_overhead.outline_size = 8
 	_my_overhead.no_depth_test = true
 	_my_overhead.position = Vector3(0, 2.75, 0)
@@ -435,17 +473,17 @@ func _event(e: Dictionary) -> void:
 			n.position = _boss_hand()
 			_projs[int(p.id)] = { "node": n, "proj": p }
 			if str(p.style) != "melee":
-				_overhead.text = "MAGIC" if p.style == "magic" else "RANGED"
+				_overhead.text = ""
 				_overhead.modulate = Color("#5ab0ff") if p.style == "magic" else Color("#7cff5a")
 				_overhead.set_meta("t", 1.6)
 				_boss.anim_speed = 1.6
 				_boss.pose("cast" if p.style == "magic" and _boss.has_clip("cast") else "strike")
 				_pose_t = 0.7
 		"blocked":
-			hud.splat(_player_root, 0, true)
+			hud.splat(_player_root, 0, true, false, 1.1)
 		"hurt":
 			if float(e.dmg) > 0.0 or str(e.what) != "magic" and str(e.what) != "ranged":
-				hud.splat(_player_root, int(e.dmg), false)
+				hud.splat(_player_root, int(e.dmg), false, false, 1.1)
 			if str(e.what) in ["slam", "boulder", "fall"]:
 				_shake = 0.35
 		"attack":
@@ -644,8 +682,8 @@ func _sync_marks() -> void:
 			cm.height = 0.02
 			disc.mesh = cm
 			match kind:
-				"bolt": disc.material_override = _mat("shadow_bolt", Color("#000000"), 0.0, 0.62)
-				"fall": disc.material_override = _mat("shadow_fall", Color("#000000"), 0.0, 0.55)
+				"bolt": disc.material_override = _mat("scorch", Color("#1a0806"), 0.0, 0.55)
+				"fall": disc.material_override = _mat("shadow_fall", Color("#050303"), 0.0, 0.75)
 				_: disc.material_override = _mat("sigil_core", Color("#ffcf40"), 1.5, 0.25)
 			n.add_child(disc)
 			if kind == "sigil":
@@ -679,9 +717,23 @@ func _sync_marks() -> void:
 				n.add_child(r)
 				r.name = "Rock"
 			if kind == "bolt":
+				var zz := Node3D.new()
+				zz.name = "Zig"
+				n.add_child(zz)
+				var zm := _mat("zig", Color("#ff4a30"), 6.0)
+				var pts := [Vector3(0.05, 2.2, 0), Vector3(-0.3, 1.5, 0), Vector3(0.25, 1.05, 0), Vector3(-0.14, 0.4, 0), Vector3(0.08, 0.0, 0)]
+				for i in pts.size() - 1:
+					var a: Vector3 = pts[i]
+					var b: Vector3 = pts[i + 1]
+					var seg := _box(Vector3(0.09, a.distance_to(b), 0.09), (a + b) * 0.5, zm, zz)
+					seg.rotation.z = -atan2(b.x - a.x, a.y - b.y)
+				zz.rotation.y = randf() * TAU
 				var rim := MeshInstance3D.new()
-				rim.mesh = _square_outline(TILE - 0.2, 0.06)
-				rim.material_override = _mat("bolt_rim", Color("#ff3020"), 2.0, 0.9)
+				rim.mesh = _square_outline(TILE - 0.12, 0.08)
+				var rm := _mat("bolt_rim", Color("#ff3020"), 3.0, 0.95).duplicate() as StandardMaterial3D
+				rm.no_depth_test = true
+				rm.render_priority = 2
+				rim.material_override = rm
 				n.add_child(rim)
 			_marks[k] = { "node": n, "disc": disc, "data": d, "kind": kind }
 		else:
@@ -737,7 +789,7 @@ func _animate(delta: float) -> void:
 		if _player.pose_name() != want:
 			_player.anim_speed = 1.0
 			_player.pose(want)
-	_my_overhead.text = { "magic": "✦ MAGE", "ranged": "➶ RANGE", "melee": "⚔ MELEE" }.get(str(sim.me.prayer), "")
+	_my_overhead.text = { "magic": "✦", "ranged": "➶", "melee": "⚔" }.get(str(sim.me.prayer), "")
 	_my_overhead.modulate = { "magic": Color("#5ab0ff"), "ranged": Color("#7cff5a"), "melee": Color("#ff6a5a") }.get(str(sim.me.prayer), Color.WHITE)
 	# the Warden's overhead fades; its big moves play
 	if _overhead.has_meta("t"):
@@ -778,7 +830,7 @@ func _animate(delta: float) -> void:
 		var at: Vector3 = (s.from as Vector3).lerp(to, k) + Vector3(0, sin(k * PI) * 0.8, 0)
 		_fly(n, at)
 		if k >= 1.0:
-			hud.splat(_boss_root, int(s.dmg), false, bool(s.emp), 6.0)
+			hud.splat(_boss_root, int(s.dmg), false, bool(s.emp), 3.6)
 			n.queue_free()
 			_shots.erase(s)
 	# telegraphs grow
@@ -790,9 +842,13 @@ func _animate(delta: float) -> void:
 		var disc: MeshInstance3D = m.disc
 		match str(m.kind):
 			"bolt":
-				disc.scale = Vector3.ONE * lerpf(0.15, 1.0, prog)
-			"fall":
 				disc.scale = Vector3.ONE * lerpf(0.3, 1.0, prog)
+				var zig := (m.node as Node3D).get_node_or_null("Zig") as Node3D
+				if zig:
+					zig.scale = Vector3.ONE * lerpf(0.7, 1.45, prog) * randf_range(0.92, 1.08)
+					zig.rotate_y(delta * 1.5)
+			"fall":
+				disc.scale = Vector3.ONE * lerpf(0.35, 1.0, prog)
 				var rock := (m.node as Node3D).get_node_or_null("Rock") as Node3D
 				if rock:
 					rock.position.y = lerpf(16.0, 0.4, prog * prog)
@@ -805,7 +861,7 @@ func _animate(delta: float) -> void:
 			var a := 0.25 + 0.5 * clampf(1.0 - (float(s.t) - f) / float(s.total), 0.0, 1.0)
 			for x in s.cols:
 				for y in OsrsSim.H:
-					lit[Vector2i(int(x), y)] = [Color("#ff8a20"), a]
+					lit[Vector2i(int(x), y)] = [Color("#c8361a"), a * 0.8]
 	if not sim.rip.is_empty():
 		var a := 0.35 + 0.35 * absf(sin(Time.get_ticks_msec() / 90.0))
 		for x in OsrsSim.W:
@@ -817,6 +873,8 @@ func _animate(delta: float) -> void:
 			g.material_override = _mat("glow" + (lit[t][0] as Color).to_html(), lit[t][0], 2.0, snappedf(float(lit[t][1]), 0.05))
 		else:
 			g.visible = false
+	_true_tile.position = w(sim.me.tile) + Vector3(0, 0.025, 0)
+	_true_tile.visible = sim.me.alive
 	# the hover square
 	var ht := _tile_at(get_viewport().get_mouse_position())
 	_hover.visible = ht != Vector2i(-99, -99) and not sim.gone.has(ht) and input_on
@@ -845,7 +903,8 @@ func _fly(n: Node3D, at: Vector3) -> void:
 
 
 func _place_camera(delta: float) -> void:
-	var c := _player_root.position + Vector3(0, 1.0, 0)
+	# centred on you, aimed a few metres ahead so what you face (the Warden) stays in frame
+	var c := _player_root.position + Vector3(0, 1.0, 0) - Vector3(sin(_yaw), 0, cos(_yaw)) * 4.5
 	var off := Vector3(sin(_yaw) * cos(_pitch), sin(_pitch), cos(_yaw) * cos(_pitch)) * _dist
 	_shake = maxf(0.0, _shake - delta)
 	var jit := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.4
