@@ -10,6 +10,7 @@
 - **The tournament look (G27):** Smash-style lobby tiles with **Quick play** for every game (F10 leaves). The creator is a card on the right. The bracket rolls are slot reels and has two sides with portraits. There's no vote: the top ready match plays next. A game's map circles behind every screen.
 - **FPS:** bullets travel at 5× the slingshot ball with a trail and damage what they hit, both ways (G28). New module **FPS: Mid duel** on the Dust hallway (G29).
 - **Raid: Cinderbrand (G30):** an unavoidable burn worth 25% HP over 30 s; run it off, get cleansed or be healed through it.
+- **Raid verdict: a grade (G33):** output, mechanics, AoEs avoided, survival and activity, weighted into S-F. The higher grade wins. There is a report card at the end.
 
 ## Do this first
 1. **The author judges the look (L-14)** and plays the raid with Cinderbrand (L-3). Act on their notes.

@@ -9,6 +9,18 @@ const PATH := "user://mmo_tune.cfg"
 
 ## key -> [label, default, min, max, step, section]
 const ENTRIES := {
+	"w_output": ["Weight: output (damage + healing vs your class)", 35.0, 0.0, 100.0, 1.0, "Verdict"],
+	"w_mech": ["Weight: mechanics performed", 30.0, 0.0, 100.0, 1.0, "Verdict"],
+	"w_dodge": ["Weight: AoEs avoided", 15.0, 0.0, 100.0, 1.0, "Verdict"],
+	"w_alive": ["Weight: survival (time alive)", 12.0, 0.0, 100.0, 1.0, "Verdict"],
+	"w_busy": ["Weight: activity (always be casting)", 8.0, 0.0, 100.0, 1.0, "Verdict"],
+	"out_full": ["Output for full marks (x a bot's pace)", 1.15, 0.5, 2.0, 0.05, "Verdict"],
+	"cleanse_credit": ["Mechanics credit per cleanse on someone else", 0.5, 0.0, 2.0, 0.1, "Verdict"],
+	"grade_s": ["Grade S from", 96.0, 50.0, 100.0, 1.0, "Verdict"],
+	"grade_a": ["Grade A from", 88.0, 40.0, 100.0, 1.0, "Verdict"],
+	"grade_b": ["Grade B from", 76.0, 30.0, 100.0, 1.0, "Verdict"],
+	"grade_c": ["Grade C from", 64.0, 20.0, 100.0, 1.0, "Verdict"],
+	"grade_d": ["Grade D from", 50.0, 10.0, 100.0, 1.0, "Verdict"],
 	"run_speed": ["Run speed (m/s)", 7.0, 2.0, 14.0, 0.1, "Move"],
 	"back_speed": ["Backpedal speed (m/s)", 4.5, 1.0, 10.0, 0.1, "Move"],
 	"turn_rate": ["Keyboard turn (deg/s)", 180.0, 60.0, 540.0, 5.0, "Move"],

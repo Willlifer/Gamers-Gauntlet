@@ -40,6 +40,17 @@ var dmg_done := 0.0
 var heal_done := 0.0
 var fails := 0
 var deaths := 0
+# the grade's record (G33, MmoGrade)
+var fight_t := 0.0              # seconds of the fight (from the pull)
+var alive_t := 0.0              # of those, alive
+var busy_t := 0.0               # of those, on the global cooldown, casting or auto-attacking
+var dodge_faced := 0            # boss AoEs that landed near you (Upheaval lines, meteors)
+var dodge_hit := 0              # of those, the ones that hit you
+var mech_faced := 0.0           # mechanics you had to do (bombs, the ring, Cinderbrand)
+var mech_done := 0.0            # of those, done (Cinderbrand counts by how much of it you shed)
+var brand_full := 0.0           # Cinderbrand: what it would have dealt left alone
+var brand_taken := 0.0          # Cinderbrand: what it dealt
+var cleanses := 0               # boss debuffs you cleansed off someone else
 # serials for the view
 var cast_serial := 0
 var strike_serial := 0

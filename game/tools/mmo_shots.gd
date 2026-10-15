@@ -116,8 +116,11 @@ func _go() -> void:
 		await _shot(id)
 		await _giant(id)
 		want.erase(id)
-	if not shots.has("upheaval_fire"):
-		pass
+	# the end: fast-forward to the kill, then the report card (G33)
+	while s.winner == "" and s.time < 900.0:
+		v._tick()
+	await _wait(2.6)
+	await _shot("report")
 	print("mmo_shots: %d frames to %s" % [shots.size(), out])
 	quit(0)
 

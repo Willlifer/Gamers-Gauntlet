@@ -250,6 +250,9 @@ func _raids(runs: int) -> void:
 	var lens: Array = []
 	var wins := 0
 	var totals := {}
+	var grade_c := {}
+	var parts_c := {}
+	var grades: Array = []
 	var fails_c := {}
 	var deaths_c := {}
 	for i in runs:
@@ -283,6 +286,13 @@ func _raids(runs: int) -> void:
 			totals[p.cls] = float(totals.get(p.cls, 0.0)) + p.dmg_done + p.heal_done
 			fails_c[p.cls] = int(fails_c.get(p.cls, 0)) + p.fails
 			deaths_c[p.cls] = int(deaths_c.get(p.cls, 0)) + p.deaths
+			var g := MmoGrade.grade(s, p)
+			grade_c[p.cls] = float(grade_c.get(p.cls, 0.0)) + float(g.score)
+			for part in MmoGrade.PARTS:
+				var k: String = p.cls + "." + str(part)
+				parts_c[k] = float(parts_c.get(k, 0.0)) + float(g.parts[part])
+			if float(g.score) < 0.0 or float(g.score) > 100.0:
+				_fail("grade out of range: %s %.1f" % [p.cls, g.score])
 		print("raid %d: %s in %.0f s, Giant at %.0f%%" % [i, s.winner, s.time - s.pull_time, s.boss.hp_pct() * 100.0])
 	var avg := 0.0
 	for l: float in lens:
@@ -292,6 +302,34 @@ func _raids(runs: int) -> void:
 	for c: String in MmoClasses.ORDER:
 		print("  %-8s score/run %7.0f  par %5.0f/s (table %3.0f)  fails/run %.1f  deaths/run %.1f" % [c, float(totals[c]) / runs, float(totals[c]) / runs / avg,
 			float(MmoClasses.PAR[c]), float(fails_c[c]) / runs, float(deaths_c[c]) / runs])
+		var gs := float(grade_c[c]) / runs
+		var line := "  %-8s grade %5.1f %s  " % [c, gs, MmoGrade.letter_for(gs)]
+		for part in MmoGrade.PARTS:
+			line += " %s %.2f" % [part.substr(0, 4), float(parts_c[c + "." + part]) / runs]
+		print(line)
+		grades.append(gs)
+	# the grade is fair across classes: a bot of every class lands within 8 points of the others
+	grades.sort()
+	if not grades.is_empty() and grades[-1] - grades[0] > 8.0:
+		_fail("bot grades spread %.1f points across classes (> 8)" % (grades[-1] - grades[0]))
+	# the letter decides first, then the score
+	if not MmoGrade.beats({ "rank": 1, "score": 86.0 }, { "rank": 2, "score": 99.0 }) or MmoGrade.beats({ "rank": 1, "score": 86.0 }, { "rank": 1, "score": 90.0 }):
+		_fail("MmoGrade.beats: the letter first, then the score")
+	# a contestant who stands there doing nothing grades low
+	var idle := _raid(4242)
+	var ib := {}
+	for p: MmoUnit in idle.players():
+		if p != idle.players()[0]:
+			ib[p.id] = MmoBot.new(4242 + ib.size(), 1.0)
+	while idle.winner == "" and idle.time < 900.0:
+		var orders := {}
+		for id: String in ib:
+			orders[id] = (ib[id] as MmoBot).think(idle, idle.unit(id))
+		idle.step(orders)
+	var gi := MmoGrade.grade(idle, idle.players()[0])
+	print("  idle seat grades %.1f %s" % [gi.score, gi.letter])
+	if float(gi.score) >= MmoTune.value("grade_c"):
+		_fail("an idle contestant graded %.1f (should be under C)" % gi.score)
 	if OS.get_environment("BREAKDOWN") != "":
 		var keys := _by.keys()
 		keys.sort()

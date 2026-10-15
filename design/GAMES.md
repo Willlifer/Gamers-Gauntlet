@@ -74,9 +74,10 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
     metre walked takes 0.5 s off), get cleansed (paladin Cleanse, priest
     Dispel Magic) or be healed through it.
 - **Controls:** WoW Classic's; the camera starts behind you.
-- **The verdict:** rating, your score per second against a same-class bot
-  (`MmoClasses.PAR`), with -400 per mechanic failed and -1000 per death (G23).
-  Shelved by the author until the fight is solved (G31).
+- **The verdict: a grade** (G33, `MmoGrade`): output against a same-class
+  bot (`MmoClasses.PAR`) 35, mechanics done 30, AoEs avoided 15, survival
+  12, activity 8 → 0-100 → S 96 / A 88 / B 76 / C 64 / D 50 / F. The higher
+  letter wins, then the higher score. The report card shows the parts.
 - **Numbers:** `MmoTune` (F1).
 
 ## The Gauntlet Kit (assets for modules)

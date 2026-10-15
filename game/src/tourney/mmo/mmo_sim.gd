@@ -144,6 +144,8 @@ func step(orders: Dictionary) -> Array:
 	for u: MmoUnit in units:
 		if u.kind == "player":
 			_tick_player(u, orders.get(u.id, {}))
+			if pulled:
+				_record(u)
 	_tick_boss()
 	_tick_areas()
 	if winner == "":
@@ -195,6 +197,15 @@ func _tick_player(u: MmoUnit, o: Dictionary) -> void:
 		try_cast(u, q)
 	_tick_cast(u)
 	_tick_auto(u)
+
+
+## The grade's clock (G33): fight time, time alive, time busy.
+func _record(u: MmoUnit) -> void:
+	u.fight_t += TICK
+	if u.alive:
+		u.alive_t += TICK
+		if u.gcd > 0.0 or u.casting() or u.auto_on:
+			u.busy_t += TICK
 
 
 func _regen(u: MmoUnit) -> void:
@@ -582,6 +593,8 @@ func _effect(u: MmoUnit, ab: Dictionary, f: Dictionary, tgt: MmoUnit, school: St
 		for a: Dictionary in who.auras:
 			if a.get("cleanse", false):
 				who.auras.erase(a)
+				if who != u and str(a.get("src", "")) == "boss" or who != u and str(a.id) in ["shattered"]:
+					u.cleanses += 1
 				_emit({ "type": "cleansed", "id": who.id, "name": str(a.name), "by": u.id })
 				break
 		return
@@ -676,6 +689,8 @@ func damage(src: MmoUnit, t: MmoUnit, amount: float, school: String, what: Strin
 	if t.immune():
 		_emit({ "type": "immune", "src": src.id if src else "", "tgt": t.id, "what": what })
 		return 0.0
+	if what == "Cinderbrand":
+		t.brand_taken += amount
 	var n := amount
 	var crit := false
 	if src and src.kind == "player":
@@ -965,6 +980,8 @@ func _brand() -> void:
 func brand(u: MmoUnit) -> void:
 	var dur := MmoTune.value("brand_dur")
 	var every := MmoTune.value("brand_tick")
+	u.mech_faced += 1.0
+	u.brand_full += u.max_hp * MmoTune.value("brand_pct")
 	add_aura(u, { "id": BRAND, "name": "Cinderbrand", "src": "boss", "dur": dur + TICK * 0.5, "every": every,
 		"dot": u.max_hp * MmoTune.value("brand_pct"), "ticks": maxi(1, int(round(dur / every))),
 		"school": "fire", "debuff": true, "cleanse": true, "glyph": "flame", "col": "#ff7a2a" })
@@ -995,6 +1012,11 @@ func _upheaval() -> void:
 	if float(spell.t) >= float(spell.total):
 		var dmg := MmoTune.value("upheaval_dmg")
 		var hit := {}
+		for u: MmoUnit in living():
+			for a: Dictionary in spell.get("lines", []):
+				if _in_line(u.pos, a, DODGE_PAD):
+					u.dodge_faced += 1
+					break
 		for a: Dictionary in spell.get("lines", []):
 			for u: MmoUnit in living():
 				if hit.has(u.id):
@@ -1002,6 +1024,7 @@ func _upheaval() -> void:
 				if _in_line(u.pos, a):
 					hit[u.id] = true
 					u.fails += 1
+					u.dodge_hit += 1
 					damage(boss, u, dmg, "earth", "Upheaval", "mech")
 					if u.alive:
 						u.vh = 8.0
@@ -1012,13 +1035,17 @@ func _upheaval() -> void:
 		_end_spell(1.0)
 
 
-func _in_line(p: Vector2, a: Dictionary) -> bool:
+## Near an AoE (this much past its edge) counts as facing it, for the grade.
+const DODGE_PAD := 3.0
+
+
+func _in_line(p: Vector2, a: Dictionary, pad := 0.0) -> bool:
 	var d := p - (a.pos as Vector2)
 	var along := d.dot(a.dir as Vector2)
-	if along < 0.0 or along > float(a.len):
+	if along < -pad or along > float(a.len) + pad:
 		return false
 	var off := absf(d.dot((a.dir as Vector2).orthogonal()))
-	return off <= float(a.w) * 0.5 + 0.4
+	return off <= float(a.w) * 0.5 + 0.4 + pad
 
 
 func _meteors() -> void:
@@ -1053,7 +1080,10 @@ func _bombs() -> void:
 		spell.stage = "fuse"
 		boss.cast = {}
 		var fuse := MmoTune.value("bomb_fuse")
+		_bomb_fault = {}
 		for u: MmoUnit in living():
+			u.mech_faced += 1.0
+			u.mech_done += 1.0
 			var carrier := u
 			resolving += 1
 			add_aura(u, { "id": "bomb", "name": "Giant's Bomb", "dur": fuse, "debuff": true, "glyph": "bomb", "col": "#ff5a2a",
@@ -1078,8 +1108,19 @@ func _bomb_pop(c: MmoUnit) -> void:
 	for u: MmoUnit in living():
 		if u != c and u.pos.distance_to(at) <= r:
 			u.fails += 1
+			_bomb_failed(u)
+			_bomb_failed(c)
 			damage(boss, u, dmg, "fire", "Giant's Bomb", "mech")
 	_emit({ "type": "explode", "pos": at, "r": r, "what": "bomb" })
+
+
+var _bomb_fault := {}           # this wave's bomb failures (one per raider)
+
+
+func _bomb_failed(u: MmoUnit) -> void:
+	if not _bomb_fault.has(u.id):
+		_bomb_fault[u.id] = true
+		u.mech_done -= 1.0
 
 
 func _gather() -> void:
@@ -1110,7 +1151,10 @@ func _gather_fire(a: Dictionary) -> void:
 		else:
 			outside.append(u)
 	var share := MmoTune.value("gather_split") / maxf(1.0, float(inside.size()))
+	for u: MmoUnit in living():
+		u.mech_faced += 1.0
 	for u: MmoUnit in inside:
+		u.mech_done += 1.0
 		damage(boss, u, share, "earth", "Earthshatter", "mech")
 	for u: MmoUnit in outside:
 		u.fails += 1
@@ -1148,8 +1192,11 @@ func _tick_areas() -> void:
 			match str(a.get("on_fire", "")):
 				"meteor":
 					for u: MmoUnit in living():
+						if u.pos.distance_to(a.pos as Vector2) <= float(a.r) + DODGE_PAD:
+							u.dodge_faced += 1
 						if u.pos.distance_to(a.pos as Vector2) <= float(a.r) + u.radius * 0.5:
 							u.fails += 1
+							u.dodge_hit += 1
 							damage(boss, u, MmoTune.value("meteor_dmg"), "fire", "Meteor", "mech")
 							if u.alive:
 								add_aura(u, { "id": "burning", "name": "Burning", "src": "boss", "dur": 6.0, "every": 1.0, "dot": 360.0,

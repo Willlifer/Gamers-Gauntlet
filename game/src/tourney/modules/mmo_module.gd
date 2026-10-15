@@ -3,10 +3,10 @@ extends TourneyModule
 ## MMO: Raid night (G22). WoW Classic in miniature: a raid of six (warrior,
 ## paladin, priest, mage, hunter, rogue) against the Giant in its courtyard.
 ## Both contestants are in the same raid, each on a class of their own; the
-## other four seats are bots. Whoever rates higher wins: a rating is your
-## meter score (damage + healing, less 400 a mechanic failed and 1000 a
-## death) per second of the fight against what a bot of your class does
-## (MmoClasses.PAR; 100 = a bot's pace), so a priest can beat a hunter.
+## other four seats are bots. The higher grade wins (MmoGrade, G33): output
+## against a bot of your class, mechanics performed, AoEs avoided, survival
+## and activity, weighted into a score and a letter; the same letter goes to
+## the higher score. A priest can beat a hunter.
 ## One human on this machine plays; the other contestant is a bot.
 
 const PICK_TIME := 30.0
@@ -25,7 +25,7 @@ static var autopilot := false
 
 static func info() -> Dictionary:
 	return { "id": "mmo_raid", "name": "MMO: Raid night", "players": 2,
-		"blurb": "WoW Classic raid on the Giant. Pick a class; the better rating wins." }
+		"blurb": "WoW Classic raid on the Giant. Pick a class; the better grade wins." }
 
 
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
@@ -46,10 +46,10 @@ static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 		s.step(orders)
 	var ua: MmoUnit = s.players()[0]
 	var ub: MmoUnit = s.players()[1]
-	var ra := rating(s, ua)
-	var rb := rating(s, ub)
-	var w: Dictionary = m.players[0] if ra >= rb else m.players[1]
-	return { "winner": w.id, "summary": _summary(s, m.players[0], ua, ra, m.players[1], ub, rb), "stats": {} }
+	var ga := MmoGrade.grade(s, ua)
+	var gb := MmoGrade.grade(s, ub)
+	var w: Dictionary = m.players[0] if MmoGrade.beats(ga, gb) else m.players[1]
+	return { "winner": w.id, "summary": _summary(s, m.players[0], ua, ga, m.players[1], ub, gb), "stats": {} }
 
 
 ## The raid: the two contestants first (seats 0 and 1), then the other
@@ -67,15 +67,10 @@ static func build_raid(seed: int, cls_a: String, name_a: String, cls_b: String, 
 	return s
 
 
-static func rating(s: MmoSim, u: MmoUnit) -> float:
-	var secs := maxf(10.0, s.time - s.pull_time)
-	return 100.0 * (s.score_of(u) / secs) / float(MmoClasses.PAR[u.cls])
-
-
-static func _summary(s: MmoSim, pa: Dictionary, ua: MmoUnit, ra: float, pb: Dictionary, ub: MmoUnit, rb: float) -> String:
+static func _summary(s: MmoSim, pa: Dictionary, ua: MmoUnit, ga: Dictionary, pb: Dictionary, ub: MmoUnit, gb: Dictionary) -> String:
 	var how := "killed the Giant in %d s" % int(s.time - s.pull_time) if s.winner == "raid" else "wiped on the Giant"
-	return "The raid %s. %s (%s) rated %d, %s (%s) %d." % [how, pa.name, MmoClasses.CLASSES[ua.cls].name, int(ra),
-		pb.name, MmoClasses.CLASSES[ub.cls].name, int(rb)]
+	return "The raid %s. %s (%s) graded %s (%d), %s (%s) %s (%d)." % [how, pa.name, MmoClasses.CLASSES[ua.cls].name, ga.letter, int(ga.score),
+		pb.name, MmoClasses.CLASSES[ub.cls].name, gb.letter, int(gb.score)]
 
 
 func setup(m: Dictionary) -> void:
@@ -234,8 +229,8 @@ func _start() -> void:
 	_view.match_over.connect(func(_r: Dictionary) -> void:
 		var ua: MmoUnit = s.players()[0]
 		var ub: MmoUnit = s.players()[1]
-		var ra := rating(s, ua)
-		var rb := rating(s, ub)
-		finished.emit({ "winner": _human.id if ra >= rb else _other.id,
-			"summary": _summary(s, _human, ua, ra, _other, ub, rb), "stats": {} }))
+		var ga := MmoGrade.grade(s, ua)
+		var gb := MmoGrade.grade(s, ub)
+		finished.emit({ "winner": _human.id if MmoGrade.beats(ga, gb) else _other.id,
+			"summary": _summary(s, _human, ua, ga, _other, ub, gb), "stats": {} }))
 	add_child(_view)

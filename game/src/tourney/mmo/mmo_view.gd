@@ -470,7 +470,9 @@ func _process(delta: float) -> void:
 	_hud.update(delta)
 	if _over_t >= 0.0:
 		_over_t += delta
-		if _over_t > 5.0 and _over_t - delta <= 5.0:
+		if _over_t > 1.5 and _over_t - delta <= 1.5:
+			_report()
+		if _over_t > REPORT_HOLD and _over_t - delta <= REPORT_HOLD:
 			match_over.emit(result())
 
 
@@ -486,8 +488,19 @@ func _tick() -> void:
 		_on_event(e)
 
 
-## The tournament's verdict: the two contestants by rating (their meter
-## score against what a bot of their class manages, 100 = a bot's pace).
+## The end of the raid shows this long (the report card from 1.5 s), then the verdict.
+const REPORT_HOLD := 11.0
+
+
+## The report card (G33): the two contestants' grades, part by part.
+func _report() -> void:
+	var r := MmoReport.new()
+	r.sim = sim
+	r.me_id = me_id
+	add_child(r)
+
+
+## The raid's end; the module grades the contestants (MmoGrade).
 func result() -> Dictionary:
 	return { "winner": sim.winner, "time": sim.time - sim.pull_time }
 
