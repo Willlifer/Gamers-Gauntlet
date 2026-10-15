@@ -58,6 +58,7 @@ var _stop_req := false
 var _mouse_restore := Vector2.ZERO
 var input_on := true
 var cam_hold := false                      ## tools: the camera is placed by hand
+var audio: MmoAudio
 
 
 func setup(p_sim: MmoSim, p_me: String, p_bots: Dictionary, p_names: Dictionary = {}) -> void:
@@ -94,6 +95,9 @@ func _ready() -> void:
 	_portraits()
 	_plate = BossPlate.new(self)
 	_hud.add_child(_plate)
+	audio = MmoAudio.new()
+	audio.view = self
+	add_child(audio)
 	_place_camera(1.0)
 	var me := sim.unit(me_id)
 	if me:
@@ -461,6 +465,7 @@ func _process(delta: float) -> void:
 	_sync_shots(delta)
 	_sync_areas(delta)
 	_tick_floaters(delta)
+	audio.update(delta)
 	_place_camera(delta)
 	_hud.update(delta)
 	if _over_t >= 0.0:
@@ -490,6 +495,7 @@ func result() -> Dictionary:
 # ----------------------------------------------------------------- events
 
 func _on_event(e: Dictionary) -> void:
+	audio.on_event(e)
 	var me := sim.unit(me_id)
 	match str(e.type):
 		"error":
@@ -498,7 +504,7 @@ func _on_event(e: Dictionary) -> void:
 		"warn":
 			_hud.warn(str(e.text), Color(str(e.get("col", "#ff8a2a"))))
 		"pull":
-			BWMusic.play("boss")
+			pass
 		"dmg":
 			var t := sim.unit(str(e.tgt))
 			var s := sim.unit(str(e.src)) if str(e.src) != "" else null
@@ -1375,6 +1381,10 @@ func _ring_mesh(r: float, col: Color, w: float) -> MeshInstance3D:
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(m)
 	return m
+
+
+func unit_root(id: String) -> Node3D:
+	return _views[id].root if _views.has(id) else self
 
 
 func camera() -> Camera3D:

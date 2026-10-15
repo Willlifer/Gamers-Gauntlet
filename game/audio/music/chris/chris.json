@@ -1,0 +1,29 @@
+{
+ "chris_full": {
+  "from": "Full Chris.wav",
+  "lead_cut_s": 1.745,
+  "loop_s": 20.8642,
+  "seam_corr": 0.251,
+  "gain_db": 5.92,
+  "rms_db": -24.27,
+  "peak_db": -1.0
+ },
+ "chris_loop_a": {
+  "from": "Repeat Chris.wav",
+  "lead_cut_s": 1.385,
+  "loop_s": 7.2589,
+  "seam_corr": 0.667,
+  "gain_db": 7.47,
+  "rms_db": -24.6,
+  "peak_db": -1.0
+ },
+ "chris_loop_b": {
+  "from": "Repeat Chris 2.wav",
+  "lead_cut_s": 0.04,
+  "loop_s": 7.131,
+  "seam_corr": 0.307,
+  "gain_db": 7.64,
+  "rms_db": -22.19,
+  "peak_db": -1.0
+ }
+}

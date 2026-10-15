@@ -189,6 +189,8 @@ func _bot_pick() -> String:
 func _lock(pid: String, cls_id: String) -> void:
 	if _picks.has(pid) or _view:
 		return
+	if pid == _human.id:
+		BWSfx.ui("ui_confirm")
 	if pid == _other.id and _picks.get(_human.id, "") == cls_id:
 		cls_id = _bot_pick()
 	if pid == _human.id and _picks.get(_other.id, "") == cls_id:
