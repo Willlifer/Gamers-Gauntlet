@@ -75,7 +75,8 @@ A WoW Classic raid of six against the Giant in a round courtyard (G22).
     Dispel Magic) or be healed through it.
 - **Scorched Earth** (G37): an 8 s warning, then at 45 s the half of the
   courtyard behind the Giant (from the tank) burns, 25% of max HP a second;
-  from 1:30 it turns counter-clockwise about the Giant, 9 deg/s.
+  from 1:30 it turns counter-clockwise about the Giant, 9 deg/s. Red chevrons
+  out of the fire mark the advancing edge, gold chevrons into it the retreating one (G38).
 - **Below 50%:** no more text warnings, only "You're on your own now." **Below 25%:**
   the spell rotation runs twice as fast (G35). Timer enrage at 300 s: 5x damage.
 - **Controls:** WoW Classic's; the camera starts behind you.

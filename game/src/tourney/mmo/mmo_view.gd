@@ -1183,12 +1183,23 @@ void fragment() {
 		}
 		c = mix(c, vec3(1.0, 0.85, 0.4), edge);
 		a = max(a, edge);
-		if (spin > 0.5) {
-			// chevrons on the safe side of the edge, running the way the fire turns
-			float band = 1.0 - smoothstep(0.6, 1.4, abs(s + 1.6));
-			float chev = step(0.55, fract((t * sign(s + 0.0001) + abs(s + 1.6) * 0.6) * 0.25 + TIME * 0.9));
-			c = mix(c, vec3(1.0, 0.9, 0.2), band * chev);
-			a = max(a, band * chev * 0.85);
+		if (spin > 0.01) {
+			// The fire turns counter-clockwise (seen from above): the edge on the t < 0 ray
+			// advances into safe ground, the edge on the t > 0 ray retreats.
+			// Advancing: red chevrons on the safe side, pointing out of the fire, marching away.
+			// Retreating: gold chevrons on the fire side, pointing into the fire, marching in.
+			float wc = (fract(abs(t) / 2.0) - 0.5) * 2.0;          // across the chevron, repeating along the edge
+			float adv_band = step(1.5, -t) * (1.0 - smoothstep(0.0, 0.4, -s - 3.4)) * smoothstep(0.2, 0.6, -s);
+			float fa = fract((-s + abs(wc) * 1.4) * 0.5 - TIME * 0.9);
+			float adv = smoothstep(0.58, 0.62, fa) * (1.0 - smoothstep(0.86, 0.9, fa));
+			float ret_band = step(1.5, t) * (1.0 - smoothstep(0.0, 0.4, s - 3.4)) * smoothstep(0.2, 0.6, s);
+			float fr = fract((s + abs(wc) * 1.4) * 0.5 - TIME * 0.9);
+			float ret = smoothstep(0.58, 0.62, fr) * (1.0 - smoothstep(0.86, 0.9, fr));
+			float k = clamp(spin, 0.0, 1.0);
+			c = mix(c, vec3(1.0, 0.18, 0.08), adv_band * adv * k);
+			a = max(a, adv_band * adv * 0.9 * k);
+			c = mix(c, vec3(1.0, 0.88, 0.35), ret_band * ret * k);
+			a = max(a, ret_band * ret * 0.9 * k);
 		}
 	}
 	a *= 1.0 - smoothstep(radius - 1.0, radius, r);
@@ -1276,7 +1287,10 @@ func _sync_scorch(_delta: float) -> void:
 	var warn_len := MmoTune.value("scorch_warn")
 	_scorch_mat.set_shader_parameter("warn", clampf(float(sc.t) / maxf(0.1, warn_len), 0.0, 1.0))
 	_scorch_mat.set_shader_parameter("live", 1.0 if sc.state == "live" else 0.0)
-	_scorch_mat.set_shader_parameter("spin", 1.0 if sc.spinning else 0.0)
+	# full chevrons while turning; a flashing preview in the 10 s before it starts
+	var to_spin := MmoTune.value("scorch_spin_at") - (sim.time - sim.pull_time)
+	var spin_k := 1.0 if sc.spinning else (0.35 + 0.25 * sin(Time.get_ticks_msec() / 160.0) if sc.state == "live" and to_spin <= 10.0 else 0.0)
+	_scorch_mat.set_shader_parameter("spin", spin_k)
 	# embers over the burning half
 	_scorch_fire.emitting = sc.state == "live"
 	var d := Vector3(cos(ang), 0, sin(ang))
