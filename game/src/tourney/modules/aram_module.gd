@@ -142,4 +142,4 @@ func _start() -> void:
 		finished.emit({ "winner": w.id, "summary": "%s (%s) %d – %d %s (%s), %d s." % [_human.name, MobaChamps.CHAMPS[me.champ].name,
 			s.score[mine], s.score[theirs], _bot_p.name, MobaChamps.CHAMPS[them.champ].name, int(s.time)], "stats": {} }))
 	add_child(_view)
-	BWMusic.play("combat")
+	TourneyMusic.play("fight")

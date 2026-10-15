@@ -33,3 +33,4 @@ func setup(m: Dictionary) -> void:
 	world.match_over.connect(func(won: bool, summary: String) -> void:
 		finished.emit({ "winner": human.id if won else other.id, "summary": summary, "stats": {} }))
 	add_child(world)
+	TourneyMusic.play("fight")

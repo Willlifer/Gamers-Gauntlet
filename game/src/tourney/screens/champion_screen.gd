@@ -33,4 +33,4 @@ func _ready() -> void:
 	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	s.add_child(sp)
 	TourneyUI.button(s, "Back to the lobby", func(): done.emit())
-	BWMusic.play("title")
+	TourneyMusic.play("hype")

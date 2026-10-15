@@ -68,4 +68,4 @@ func _start() -> void:
 		finished.emit({ "winner": w.id, "summary": "Team %s took the Giant at %d s; kills %d – %d." % [w.name, int(s.time),
 			s.score.blue, s.score.red], "stats": {} }))
 	add_child(_view)
-	BWMusic.play("boss")
+	TourneyMusic.play("boss")

@@ -10,17 +10,11 @@ extends Node
 ##   the fight          chris_full
 ##   Giant under 30% or enraged   chris_loop_b
 ##   the end            the music fades, the victory / defeat sting
-## Each change crossfades over FADE seconds on the Music bus.
+## Each change crossfades on the Music bus.
 
-const DIR := "res://audio/music/chris/"
-const FADE := 1.6
 const STEP_EVERY := 0.32            ## your footsteps while running (s)
 
 var view: MmoView
-var _decks: Array[AudioStreamPlayer] = []
-var _cur := -1
-var _track := ""
-var _paused_bw: Array = []
 var _loops := {}                    # unit id -> channel loop player
 var _step_t := 0.0
 var _boss_step_t := 0.0
@@ -31,67 +25,21 @@ var _over := false
 func _ready() -> void:
 	BWAudio.ensure(self)
 	BWSfx.ensure(self)
-	_pause_bw(true)
-	for i in 2:
-		var p := AudioStreamPlayer.new()
-		p.bus = "Music"
-		p.volume_db = -60.0
-		add_child(p)
-		_decks.append(p)
+	TourneyMusic.ensure(self)
 	music("chris_loop_a")
 
 
-func _exit_tree() -> void:
-	_pause_bw(false)
-
-
-## Pause (or resume) whatever Black | White's music node is playing.
-func _pause_bw(on: bool) -> void:
-	var bw := BWMusic.instance()
-	if bw == null:
-		return
-	if on:
-		_paused_bw = []
-		for c in bw.find_children("*", "AudioStreamPlayer", true, false):
-			var p := c as AudioStreamPlayer
-			if p.playing and not p.stream_paused:
-				p.stream_paused = true
-				_paused_bw.append(p)
-	else:
-		for p: AudioStreamPlayer in _paused_bw:
-			if is_instance_valid(p):
-				p.stream_paused = false
-		_paused_bw = []
-
-
-## The tracks import as forward loops over the whole file (their .import:
-## edit/loop_mode=2, loop_end=-1); trim_chris.py made the seams.
-static func stream(track: String) -> AudioStream:
-	return load(DIR + track + ".wav") as AudioStreamWAV
-
-
+## The raid's track on the tournament's shared player (G25).
 func music(track: String) -> void:
-	if track == _track:
-		return
-	_track = track
-	var old := _decks[_cur] if _cur >= 0 else null
-	_cur = (_cur + 1) % 2
-	var p := _decks[_cur]
-	if track == "":
-		p.stop()
-	else:
-		p.stream = stream(track)
-		p.volume_db = -40.0
-		p.play()
-		create_tween().tween_property(p, "volume_db", 0.0, FADE)
-	if old:
-		var tw := create_tween()
-		tw.tween_property(old, "volume_db", -60.0, FADE)
-		tw.tween_callback(old.stop)
+	TourneyMusic.play(track)
+
+
+static func stream(track: String) -> AudioStream:
+	return TourneyMusic.stream(track)
 
 
 func current() -> String:
-	return _track
+	return TourneyMusic.current()
 
 
 # ------------------------------------------------------------------ frame

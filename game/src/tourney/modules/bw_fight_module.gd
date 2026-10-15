@@ -96,7 +96,7 @@ func _play(p: Dictionary) -> void:
 	_screen.configure("res://maps/%s.json" % BWRun.TWINS_MAP, players, enemies, [], seed_value)
 	_screen.trust_fn = trun.trust_stage
 	add_child(_screen)
-	BWMusic.play("boss")
+	TourneyMusic.play("boss")
 	var result: Array = await _screen.finished
 	var battle: BWBattle = result[1]
 	_results[p.id] = { "won": result[0] == "player", "cycles": maxi(1, battle.cycle) }

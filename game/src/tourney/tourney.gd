@@ -13,6 +13,7 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	BWSettings.init(true)
 	BWMusic.ensure(self)
+	TourneyMusic.ensure(self)
 	BWEsc.ensure(self)
 	BWSettings.apply_all()
 	BWShaderWarm.start(self)
@@ -49,7 +50,7 @@ func go_lobby(autostart: bool = false) -> void:
 	s.start.connect(start_tournament)
 	s.open_range.connect(go_range)
 	_swap(s)
-	BWMusic.play("rest")
+	TourneyMusic.play("lobby")
 	if autostart:
 		start_tournament.call_deferred()
 
@@ -59,6 +60,7 @@ func go_range(kind: String) -> void:
 	s.kind = kind
 	s.back.connect(func(): go_lobby())
 	_swap(s)
+	TourneyMusic.play("lobby")
 
 
 func start_tournament() -> void:
@@ -81,7 +83,7 @@ func go_bracket(first: bool) -> void:
 	s.chosen.connect(go_matchup)
 	s.finished.connect(go_champion)
 	_swap(s)
-	BWMusic.play("rest")
+	TourneyMusic.play("lobby")
 
 
 func go_matchup(match_id: String) -> void:
@@ -90,6 +92,7 @@ func go_matchup(match_id: String) -> void:
 	s.match_id = match_id
 	s.start.connect(func(): go_game(match_id))
 	_swap(s)
+	TourneyMusic.play("hype")
 
 
 func go_game(match_id: String) -> void:
@@ -105,6 +108,7 @@ func go_game(match_id: String) -> void:
 	var mod: TourneyModule = script.new()
 	mod.finished.connect(func(r): _record(match_id, r))
 	_swap(mod)
+	TourneyMusic.play("hype")                       # loading in and picking: the game cues "fight" when it starts
 	mod.setup(cfg)
 
 
@@ -122,7 +126,7 @@ func _record(match_id: String, r: Dictionary) -> void:
 	s.payouts = pay
 	s.done.connect(func(): go_bracket(false))
 	_swap(s)
-	BWMusic.play("rest")
+	TourneyMusic.play("lobby")
 	BWMusic.sting("level_up")
 
 
