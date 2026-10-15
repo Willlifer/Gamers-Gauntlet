@@ -1,6 +1,6 @@
 class_name GKMaterials
 extends RefCounted
-## Material roles for the Gamer Kit. A GKMesh surface is named after a role;
+## Material roles for the Gauntlet Kit. A GKMesh surface is named after a role;
 ## this turns the role into a material (gk_surface.gdshader, cached and
 ## shared), or into a plain StandardMaterial3D for export to other tools.
 ## A role unknown here renders magenta and warns once, so a typo shows up in

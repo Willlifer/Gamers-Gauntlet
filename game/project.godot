@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="The Gamer"
+config/name="Gamers Gauntlet"
 config/description="A party tournament of short games."
 config/version="0.1.0"
 run/main_scene="res://scenes/tourney.tscn"

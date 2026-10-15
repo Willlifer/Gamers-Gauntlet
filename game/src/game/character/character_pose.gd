@@ -171,7 +171,7 @@ func update(delta: float) -> void:
 
 # ----------------------------------------------------------------- solver
 
-## The Gamer kit: keys laid over every pose before solving (e.g. hand_r /
+## The Gauntlet kit: keys laid over every pose before solving (e.g. hand_r /
 ## hand_l holding a kit rifle while the clips walk the legs). Empty = off.
 var override := {}
 ## How much of `override` shows (0..1): eases a keyed move in and out of the clips.

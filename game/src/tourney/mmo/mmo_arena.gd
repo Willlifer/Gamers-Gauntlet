@@ -5,7 +5,7 @@ extends RefCounted
 ## plaza (MmoSim.ARENA_R) inside a wide stone curb, a lawn with four
 ## fountains, a cloister of columns and arches under a tiled roof, and a
 ## high brick wall with red banners; a gate behind the Giant, an opening
-## behind the raid. Built from the Gamer kit (GKMesh + GKMaterials roles),
+## behind the raid. Built from the Gauntlet kit (GKMesh + GKMaterials roles),
 ## deterministic, no textures.
 
 const R := MmoSim.ARENA_R

@@ -1,6 +1,6 @@
 class_name TourneyMusic
 extends Node
-## The Gamer's music (G25): the author's three Chris loops everywhere in the
+## Gamers Gauntlet's music (G25): the author's three Chris loops everywhere in the
 ## tournament, one shared player that crossfades between them and carries on
 ## across screens (asking for the track already playing changes nothing).
 ## Black | White's own music stays for Black | White's game; its stings

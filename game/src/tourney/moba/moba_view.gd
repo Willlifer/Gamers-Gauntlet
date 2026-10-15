@@ -517,7 +517,7 @@ func _add_unit(u: MobaUnit) -> void:
 		var c: Dictionary = MobaChamps.CHAMPS[u.champ]
 		MobaLook.tint(ch, Color(str(c.tint)), Color(str(c.hair_hex)))
 		if c.has("kit_weapon"):
-			# a Gamer kit item in place of the Black | White weapon (held on the
+			# a Gauntlet kit item in place of the Black | White weapon (held on the
 			# same socket; the weapon's clips keep driving the body)
 			GKBWHold.swap_weapon(ch, GKRegistry.build(str(c.kit_weapon), c.get("kit_params", {})))
 	elif u.kind == "minion":

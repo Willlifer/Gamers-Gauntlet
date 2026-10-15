@@ -31,7 +31,7 @@ static func export_glb(a: GKAsset, path: String) -> Dictionary:
 	if f == null:
 		return { "ok": false, "error": "cannot write %s (%s)" % [side, error_string(FileAccess.get_open_error())], "path": path }
 	var info := a.describe()
-	info["generator"] = "GKRegistry (The Gamer kit)"
+	info["generator"] = "GKRegistry (The Gauntlet kit)"
 	info["exported"] = Time.get_datetime_string_from_system(true)
 	f.store_string(JSON.stringify(_plain(info), "\t"))
 	f.close()

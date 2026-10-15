@@ -1,6 +1,6 @@
 class_name GKMesh
 extends RefCounted
-## Geometry collector for the Gamer Kit: primitives go in, one ArrayMesh
+## Geometry collector for the Gauntlet Kit: primitives go in, one ArrayMesh
 ## comes out with one surface per material ROLE (the surface name is the
 ## role; GKMaterials turns roles into materials). No randomness here:
 ## builders that want variety pass in their own seeded RandomNumberGenerator,

@@ -1043,7 +1043,7 @@ func _hex(h: Variant) -> Vector3:
 	return Vector3.ZERO
 
 
-## Colour overrides by element (The Gamer's MOBA dyes the releases per
+## Colour overrides by element (Gamers Gauntlet's MOBA dyes the releases per
 ## champion; empty, and so unused, in Black | White's own combat).
 static var tint_over := {}
 

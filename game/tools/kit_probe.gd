@@ -1,5 +1,5 @@
 extends SceneTree
-## Headless checks for the Gamer Kit (G16/G17). Exit 0 when all pass.
+## Headless checks for the Gauntlet Kit (G16/G17). Exit 0 when all pass.
 ##   godot --headless --path . --script res://tools/kit_probe.gd
 ## Per asset: defaults and every preset build without warnings; every
 ## parameter at its min and max builds; the same params give the same mesh

@@ -1,5 +1,5 @@
 extends Control
-## The kit bench: the workshop UI over the Gamer Kit. Pick an asset, shape it
+## The kit bench: the workshop UI over the Gauntlet Kit. Pick an asset, shape it
 ## with its parameters, keep presets, export a .glb + sidecar. The kit itself
 ## never needs this scene (GKRegistry builds without it); the bench is only
 ## the hands-on front end for developers and artists.

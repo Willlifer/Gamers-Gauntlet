@@ -1,6 +1,6 @@
 class_name FpsModule
 extends TourneyModule
-## FPS: Rooftop duel (prototype). First person on the Gamer kit's apartment
+## FPS: Rooftop duel (prototype). First person on the Gauntlet kit's apartment
 ## rooftops, you against a bot, first to FpsTune.kills_to_win. Offline: the
 ## human on this machine plays; the other seat is the bot. (Online needs the
 ## shooter network model, G8.)

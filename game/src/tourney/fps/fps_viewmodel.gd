@@ -1,6 +1,6 @@
 class_name FpsViewmodel
 extends Node3D
-## The gun you see in first person: a Gamer kit item hung off the camera,
+## The gun you see in first person: a Gauntlet kit item hung off the camera,
 ## drawn only by the view-model camera (render layer 2, its own FOV, so it
 ## never clips into walls). All motion is procedural:
 ##   hip / aim    aiming slides the kit item's `eye` marker onto the eye (the

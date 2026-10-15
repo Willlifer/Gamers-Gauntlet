@@ -1,4 +1,4 @@
-// Gamer Kit surfaces (GKMaterials): one lit shader for every kit material,
+// Gauntlet Kit surfaces (GKMaterials): one lit shader for every kit material,
 // switched by `pat`. Patterns are procedural in object space (items: the
 // pattern rides with the gun) or world space (environments: pieces line up),
 // so no textures are needed and every role is a handful of numbers.

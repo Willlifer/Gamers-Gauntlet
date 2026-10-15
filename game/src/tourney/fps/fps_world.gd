@@ -1,6 +1,6 @@
 class_name FpsWorld
 extends Node3D
-## The FPS prototype: you against a bot on the Gamer kit's apartment
+## The FPS prototype: you against a bot on the Gauntlet kit's apartment
 ## rooftops (G17), first to FpsTune.kills_to_win. Builds the map from the
 ## kit (its colliders are the level), seats the player on roof A and the bot
 ## on roof B, and owns the shared effects (traces, tracers, flashes, impacts,

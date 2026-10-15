@@ -1,5 +1,5 @@
 extends SceneTree
-## Windowed: the reference-gauntlet frames for Gamer Kit assets (G16). Each
+## Windowed: the reference-gauntlet frames for Gauntlet Kit assets (G16). Each
 ## asset is built from its defaults (or PRESET), shot from fixed cameras and
 ## laid out on one sheet beside its reference image:
 ##   items  row 1: the reference | ours from the reference's angle

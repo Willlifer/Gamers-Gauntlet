@@ -90,7 +90,7 @@ var current := ""                 ## last requested pose name
 var layers: Array = []            ## bottom .. top; see _clip_layer()
 var pending := ""                 ## pose to play when the running one-shot ends
 var walk_rate := -1.0             ## >= 0 forces the locomotion playback rate (tools); < 0 = follow root speed
-var reverse := false             ## The Gamer: gait clips play backwards (a backpedal)
+var reverse := false             ## Gamers Gauntlet: gait clips play backwards (a backpedal)
 var run_rate := -1.0              ## > 0: a planned run's rate (phase-aligns the stop); reset by any other request
 var wounded := false              ## HP < 35%: idle -> wounded, walk / run -> limp
 var rotate_idles := true          ## play idle variants while standing (tools turn it off)

@@ -692,7 +692,7 @@ func _fly(w: BWWeaponView, to_stow: bool) -> void:
 		off.scale = off_s
 
 
-## The Gamer: playback rate for clips (real-time games run autos faster).
+## Gamers Gauntlet: playback rate for clips (real-time games run autos faster).
 var anim_speed := 1.0
 
 
