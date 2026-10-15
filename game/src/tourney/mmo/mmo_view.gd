@@ -464,6 +464,7 @@ func _process(delta: float) -> void:
 	_draw_units(clampf(_acc / MmoSim.TICK, 0.0, 1.0), delta)
 	_sync_shots(delta)
 	_sync_areas(delta)
+	_sync_scorch(delta)
 	_tick_floaters(delta)
 	audio.update(delta)
 	_place_camera(delta)
@@ -1138,6 +1139,67 @@ func _tick_floaters(delta: float) -> void:
 
 # ------------------------------------------------------------------ areas
 
+## Scorched Earth (G37): one big disc over the courtyard; the shader draws the
+## burning half by angle. warn: hatching that fills in and an edge line that
+## pulses faster as it nears; live: fire with embers and a bright edge;
+## spinning: chevrons along the edge running the way it turns.
+const SCORCH_SHADER := """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
+uniform vec2 dir = vec2(1.0, 0.0);
+uniform float warn = 0.0;        // 0..1 through the warning
+uniform float live = 0.0;        // 0 or 1
+uniform float spin = 0.0;        // 0 or 1
+uniform float radius = 26.0;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) {
+	vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+void fragment() {
+	vec2 p = (UV * 2.0 - 1.0) * radius;
+	float r = length(p);
+	if (r > radius) { discard; }
+	float s = dot(p, dir);                       // > 0: the burning side
+	vec2 along = vec2(-dir.y, dir.x);
+	float t = dot(p, along);
+	float edge = 1.0 - smoothstep(0.0, 0.6, abs(s));
+	vec3 c = vec3(0.0);
+	float a = 0.0;
+	if (live < 0.5) {
+		float beat = 0.5 + 0.5 * sin(TIME * mix(4.0, 22.0, warn));
+		float hatch = step(0.5, fract((s + t) * 0.35 - TIME * 0.6));
+		if (s > 0.0) {
+			c = mix(vec3(1.0, 0.55, 0.1), vec3(1.0, 0.15, 0.05), warn);
+			a = hatch * (0.10 + 0.32 * warn) + 0.06 * warn;
+		}
+		c = mix(c, vec3(1.0, 0.8, 0.3), edge);
+		a = max(a, edge * (0.45 + 0.5 * beat));
+	} else {
+		float n = noise(p * 0.35 + vec2(0.0, -TIME * 0.8)) * 0.6 + noise(p * 1.1 - vec2(TIME * 1.3, 0.0)) * 0.4;
+		if (s > 0.0) {
+			c = mix(vec3(0.35, 0.03, 0.0), vec3(1.0, 0.42, 0.05), smoothstep(0.35, 0.9, n));
+			a = 0.62 + 0.25 * n;
+		}
+		c = mix(c, vec3(1.0, 0.85, 0.4), edge);
+		a = max(a, edge);
+		if (spin > 0.5) {
+			// chevrons on the safe side of the edge, running the way the fire turns
+			float band = 1.0 - smoothstep(0.6, 1.4, abs(s + 1.6));
+			float chev = step(0.55, fract((t * sign(s + 0.0001) + abs(s + 1.6) * 0.6) * 0.25 + TIME * 0.9));
+			c = mix(c, vec3(1.0, 0.9, 0.2), band * chev);
+			a = max(a, band * chev * 0.85);
+		}
+	}
+	a *= 1.0 - smoothstep(radius - 1.0, radius, r);
+	ALBEDO = c;
+	ALPHA = clamp(a, 0.0, 1.0);
+}
+"""
+var _scorch_node: MeshInstance3D
+var _scorch_mat: ShaderMaterial
+var _scorch_fire: CPUParticles3D
+
 const TELE_SHADER := """
 shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
@@ -1175,6 +1237,51 @@ func _tele_mat(col: Color, shape: int) -> ShaderMaterial:
 	m.set_shader_parameter("col", col)
 	m.set_shader_parameter("shape", shape)
 	return m
+
+
+func _sync_scorch(_delta: float) -> void:
+	var sc: Dictionary = sim.scorch
+	if sc.is_empty():
+		if _scorch_node:
+			_scorch_node.visible = false
+		return
+	if _scorch_node == null:
+		_scorch_node = MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		var R := MmoSim.ARENA_R + 2.0
+		pm.size = Vector2.ONE * R * 2.0
+		_scorch_node.mesh = pm
+		_scorch_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var sh := Shader.new()
+		sh.code = SCORCH_SHADER
+		_scorch_mat = ShaderMaterial.new()
+		_scorch_mat.shader = sh
+		_scorch_mat.set_shader_parameter("radius", R)
+		_scorch_node.material_override = _scorch_mat
+		add_child(_scorch_node)
+		_scorch_fire = _sparkles(Color("#ff6a20"))
+		_scorch_fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		_scorch_fire.emission_box_extents = Vector3(R * 0.5, 0.1, R)
+		_scorch_fire.amount = 220
+		_scorch_fire.lifetime = 1.4
+		_scorch_fire.initial_velocity_min = 1.0
+		_scorch_fire.initial_velocity_max = 3.5
+		_scorch_fire.emitting = false
+		_scorch_node.add_child(_scorch_fire)
+	_scorch_node.visible = true
+	var bp := _v3(sim.boss.pos, 0.07)
+	_scorch_node.position = bp
+	var ang := float(sc.ang)
+	_scorch_mat.set_shader_parameter("dir", Vector2(cos(ang), sin(ang)))
+	var warn_len := MmoTune.value("scorch_warn")
+	_scorch_mat.set_shader_parameter("warn", clampf(float(sc.t) / maxf(0.1, warn_len), 0.0, 1.0))
+	_scorch_mat.set_shader_parameter("live", 1.0 if sc.state == "live" else 0.0)
+	_scorch_mat.set_shader_parameter("spin", 1.0 if sc.spinning else 0.0)
+	# embers over the burning half
+	_scorch_fire.emitting = sc.state == "live"
+	var d := Vector3(cos(ang), 0, sin(ang))
+	_scorch_fire.position = d * (MmoSim.ARENA_R + 2.0) * 0.5
+	_scorch_fire.rotation.y = -ang
 
 
 func _add_area(a: Dictionary) -> void:

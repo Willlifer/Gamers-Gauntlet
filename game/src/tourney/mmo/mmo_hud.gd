@@ -477,6 +477,12 @@ func _timers_update() -> void:
 		var enr := MmoTune.value("enrage") - (sim.time - sim.pull_time)
 		if enr > 0.0:
 			rows.append(["Enrage", enr, MmoTune.value("enrage"), Color("#802020")])
+		var el := sim.time - sim.pull_time
+		var sc_at := MmoTune.value("scorch_at")
+		if el < sc_at and el >= sc_at - MmoTune.value("scorch_warn") - 6.0:
+			rows.append(["Scorched Earth", sc_at - el, MmoTune.value("scorch_warn") + 6.0, Color("#d04010")])
+		elif el < MmoTune.value("scorch_spin_at") and el >= MmoTune.value("scorch_spin_at") - 10.0:
+			rows.append(["The fire turns", MmoTune.value("scorch_spin_at") - el, 10.0, Color("#d04010")])
 	for a: Dictionary in sim.areas:
 		if str(a.kind) == "ring":
 			rows.append(["Earthshatter: GET IN", float(a.t), float(a.dur), Color("#d0a020")])

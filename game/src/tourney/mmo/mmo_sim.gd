@@ -31,6 +31,7 @@ extends RefCounted
 
 const TICK := 1.0 / 30.0
 const ARENA_R := 25.0
+const TANK_SPOT_HINT := Vector2(0, -9)   ## where the tank holds the Giant (MmoBot.TANK_SPOT); Scorched Earth burns the far side
 const BOSS_REACH := 3.6
 const BOSS_WALK := 3.4
 const PULL_R := 16.0
@@ -51,6 +52,7 @@ var winner := ""                # "" | "raid" | "boss"
 var pulled := false
 var pull_time := 0.0
 var enraged := false
+var scorch := {}                ## Scorched Earth (G37): { state: "warn"|"live", ang (the burning half's centre, rad), t, spinning }
 var silent := false             ## below silence_at: no text warnings any more (G35)
 var frenzied := false           ## below frenzy_at: the spell rotation runs frenzy_rate x faster (G35)
 var spell := {}                 # the Giant's spell in progress: { id, t, total, stage, ... }
@@ -843,6 +845,7 @@ func _tick_boss() -> void:
 			if u.pos.distance_to(b.pos) < PULL_R:
 				_pull()
 		return
+	_tick_scorch(b)
 	# G35: at half health the warnings stop; at a quarter the rotation doubles
 	if not silent and b.hp_pct() <= MmoTune.value("silence_at"):
 		silent = true
@@ -957,6 +960,9 @@ func _begin_spell() -> void:
 			_emit({ "type": "warn", "text": "Bombs on everyone: SPREAD OUT!", "col": "#ff4a3a" })
 		"gather":
 			var ang := rng.randf() * TAU
+			if not scorch.is_empty():
+				# Scorched Earth (G37): the ring lands behind the fire's trailing edge
+				ang = float(scorch.ang) + PI * 0.5 + 0.5 + (ang / TAU) * 1.0
 			var at := boss.pos + Vector2(cos(ang), sin(ang)) * 11.0
 			if at.length() > ARENA_R - 6.0:
 				at = at.normalized() * (ARENA_R - 6.0)
@@ -998,6 +1004,52 @@ func brand(u: MmoUnit) -> void:
 	add_aura(u, { "id": BRAND, "name": "Cinderbrand", "src": "boss", "dur": dur + TICK * 0.5, "every": every,
 		"dot": u.max_hp * MmoTune.value("brand_pct"), "ticks": maxi(1, int(round(dur / every))),
 		"school": "fire", "debuff": true, "cleanse": true, "glyph": "flame", "col": "#ff7a2a" })
+
+
+## Scorched Earth (G37), on the fight's clock: scorch_warn seconds of warning,
+## then the half of the courtyard on one side of the Giant (a line through
+## it) burns for scorch_pct of max HP a second; from scorch_spin_at the
+## burning half turns counter-clockwise (seen from above) about the Giant.
+func _tick_scorch(b: MmoUnit) -> void:
+	var el := time - pull_time
+	var at := MmoTune.value("scorch_at")
+	if scorch.is_empty():
+		if MmoTune.value("scorch_pct") > 0.0 and el >= at - MmoTune.value("scorch_warn"):
+			# the burning half: the side away from the tank's spot, a little off, so the raid has room
+			var tank_side := (TANK_SPOT_HINT - b.pos).angle()
+			scorch = { "state": "warn", "ang": wrapf(tank_side + PI + rng.randf_range(-0.6, 0.6), -PI, PI), "t": 0.0, "spinning": false }
+			_emit({ "type": "warn", "text": "The ground behind the Giant begins to smoulder!", "col": "#ff6a20" })
+			_emit({ "type": "scorch", "stage": "warn" })
+		return
+	scorch.t = float(scorch.t) + TICK
+	if scorch.state == "warn" and el >= at:
+		scorch.state = "live"
+		_emit({ "type": "warn", "text": "Scorched Earth! Stay out of the fire!", "col": "#ff3a10" })
+		_emit({ "type": "scorch", "stage": "live" })
+	if scorch.state != "live":
+		return
+	if el >= MmoTune.value("scorch_spin_at"):
+		if not scorch.spinning:
+			scorch.spinning = true
+			_emit({ "type": "warn", "text": "The fire begins to turn! Keep moving!", "col": "#ff3a10" })
+			_emit({ "type": "scorch", "stage": "spin" })
+		scorch.ang = wrapf(float(scorch.ang) - deg_to_rad(MmoTune.value("scorch_spin")) * TICK, -PI, PI)
+	var dps := MmoTune.value("scorch_pct")
+	for u: MmoUnit in living():
+		if in_scorch(u.pos):
+			damage(boss, u, u.max_hp * dps * TICK, "fire", "Scorched Earth", "mech")
+			u.scorch_t += TICK
+
+
+## Is `p` in the burning half (live, or `ahead` seconds of turning ahead)?
+func in_scorch(p: Vector2, pad := 0.0, ahead := 0.0) -> bool:
+	if scorch.is_empty():
+		return false
+	var ang := float(scorch.ang)
+	if scorch.spinning and ahead > 0.0:
+		ang -= deg_to_rad(MmoTune.value("scorch_spin")) * ahead
+	var d := p - boss.pos
+	return d.dot(Vector2(cos(ang), sin(ang))) > -pad
 
 
 ## The gap between spells now: spell_gap, divided by frenzy_rate below frenzy_at (G35).
@@ -1227,6 +1279,10 @@ func _tick_areas() -> void:
 
 ## Is `p` inside a live hazard (the bots dodge with this)?
 func danger_at(p: Vector2, pad := 0.6) -> bool:
+	# Scorched Earth: the burning half, from the last 3 s of the warning, and where it will be in 2.5 s while turning
+	if not scorch.is_empty() and (scorch.state == "live" or time - pull_time >= MmoTune.value("scorch_at") - 3.0):
+		if in_scorch(p, pad + 1.0) or in_scorch(p, pad + 1.0, 2.5):
+			return true
 	for a: Dictionary in areas:
 		match str(a.kind):
 			"line":

@@ -50,7 +50,8 @@ var mech_faced := 0.0           # mechanics you had to do (bombs, the ring, Cind
 var mech_done := 0.0            # of those, done (Cinderbrand counts by how much of it you shed)
 var brand_full := 0.0           # Cinderbrand: what it would have dealt left alone
 var brand_taken := 0.0          # Cinderbrand: what it dealt
-var cleanses := 0               # boss debuffs you cleansed off someone else
+var cleanses := 0
+var scorch_t := 0.0             # seconds spent standing in Scorched Earth (G37)               # boss debuffs you cleansed off someone else
 # serials for the view
 var cast_serial := 0
 var strike_serial := 0

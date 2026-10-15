@@ -75,6 +75,10 @@ func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 	var idx := s.players().find(u)
 	# a bomb on me: my spread slot
 	if u.has_aura("bomb") and _react(s, "bomb%d" % int(s.time / 20.0)):
+		if not s.scorch.is_empty():
+			# Scorched Earth (G37): fan the bombs across the safe half instead of the whole circle
+			var fa := float(s.scorch.ang) + PI * 0.5 + 0.25 + idx * (PI * 0.85 / 5.0)
+			return (b.pos + Vector2(cos(fa), sin(fa)) * 14.0).limit_length(MmoSim.ARENA_R - 1.5)
 		var a := TAU * idx / 6.0 + 0.4
 		return Vector2(sin(a), cos(a)) * SPREAD_R
 	# the ring: get in
@@ -83,6 +87,9 @@ func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 			var a := TAU * idx / 6.0
 			return (ar.pos as Vector2) + Vector2(sin(a), cos(a)) * minf(1.6, float(ar.r) * 0.4)
 	var home := _home(s, u, idx)
+	# Scorched Earth (G37): stand just behind the fire's trailing edge and walk with it as it turns
+	if not s.scorch.is_empty() and (s.scorch.state == "live" or s.time - s.pull_time >= MmoTune.value("scorch_at") - 3.0) 			and _react(s, "scorch%d" % int(s.time / 6.0)):
+		home = _scorch_home(s, u, idx)
 	# hazards: if home or here is in one, find the nearest safe spot
 	if s.danger_at(u.pos) and _react(s, "haz%d" % int(s.time * 2.0)):
 		return _safe(s, u.pos, home)
@@ -120,6 +127,14 @@ func _home(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
 	var arc := [-0.75, 0.0, 0.75, -0.4, 0.4]
 	var a := float(arc[idx % arc.size()])
 	return (b.pos + away.rotated(a) * 13.0).limit_length(MmoSim.ARENA_R - 2.0)
+
+
+func _scorch_home(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
+	var b := s.boss
+	var melee: bool = float(MmoClasses.CLASSES[u.cls].auto.get("range", 0.0)) <= MmoClasses.MELEE and MmoClasses.CLASSES[u.cls].auto.has("dmg")
+	var r := b.radius + 1.8 if u.role == "tank" else (b.radius + 2.0 if melee else 8.5)
+	var a := float(s.scorch.ang) + PI * 0.5 + 0.6 + float(idx % 3) * 0.32
+	return (b.pos + Vector2(cos(a), sin(a)) * r).limit_length(MmoSim.ARENA_R - 1.5)
 
 
 func _tank(s: MmoSim) -> MmoUnit:

@@ -41,7 +41,7 @@ const ORDER := ["warrior", "paladin", "priest", "mage", "hunter", "rogue"]
 ## A bot's meter score per second of the fight, per class (tools/mmo_probe.gd
 ## prints it as "par"): the tournament rates a player against their class's.
 ## Re-measured 2026-10-15 over 20 bot raids with Cinderbrand in (G30).
-const PAR := { "warrior": 303.0, "paladin": 409.0, "priest": 233.0, "mage": 330.0, "hunter": 458.0, "rogue": 386.0 }
+const PAR := { "warrior": 288.0, "paladin": 416.0, "priest": 225.0, "mage": 223.0, "hunter": 370.0, "rogue": 366.0 }
 
 const CLASSES := {
 	"warrior": {

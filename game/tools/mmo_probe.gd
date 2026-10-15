@@ -323,6 +323,45 @@ func _raids(runs: int) -> void:
 	grades.sort()
 	if not grades.is_empty() and grades[-1] - grades[0] > 8.0:
 		_fail("bot grades spread %.1f points across classes (> 8)" % (grades[-1] - grades[0]))
+	# G37: Scorched Earth burns the half it marked, hurts there and nowhere else, and turns counter-clockwise
+	var sc := _raid(9090)
+	var sb := {}
+	for p: MmoUnit in sc.players():
+		sb[p.id] = MmoBot.new(9090 + sb.size(), 1.0)
+	var warned := false
+	var ang_live := 0.0
+	var hurt_safe := false
+	var spun := false
+	while sc.winner == "" and sc.time < 900.0:
+		var orders := {}
+		for id: String in sb:
+			orders[id] = (sb[id] as MmoBot).think(sc, sc.unit(id))
+		var before := {}
+		for p: MmoUnit in sc.living():
+			before[p.id] = [p.hp, sc.in_scorch(p.pos)]
+		for e: Dictionary in sc.step(orders):
+			if e.type == "scorch" and e.stage == "warn":
+				warned = true
+			if e.type == "scorch" and e.stage == "live":
+				ang_live = float(sc.scorch.ang)
+			if e.type == "dmg" and str(e.what) == "Scorched Earth" and before.has(str(e.tgt)) and not before[str(e.tgt)][1] and not sc.in_scorch(sc.unit(str(e.tgt)).pos):
+				hurt_safe = true
+		if not spun and not sc.scorch.is_empty() and sc.scorch.spinning and sc.time - sc.pull_time > MmoTune.value("scorch_spin_at") + 5.0:
+			spun = true
+			var turned := angle_difference(ang_live, float(sc.scorch.ang))
+			print("  G37: turned %.0f deg in the first %.0f s of spin (negative = counter-clockwise from above)" % [rad_to_deg(turned), sc.time - sc.pull_time - MmoTune.value("scorch_spin_at")])
+			if turned >= 0.0:
+				_fail("Scorched Earth turned the wrong way")
+	var burnt := 0.0
+	for p: MmoUnit in sc.players():
+		burnt += p.scorch_t
+	print("  G37: warned %s, raid %s in %.0f s, %.1f raider-seconds in the fire" % [warned, sc.winner, sc.time - sc.pull_time, burnt])
+	if not warned:
+		_fail("Scorched Earth never warned")
+	if hurt_safe:
+		_fail("Scorched Earth hurt someone outside it")
+	if sc.time - sc.pull_time > MmoTune.value("scorch_spin_at") + 5.0 and not spun:
+		_fail("Scorched Earth never turned")
 	# G35: one "You're on your own now." per raid at half health, no warnings after it; the rotation doubles at a quarter
 	if on_own != runs:
 		_fail("\"You're on your own now.\" came %d times in %d raids" % [on_own, runs])
