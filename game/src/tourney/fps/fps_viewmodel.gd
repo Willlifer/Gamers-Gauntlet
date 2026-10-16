@@ -289,10 +289,10 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 	_av += (-_ap * 220.0 - _av * 20.0) * delta
 	_ap += _av * delta
 	# sway: lag behind the look, settle back
-	var sw := FpsTune.value("sway") * (1.0 - e * 0.8)
+	var sw := FpsTune.value("sway") * float(spec.get("sway", 1.0)) * (1.0 - e * 0.8)
 	_sway = _sway.lerp(Vector2(-look.x, -look.y) * 0.0018 * sw, minf(1.0, delta * 10.0))
 	_strafe = lerpf(_strafe, strafe, minf(1.0, delta * 6.0))
-	var drift := side_drift() * (1.0 - e * 0.5)
+	var drift := side_drift() * float(spec.get("sway", 1.0)) * (1.0 - e * 0.5)
 	# bob: the run cycle, scaled by speed
 	var moving := speed01 if grounded else 0.0
 	_bob_amt = move_toward(_bob_amt, moving * FpsTune.value("bob") * (1.0 - e * 0.85), delta * 4.0)
