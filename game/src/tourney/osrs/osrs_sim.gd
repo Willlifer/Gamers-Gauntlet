@@ -10,8 +10,10 @@ extends RefCounted
 ## never cuts a blocked corner. The Warden is a 5x5 piece in the void north
 ## of the floor.
 ##
-## The flanks (G53): the two red phantoms either side of the floor take
-## turns firing the prayable auto attacks:
+## The flanks (G53): the two red phantoms either side of the floor fire the
+## prayable auto attacks (the sim's west / east turn-taking is bookkeeping;
+## on screen, G53d, the mage casts every magic shot and the ranger looses
+## every arrow):
 ##   projectiles  magic (blue orb) or ranged (arrow), from the west or east
 ##                phantom by turns; each lands `flight_s` (3 s, five ticks)
 ##                after launch wherever you stand, so a near one crawls and a
@@ -26,10 +28,12 @@ extends RefCounted
 ##                A struck square can't be picked again for a few ticks.
 ##   boulders     shadows under falling rocks (one on you); a rock that lands
 ##                blocks its square for a while.
-##   slam         three hits, each glowing over the whole floor but one safe
-##                column, a different one each time (G53b, seeded, a short
-##                run apart): run column to column. Below 50% the three hits
-##                come faster (slam_gap_fast).
+##   slam         three hits, each over the whole floor but one of the three
+##                middle columns (G53d, after the author's reference): the
+##                Warden's pose says which. West fist raised: the west-middle
+##                column is safe; both fists: the centre; east fist: the
+##                east-middle. Seeded order, never the same twice running.
+##                Below 50% the three hits come faster (slam_gap_fast).
 ##   tear-out     every `rip_pct` of its HP lost (8%), the furthest row cracks
 ##                and falls away, down to `rows_left` rows.
 ##   skulls       at 75%, 50% and 25% it stops (shielded, no specials) and
@@ -60,6 +64,7 @@ const BOSS_RECT := Rect2i(5, -5, 5, 5)          ## the Warden's squares
 const STYLES := ["magic", "ranged"]
 const WEAPONS := ["bow", "staff", "dagger"]
 const SKULL_AT := [0.75, 0.5, 0.25]             ## skull phases at these HP fractions
+const SLAM_POSES := ["west", "both", "east"]    ## G53d: the slam's poses, each sparing one middle column
 
 var rng := RandomNumberGenerator.new()
 var tick := 0
@@ -70,7 +75,7 @@ var boss := {}
 var projs: Array = []          # { id, style, launch, land, dmg }
 var bolts: Array = []          # lightning { tile, t, total }
 var falls: Array = []          # boulders { tile, t, total }
-var slams: Array = []          # { cols: [x], safe: x, t, total, side: "1".."3" }
+var slams: Array = []          # { cols: [x], safe: x, t, total, side: "west"|"both"|"east", i }
 var rip := {}                  # { row, t, total } while a row is cracking
 var sigils: Array = []         # { tile, t, total }
 var skulls: Array = []         # { id, tile, hp, max } during a skull phase
@@ -97,7 +102,7 @@ func _init(seed: int = 1) -> void:
 	var bh := OsrsTune.value("boss_hp")
 	boss = { "hp": bh, "max_hp": bh, "auto_cd": 8, "special_cd": 14, "rips": 0,
 		"sigil_cd": 15, "last_style": "", "last_src": "", "flank": 0, "twin": "", "twin_src": "", "anim": "", "anim_tick": -99,
-		"phase": 1, "skull_i": 0, "shield": "", "shield_cd": int(OsrsTune.value("shield_first")), "shield_n": 0 }
+		"phase": 1, "skull_i": 0, "next_style": "", "shield": "", "shield_cd": int(OsrsTune.value("shield_first")), "shield_n": 0 }
 
 
 # ------------------------------------------------------------------ squares
@@ -426,7 +431,8 @@ func _boss_turn() -> void:
 		boss.phase = ph
 		_ev({ "type": "phase", "phase": ph })
 	# the skull phases: at 75%, 50%, 25% (the Warden can't be hit below them first)
-	if skull_phase.is_empty() and int(boss.skull_i) < SKULL_AT.size() and float(boss.hp) <= _hp_floor() + 0.001:
+	# G53d: never during a slam sequence (it waits for the last hit; the HP stays held at the threshold)
+	if skull_phase.is_empty() and slams.is_empty() and int(boss.skull_i) < SKULL_AT.size() and float(boss.hp) <= _hp_floor() + 0.001:
 		boss.skull_i = int(boss.skull_i) + 1
 		_skulls_rise()
 	var quiet := not skull_phase.is_empty()
@@ -442,7 +448,10 @@ func _boss_turn() -> void:
 		if boss_dist(me.tile) <= 1:
 			_launch("melee", 1, OsrsTune.value("melee_hit"), "warden")
 		else:
-			var style: String = STYLES[rng.randi() % 2]
+			# G53d: the style is rolled a shot ahead, so the view can show the
+			# right phantom (the mage, the ranger) winding up the tick before
+			var style: String = str(boss.next_style) if str(boss.next_style) != "" else STYLES[rng.randi() % 2]
+			boss.next_style = STYLES[rng.randi() % 2]
 			var src: String = ["west", "east"][int(boss.flank) % 2]
 			boss.flank = int(boss.flank) + 1
 			_launch(style, flight_ticks(), -1.0, src)
@@ -644,30 +653,29 @@ func _boulders() -> void:
 	_ev({ "type": "boulders", "n": picks.size() })
 
 
-## Three hits; each covers every column but one safe column, a different
-## one each time, 2-4 columns from the last (G53b): run column to column.
-## The first is within a few columns of you. Below 50% the hits come
-## slam_gap_fast ticks apart instead of slam_gap.
+## Three hits (G53d); each covers every column but one of the middle three,
+## the one its pose names: "west" (a west fist) spares the west-middle
+## column, "both" the centre, "east" the east-middle. Seeded, never the same
+## pose twice running. Below 50% the hits come slam_gap_fast ticks apart
+## instead of slam_gap.
 func _slam() -> void:
 	_anim("upheaval")
 	var w := int(OsrsTune.value("slam_warn"))
 	var gap := slam_gap()
-	var reach_cols := mini(4, gap * 2)                        # how far you can run between hits
-	var safe: Array = []
-	var a := clampi(me.tile.x + rng.randi_range(-3, 3), 1, W - 2)
-	safe.append(a)
-	for i in 2:
-		var last: int = safe[-1]
-		var opts: Array = []
-		for x in range(1, W - 1):
-			var d := absi(x - last)
-			if d >= 2 and d <= reach_cols and not safe.has(x):
-				opts.append(x)
-		safe.append(opts[rng.randi() % opts.size()])
+	var poses: Array = []
 	for i in 3:
-		var cols: Array = range(0, W).filter(func(x: int) -> bool: return x != int(safe[i]))
-		slams.append({ "cols": cols, "safe": int(safe[i]), "t": w + gap * i, "total": w, "side": str(i + 1) })
-	_ev({ "type": "slam", "side": "1", "safe": safe })
+		var opts: Array = SLAM_POSES.filter(func(p: String) -> bool: return poses.is_empty() or p != poses[-1])
+		poses.append(opts[rng.randi() % opts.size()])
+	for i in 3:
+		var safe := slam_safe(str(poses[i]))
+		var cols: Array = range(0, W).filter(func(x: int) -> bool: return x != safe)
+		slams.append({ "cols": cols, "safe": safe, "t": w + 1 + gap * i, "total": w, "side": poses[i], "i": i })   # +1: it ticks down this tick too, so every pose shows a full slam_warn
+	_ev({ "type": "slam", "side": poses[0], "i": 0 })
+
+
+## The column a slam pose spares: the middle three only.
+static func slam_safe(pose: String) -> int:
+	return W / 2 + { "west": -1, "both": 0, "east": 1 }[pose]
 
 
 func slam_gap() -> int:
@@ -721,8 +729,8 @@ func _resolve() -> void:
 					_shove()
 	for s: Dictionary in slams.duplicate():
 		s.t = int(s.t) - 1
-		if int(s.t) == int(s.total) and str(s.side) != "1":
-			_ev({ "type": "slam", "side": s.side, "safe": int(s.safe) })
+		if int(s.t) == int(s.total) and int(s.i) != 0:
+			_ev({ "type": "slam", "side": s.side, "safe": int(s.safe), "i": int(s.i) })
 			_anim("upheaval")
 		if int(s.t) <= 0:
 			slams.erase(s)

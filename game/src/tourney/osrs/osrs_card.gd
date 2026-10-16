@@ -79,7 +79,7 @@ func _ready() -> void:
 	_label(card, "The fight", Vector2(40, 388), 16, OsrsHud.ORANGE)
 	var lines := [
 		["shots", "The phantoms on the flanks fire by turns: blue orb is magic, green arrow is missiles."],
-		["slam", "The floor glows: stand in the green column, then the next, then the next."],
+		["slam", "Slams: only a middle column is safe. West fist up: west-middle; both: centre; east fist: east-middle."],
 		["shadow", "Shadows mark lightning and boulders: step off. The far row cracks and falls."],
 		["skull", "Skulls rise at 75 / 50 / 25%: wield the dagger, click skull after skull before they burst."],
 		["shield", "A blue shield stops magic, a green one arrows: swap weapons."],
@@ -131,8 +131,10 @@ func _draw_mech(c: Control, what: String) -> void:
 			c.draw_line(m + Vector2(-2, 16), m + Vector2(16, -2), Color("#e8f0e0"), 2.0)
 			c.draw_colored_polygon(PackedVector2Array([m + Vector2(18, -4), m + Vector2(10, -2), m + Vector2(16, 4)]), Color("#7cff5a"))
 		"slam":
-			for x in 5:
-				c.draw_rect(Rect2(4 + x * 8, 6, 7, 36), Color("#30ff60") if x == 2 else Color("#c8361a"))
+			for x in 3:
+				c.draw_rect(Rect2(6 + x * 12, 26, 10, 10), Color("#ffd040") if x == 0 else Color("#d02020"), false, 2.0)
+			c.draw_rect(Rect2(4, 6, 14, 12), Color("#9a8a6a"))
+			c.draw_line(Vector2(11, 20), Vector2(11, 24), Color("#ff9a30"), 2.0)
 		"shadow":
 			c.draw_circle(m + Vector2(0, 8), 14.0, Color(0, 0, 0, 0.8))
 			c.draw_polyline(PackedVector2Array([m + Vector2(2, -18), m + Vector2(-5, -6), m + Vector2(4, -2), m + Vector2(-2, 8)]), Color("#ff4a30"), 3.0)

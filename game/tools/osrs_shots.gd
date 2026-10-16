@@ -4,8 +4,9 @@ extends SceneTree
 ## boulders, slam, sigil, tear-out, the end card; G53: a phantom's shot
 ## leaving the flank, the slam's third hit (centre column only), a fast slam
 ## below 50%, the damage potion up, the skulls rising, the dagger on them.
-## G53b: a falling boulder (no cast shadow, only its square), the three-
-## column slam, a phantom winding up and firing, both shields, the skulls
+## G53b: a falling boulder (no cast shadow, only its square), a phantom
+## winding up and firing; G53d: each slam pose (slam_west / slam_both /
+## slam_east) just before it lands, both shields, the skulls
 ## charging, a skate mid-chain.
 ## Runs at 2x speed.
 ##   [TAG=r1] godot --path . --script res://tools/osrs_shots.gd
@@ -80,10 +81,17 @@ func _go() -> void:
 		# G53b
 		if s.falls.any(func(x: Dictionary) -> bool: return int(x.t) == 2) and v._acc > 0.3:
 			await _shot("boulder_noshadow")
-		if s.slams.size() == 3 and int(s.slams[0].t) == 1 and v._acc > 0.3:
-			await _shot("slam_columns")
-		if s.slams.size() == 2 and int(s.slams[0].t) == 1 and v._acc > 0.3:
-			await _shot("slam_columns2")
+		# G53d: the mage's orb leaving his staff, the ranger's arrow leaving his bow
+		if s.projs.any(func(p: Dictionary) -> bool: return str(p.style) == "magic" and str(p.src) != "warden" and s.tick == int(p.launch)) and v._acc > 0.25:
+			await _shot("mage_cast")
+		if s.projs.any(func(p: Dictionary) -> bool: return str(p.style) == "ranged" and str(p.src) != "warden" and s.tick == int(p.launch)) and v._acc > 0.25:
+			await _shot("ranger_loose")
+		if str(s.boss.next_style) == "magic" and int(s.boss.auto_cd) <= 1 and OsrsSim.boss_dist(s.me.tile) > 1 and v._acc > 0.45:
+			await _shot("mage_windup")
+		# G53d: one frame per slam pose, its fist up, just before it lands
+		var ps: Dictionary = v._posing()
+		if not ps.is_empty() and int(ps.t) == 2 and v._acc > 0.3:
+			await _shot("slam_" + str(ps.side))
 		if int(s.boss.auto_cd) <= 1 and OsrsSim.boss_dist(s.me.tile) > 1 and v._acc > 0.45:
 			await _shot("phantom_windup")
 		if str(s.boss.shield) == "magic" and int(s.boss.shield_cd) <= int(OsrsTune.value("shield_every")) - 3:

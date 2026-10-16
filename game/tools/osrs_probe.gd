@@ -38,6 +38,7 @@ func _initialize() -> void:
 	_dagger()
 	_skulls()
 	_skate()
+	_skull_wait()
 	_shields()
 	_runs()
 	print("osrs probe: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
@@ -280,11 +281,15 @@ func _tearout() -> void:
 	_ok(rips >= 6, "a bot fight tears out %d rows (was 0-3 before G53)" % rips)
 
 
-## G53b: three slam hits, three different safe columns 2-4 apart; running
-## column to column dodges them all, at either speed; standing still doesn't.
+## G53d: three slam hits; each spares one of the middle three columns, the
+## one its pose names (west fist: west-middle, both: centre, east fist:
+## east-middle), never the same pose twice running; running to each in turn
+## dodges them all, at either speed; standing still doesn't.
 func _slam_g53() -> void:
 	var ok_cols := true
 	var bad := ""
+	var seen := {}
+	var mid: Array = [OsrsSim.W / 2 - 1, OsrsSim.W / 2, OsrsSim.W / 2 + 1]
 	for seed in 40:
 		var s := OsrsSim.new(300 + seed)
 		_quiet(s)
@@ -292,16 +297,14 @@ func _slam_g53() -> void:
 		if seed % 2 == 1:
 			s.boss.hp = float(s.boss.max_hp) * 0.45
 		s._slam()
-		var safe: Array = s.slams.map(func(x: Dictionary) -> int: return int(x.safe))
 		for i in 3:
-			var c: Array = s.slams[i].cols
-			if c.size() != OsrsSim.W - 1 or c.has(safe[i]):
+			var sl: Dictionary = s.slams[i]
+			seen[str(sl.side)] = true
+			var c: Array = sl.cols
+			if not mid.has(int(sl.safe)) or c.size() != OsrsSim.W - 1 or c.has(sl.safe) or int(sl.safe) != OsrsSim.slam_safe(str(sl.side)) 					or (i > 0 and str(sl.side) == str(s.slams[i - 1].side)):
 				ok_cols = false
-		if safe[0] == safe[1] or safe[1] == safe[2] or safe[0] == safe[2] or absi(safe[1] - safe[0]) > 4 or absi(safe[2] - safe[1]) > 4 \
-				or absi(safe[1] - safe[0]) < 2 or absi(safe[2] - safe[1]) < 2:
-			ok_cols = false
-			bad = str(safe)
-	_ok(ok_cols, "each slam hit spares one column, three different ones 2-4 apart (40 slams) %s" % bad)
+				bad = "%s %s" % [str(sl.side), str(sl.safe)]
+	_ok(ok_cols and seen.size() == 3, "each slam hit spares one middle column, the one its pose names (west %d, both %d, east %d), no pose twice running %s" % [OsrsSim.slam_safe("west"), OsrsSim.slam_safe("both"), OsrsSim.slam_safe("east"), bad])
 	var gap := 0
 	var fgap := 0
 	for slow in [true, false]:
@@ -339,6 +342,21 @@ func _slam_g53() -> void:
 				still += 1
 		_ok(hits == 0 and still == 0, "%s slams: running to each safe column in turn dodges all three (%d / 20 hit); standing still never does (%d / 20 clean)" % ["slow" if slow else "fast", hits, still])
 	_ok(gap == 4 and fgap == 2, "slam hits %d ticks apart above 50%%, %d below" % [gap, fgap])
+	# every hit's pose shows (a "slam" event, the view's cue) slam_warn ticks before it lands
+	var v := OsrsSim.new(77)
+	var vb := OsrsBot.new(77)
+	var posed := {}
+	var lands := 0
+	var cued := 0
+	while v.over == "":
+		for e: Dictionary in v.step(vb.think(v)):
+			if str(e.type) == "slam":
+				posed[int(e.tick) + int(OsrsTune.value("slam_warn"))] = str(e.side)
+			elif str(e.type) == "slam_land":
+				lands += 1
+				if str(posed.get(int(e.tick), "")) == str(e.side):
+					cued += 1
+	_ok(lands > 0 and cued == lands, "every slam hit's pose shows %d ticks before it lands (%d / %d)" % [int(OsrsTune.value("slam_warn")), cued, lands])
 
 
 ## G53: a damage potion; a dose makes bow / staff hits x boost_mult for boost_ticks.
@@ -500,6 +518,40 @@ func _skulls() -> void:
 	print("  skull phases: skating dagger bots cleared %d / %d (%d skulls burst); bow-only bots cleared %d / %d (%d skulls burst)" % [cleared[0], phases[0], bursts[0], cleared[1], phases[1], bursts[1]])
 	_ok(phases[0] > 0 and cleared[0] >= phases[0] * 0.8, "a good player skating with the dagger clears the skulls (%d / %d)" % [cleared[0], phases[0]])
 	_ok(phases[1] > 0 and cleared[1] == 0 and bursts[1] >= phases[1] * 3, "the main weapon is too slow: never clears, %d skulls burst over %d phases" % [bursts[1], phases[1]])
+
+
+## G53d: skulls never rise during a slam sequence: crossing the threshold
+## mid-slam, the phase waits for the last hit; no slam starts during skulls.
+func _skull_wait() -> void:
+	var s := OsrsSim.new(34)
+	_quiet(s)
+	s.boss.skull_i = 0
+	s.me.tile = Vector2i(7, 9)
+	s._slam()
+	s.boss.hp = float(s.boss.max_hp) * 0.75
+	var rose_during := false
+	var rose_after := -1
+	var t := 0
+	while t < 30:
+		var mid := not s.slams.is_empty()
+		for e: Dictionary in s.step({}):
+			if str(e.type) == "skulls":
+				if mid and not s.slams.is_empty():
+					rose_during = true
+				rose_after = t
+		if rose_after >= 0:
+			break
+		t += 1
+	_ok(not rose_during and rose_after >= 0 and s.slams.is_empty(), "crossing 75%% mid-slam, the skulls wait for the slam's last hit (rose %d ticks in)" % rose_after)
+	var no_slam := true
+	var r := OsrsSim.new(35)
+	var b := OsrsBot.new(35)
+	while r.over == "":
+		var during := not r.skull_phase.is_empty()
+		for e: Dictionary in r.step(b.think(r)):
+			if str(e.type) == "slam" and during:
+				no_slam = false
+	_ok(no_slam, "no slam starts during a skull phase")
 
 
 ## G53b: the skate. Clicking a skull you aren't next to walks to the nearest

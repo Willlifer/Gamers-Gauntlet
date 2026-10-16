@@ -17,6 +17,7 @@ extends Node3D
 signal over(result: Dictionary)
 
 const TILE := 1.6
+const SKULL_PICK_PX := 34.0                     ## a click this close to a skull (head or feet) on screen targets it
 const BOSS_POS := Vector3(0, 0, -13.6)          ## the 5x5 piece's centre (square 7, -3)
 
 var sim: OsrsSim
@@ -55,8 +56,10 @@ var _pose_t := 0.0
 var hud: OsrsHud
 var _tune: OsrsTunePanel
 var _mats := {}
-var _phantoms := {}                               # "west" / "east" -> { node, light, label }
+var _phantoms := {}                               # "mage" (west) / "ranger" (east) -> { node, light, label, orb, ... }
 var _skulls := {}                                 # skull id -> { node, pips, ring, head, light }
+var _fists := {}                                  # "west" / "east" -> Node3D: the Warden's slam fists (G53d)
+var _mid_marks := {}                              # middle column x -> MeshInstance3D: the three-square marker (G53d)
 var _shield: MeshInstance3D                       # the Warden's magic / bowfire shield bubble (G53b)
 var _shield_mark: Label3D
 
@@ -284,10 +287,11 @@ func _build_boss() -> void:
 	l.omni_range = 12.0
 	l.position = Vector3(0, 5, 3)
 	_boss_root.add_child(l)
-	# the phantoms on the flanks (after the reference: red ghosts): they loose
-	# the prayable shots by turns (G53)
+	# the phantoms on the flanks (after the reference: red ghosts), G53d: the
+	# mage (robes, staff) west casts every magic shot, the ranger (a bow) east
+	# looses every arrow; which one fires follows the shot's style
 	for side in [-1.0, 1.0]:
-		var ph := BWCharacter.create(MobaLook.boss_unit())
+		var ph := BWCharacter.create(_phantom_unit("mage" if side < 0.0 else "ranger"))
 		MobaLook.tint(ph, Color("#ff4a3a"))
 		_ghost(ph)
 		ph.scale = Vector3.ONE * 2.6
@@ -315,10 +319,10 @@ func _build_boss() -> void:
 		om.radius = 0.4
 		om.height = 0.8
 		orb.mesh = om
-		orb.material_override = _mat("ph_orb", Color("#fff0e0"), 6.0)
+		orb.material_override = _mat("ph_orb", Color("#bcd8ff") if side < 0.0 else Color("#7cff5a"), 6.0).duplicate()
 		orb.visible = false
 		add_child(orb)
-		_phantoms["west" if side < 0.0 else "east"] = { "node": ph, "light": pl, "label": lab, "t": 0.0, "side": side, "orb": orb, "wind": false }
+		_phantoms["mage" if side < 0.0 else "ranger"] = { "node": ph, "light": pl, "label": lab, "t": 0.0, "side": side, "orb": orb, "wind": false }
 	# the shield bubble and its mark (G53b)
 	_shield = MeshInstance3D.new()
 	var sm := SphereMesh.new()
@@ -344,6 +348,35 @@ func _build_boss() -> void:
 	_shield_mark.no_depth_test = true
 	_shield_mark.position = Vector3(0, 9.2, 0)
 	_boss_root.add_child(_shield_mark)
+	# G53d: its two great stone fists, either side of it; the one it raises
+	# (or both) says which middle column the slam spares
+	for side in ["west", "east"]:
+		var fist := Node3D.new()
+		var stone := _mat("fist_stone", Color("#6e6250"))
+		_box(Vector3(2.0, 1.6, 1.8), Vector3.ZERO, stone, fist)
+		for k in 4:
+			_box(Vector3(0.42, 0.4, 0.5), Vector3(-0.72 + k * 0.48, 0.55, 0.85), stone, fist)
+		_box(Vector3(0.9, 0.5, 0.8), Vector3(0.9 if side == "west" else -0.9, -0.2, 0.7), stone, fist)
+		var glow := OmniLight3D.new()
+		glow.name = "Glow"
+		glow.light_color = Color("#ff9a30")
+		glow.light_energy = 0.0
+		glow.omni_range = 7.0
+		fist.add_child(glow)
+		add_child(fist)
+		fist.position = _fist_rest(side)
+		_fists[side] = fist
+	# the three middle columns marked at the top row, like a player's tile marker
+	for x in [OsrsSim.W / 2 - 1, OsrsSim.W / 2, OsrsSim.W / 2 + 1]:
+		var mk := MeshInstance3D.new()
+		mk.mesh = _square_outline(TILE - 0.14, 0.09)
+		var mm := StandardMaterial3D.new()
+		mm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mm.albedo_color = Color("#d02020")
+		mk.material_override = mm
+		add_child(mk)
+		mk.position = w(Vector2i(x, 0)) + Vector3(0, 0.03, 0)
+		_mid_marks[x] = mk
 
 
 ## A phantom: every mesh half see-through with a red glow laid over it.
@@ -360,6 +393,33 @@ func _ghost(n: Node) -> void:
 		g.material_overlay = m
 	for c in n.get_children():
 		_ghost(c)
+
+
+## A phantom's body (G53d): the mage in robes and a wizard's hat with a
+## staff, the ranger in leathers with a bow.
+func _phantom_unit(kind: String) -> BWUnit:
+	var u := BWUnit.new()
+	u.id = "phantom_" + kind
+	u.name = kind.capitalize()
+	u.team = "enemy"
+	var mage := kind == "mage"
+	u.weapon_model = "moon_staff" if mage else "longbow"
+	u.weapon_class = "staff" if mage else "bow"
+	u.cosmetics = { "hair_style": "buzzed", "hair_hex": "#c03020", "gender": "a", "top": "hoodie", "bottom": "sweatpants", "clothing_shade": "dark" }
+	var gear: Dictionary = { "head": "wizard_hat", "chest": "silken_robe", "legs": "robe_bottoms" } if mage \
+		else { "head": "feathered_cap", "chest": "leather_cuirass", "legs": "chaps" }
+	for slot: String in gear:
+		if BWEquipmentView.has_model(str(gear[slot])):
+			u.equipment[slot] = { "base": str(gear[slot]), "slot": slot, "element": "" }
+	for st in BWUnit.STATS:
+		u.stats[st] = 9
+	u.hp = u.max_hp()
+	return u
+
+
+## Which phantom shows a shot of `style`: the mage magic, the ranger arrows.
+static func shooter(style: String) -> String:
+	return { "magic": "mage", "ranged": "ranger" }.get(style, "")
 
 
 func _player_unit(weapon: String) -> BWUnit:
@@ -439,7 +499,40 @@ func _ray(screen: Vector2) -> Array:
 	return [_cam.project_ray_origin(screen), _cam.project_ray_normal(screen)]
 
 
+## The skull a click at `screen` means (G53d), or -1: a skull wins over the
+## floor and the Warden when the click is on its square, on its body (a
+## generous sphere), or within SKULL_PICK_PX of it on screen; the nearest
+## to the click if several.
+func skull_at_screen(screen: Vector2) -> int:
+	var best := -1
+	var bd := 1e9
+	var r := _ray(screen)
+	var tile := _tile_at(screen)
+	for k: Dictionary in sim.skulls:
+		var c: Vector3 = w(k.tile) + Vector3(0, 1.0, 0)
+		var d := 1e9
+		if tile == k.tile:
+			d = 0.0
+		var t := (c - (r[0] as Vector3)).dot(r[1] as Vector3)
+		if t > 0.0 and ((r[0] as Vector3) + (r[1] as Vector3) * t).distance_to(c) < 0.95:
+			d = minf(d, 1.0)
+		if not _cam.is_position_behind(c):
+			var px := _cam.unproject_position(c).distance_to(screen)
+			var px_feet := _cam.unproject_position(w(k.tile)).distance_to(screen)
+			if minf(px, px_feet) < SKULL_PICK_PX:
+				d = minf(d, 2.0 + minf(px, px_feet) / SKULL_PICK_PX)
+		if d < bd:
+			bd = d
+			best = int(k.id)
+	return best
+
+
 func _click_at(screen: Vector2) -> void:
+	var sk := skull_at_screen(screen)
+	if sk >= 0:
+		queue({ "target": sk })
+		_mark(w(sim.skull(sk).tile) + Vector3(0, 0.05, 0), Color("#ff2020"))
+		return
 	var r := _ray(screen)
 	var o: Vector3 = r[0]
 	var d: Vector3 = r[1]
@@ -527,13 +620,14 @@ func _event(e: Dictionary) -> void:
 			var p: Dictionary = e.proj
 			var n := _proj_node(str(p.style))
 			add_child(n)
-			n.position = _src_hand(str(p.get("src", "warden")))
-			_projs[int(p.id)] = { "node": n, "proj": p }
-			var ph: Dictionary = _phantoms.get(str(p.get("src", "")), {})
+			var who := shooter(str(p.style)) if str(p.get("src", "")) != "warden" else ""
+			n.position = _src_hand(who)
+			_projs[int(p.id)] = { "node": n, "proj": p, "from": n.position }
+			var ph: Dictionary = _phantoms.get(who, {})
 			if not ph.is_empty():
 				var body: BWCharacter = ph.node
 				body.anim_speed = 1.6
-				body.pose("cast" if p.style == "magic" and body.has_clip("cast") else "strike")
+				body.pose("cast" if who == "mage" and body.has_clip("cast") else "strike")
 				var lab: Label3D = ph.label
 				lab.text = "✦" if p.style == "magic" else "➶"
 				lab.modulate = Color("#5ab0ff") if p.style == "magic" else Color("#7cff5a")
@@ -580,19 +674,28 @@ func _event(e: Dictionary) -> void:
 			_dust(w(e.tile), Color("#7a7468"))
 			_shake = maxf(_shake, 0.15)
 		"slam_land":
+			# G53d: the shock rolls out from the fist's side (both: from both
+			# edges in), over every column but the spared one
+			var side := str(e.side)
 			for x in e.cols:
+				var from_w := float(int(x))
+				var from_e := float(OsrsSim.W - 1 - int(x))
+				var d: float = from_w if side == "west" else (from_e if side == "east" else minf(from_w, from_e))
 				for y in OsrsSim.H:
 					var t := Vector2i(int(x), y)
 					if _tiles.has(t) and not sim.gone.has(t):
 						var mi: MeshInstance3D = _tiles[t]
 						var tw := create_tween()
+						tw.tween_interval(d * 0.035)
 						tw.tween_property(mi, "position:y", 0.35, 0.08)
 						tw.tween_property(mi, "position:y", -0.15, 0.25)
+			for fs in (["west", "east"] if side == "both" else [side]):
+				_dust(_fists[fs].position + Vector3(0, -1.0, 0), Color("#8a7a60"))
 			_shake = maxf(_shake, 0.25)
 			hud.chat("The Warden slams the floor!", Color("#b00000"))
 		"slam":
-			if str(e.side) == "1":
-				hud.chat("The floor glows! Run to the safe column, then the next, then the next.", Color("#7a4a00"))
+			if int(e.get("i", 0)) == 0:
+				hud.chat("The Warden raises its fists!", Color("#7a4a00"))
 		"rip_warn":
 			hud.chat("The far row cracks!", Color("#b00000"))
 		"rip":
@@ -674,6 +777,19 @@ func _boss_hand() -> Vector3:
 	return BOSS_POS + Vector3(0, 5.5, 1.6)
 
 
+func _fist_rest(side: String) -> Vector3:
+	return BOSS_POS + Vector3(-4.6 if side == "west" else 4.6, 1.0, 2.2)
+
+
+## The slam whose pose is showing now: the next to land, once its warning starts.
+func _posing() -> Dictionary:
+	var best := {}
+	for sl: Dictionary in sim.slams:
+		if int(sl.t) <= int(sl.total) + 1 and (best.is_empty() or int(sl.t) < int(best.t)):
+			best = sl
+	return best
+
+
 ## The Warden says something over its head, OSRS style (yellow, ~3 s), and
 ## the chat box echoes it.
 func _say(text: String) -> void:
@@ -746,7 +862,9 @@ func _skull_head() -> Node3D:
 func _src_hand(src: String) -> Vector3:
 	if _phantoms.has(src):
 		var ph: Dictionary = _phantoms[src]
-		return (ph.node as Node3D).position + Vector3(-float(ph.side) * 1.4, 4.6, 0.6)
+		if src == "mage":                                  # the staff's tip, held high
+			return (ph.node as Node3D).position + Vector3(-float(ph.side) * 1.5, 6.4, 0.8)
+		return (ph.node as Node3D).position + Vector3(-float(ph.side) * 1.6, 3.9, 0.8)   # the bow at the chest
 	return _boss_hand()
 
 
@@ -1086,7 +1204,7 @@ func _animate(delta: float) -> void:
 		var n: Node3D = _projs[id].node
 		var k := clampf((now - float(p.launch)) / maxf(1.0, float(p.land) - float(p.launch)), 0.0, 1.0)
 		var to := _player_root.position + Vector3(0, 1.2, 0)
-		var at := _boss_hand().lerp(to, k) + Vector3(0, sin(k * PI) * 1.2, 0)
+		var at := (_projs[id].from as Vector3).lerp(to, k) + Vector3(0, sin(k * PI) * 1.2, 0)
 		_fly(n, at)
 		if float(sim.tick) >= float(p.land):
 			n.queue_free()
@@ -1103,20 +1221,30 @@ func _animate(delta: float) -> void:
 				hud.splat(s.hit, int(s.dmg), false, bool(s.emp), float(s.h))
 			n.queue_free()
 			_shots.erase(s)
-	# a phantom winds up the tick before it looses (G53b): a gathering orb, a cast pose
-	var nxt := ["west", "east"][int(sim.boss.flank) % 2] as String
+	# the phantom whose shot comes next winds up the tick before it looses
+	# (G53b/d): the mage gathers an orb at his staff's tip, the ranger draws
+	var due := {}
+	if sim.over == "" and int(sim.boss.auto_cd) <= 1 and OsrsSim.boss_dist(sim.me.tile) > 1 and str(sim.boss.next_style) != "":
+		due[shooter(str(sim.boss.next_style))] = true
+	if str(sim.boss.twin) != "":
+		due[shooter(str(sim.boss.twin))] = true
 	for side in _phantoms:
 		var ph: Dictionary = _phantoms[side]
-		var winding: bool = side == nxt and int(sim.boss.auto_cd) <= 1 and OsrsSim.boss_dist(sim.me.tile) > 1 and sim.over == ""
+		var winding: bool = due.has(side)
 		var orb := ph.orb as MeshInstance3D
 		if winding and not bool(ph.wind):
 			ph.wind = true
 			var body: BWCharacter = ph.node
 			body.anim_speed = 0.7
-			body.pose("cast" if body.has_clip("cast") else "strike")
+			body.pose("windup" if body.has_clip("windup") else ("cast" if body.has_clip("cast") else "strike"))
+		if side == "ranger":
+			(orb.material_override as StandardMaterial3D).albedo_color = Color("#7cff5a")
 		orb.visible = winding
 		if winding:
 			orb.position = _src_hand(side)
+			if side == "ranger":
+				orb.scale = Vector3(0.25, 0.25, 0.25)
+				continue
 			orb.scale = Vector3.ONE * (0.3 + 1.0 * f) * randf_range(0.92, 1.08)
 	# the phantoms' overheads fade after they loose
 	for side in _phantoms:
@@ -1190,24 +1318,33 @@ func _animate(delta: float) -> void:
 		var sc := Color("#4aa0ff") if sh == "magic" else Color("#5aff4a")
 		(_shield.material_override as StandardMaterial3D).albedo_color = Color(sc, 0.05 + 0.025 * sin(Time.get_ticks_msec() / 200.0))
 		_shield_mark.modulate = sc
-	# slam (G53b: only the next hit glows; its safe column is lit green, the one
-	# after it a fainter green) and tear-out glow
+	# the slam (G53d): no floor glow. The pose tells it: the fist it raises
+	# (or both) climbs, glows and comes down on the hit; it leans that way;
+	# the matching square of the three-square marker lights gold
+	var ps := _posing()
+	var pose := str(ps.get("side", ""))
+	var pk := 0.0
+	if not ps.is_empty():
+		pk = clampf(1.0 - (float(ps.t) - f) / float(ps.total), 0.0, 1.0)     # 0 the pose starts .. 1 it lands
+	for fs in _fists:
+		var fist: Node3D = _fists[fs]
+		var up: bool = pose == fs or pose == "both"
+		var want := _fist_rest(fs)
+		if up:
+			want += Vector3(0, 2.0 + 7.0 * sin(minf(pk, 0.85) / 0.85 * PI * 0.5), 0.6)
+			if pk > 0.85:
+				want.y = lerpf(want.y, _fist_rest(fs).y - 0.4, (pk - 0.85) / 0.15)
+		fist.position = fist.position.lerp(want, minf(1.0, delta * (30.0 if pk > 0.85 else 8.0)))
+		var gl := fist.get_node("Glow") as OmniLight3D
+		gl.light_energy = lerpf(gl.light_energy, 9.0 * pk if up else 0.0, minf(1.0, delta * 10.0))
+	var lean := { "west": 0.22, "east": -0.22 }.get(pose, 0.0) as float
+	_boss.rotation.z = lerpf(_boss.rotation.z, lean, minf(1.0, delta * 6.0))
+	for x in _mid_marks:
+		var on: bool = not ps.is_empty() and int(ps.safe) == int(x)
+		(_mid_marks[x].material_override as StandardMaterial3D).albedo_color = Color("#ffd040") if on else Color("#d02020")
+		(_mid_marks[x] as MeshInstance3D).visible = not sim.gone.has(Vector2i(int(x), 0))
+	# the tear-out glow
 	var lit := {}
-	var order: Array = sim.slams.duplicate()
-	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.t) < int(b.t))
-	if not order.is_empty():
-		var s: Dictionary = order[0]
-		if int(s.t) <= int(s.total):
-			var a := 0.25 + 0.5 * clampf(1.0 - (float(s.t) - f) / float(s.total), 0.0, 1.0)
-			for x in s.cols:
-				for y in OsrsSim.H:
-					lit[Vector2i(int(x), y)] = [Color("#c8361a"), a * 0.8]
-		for y in OsrsSim.H:
-			lit[Vector2i(int(s.safe), y)] = [Color("#30ff60"), 0.55]
-		if order.size() >= 2:
-			for y in OsrsSim.H:
-				if not lit.has(Vector2i(int(order[1].safe), y)) or (lit[Vector2i(int(order[1].safe), y)][0] as Color) != Color("#30ff60"):
-					lit[Vector2i(int(order[1].safe), y)] = [Color("#2a9a48"), 0.3]
 	if not sim.rip.is_empty():
 		var a := 0.35 + 0.35 * absf(sin(Time.get_ticks_msec() / 90.0))
 		for x in OsrsSim.W:
@@ -1222,8 +1359,13 @@ func _animate(delta: float) -> void:
 	_true_tile.position = w(sim.me.tile) + Vector3(0, 0.025, 0)
 	_true_tile.visible = sim.me.alive
 	# the hover square
-	var ht := _tile_at(get_viewport().get_mouse_position())
+	var mp := get_viewport().get_mouse_position()
+	var ht := _tile_at(mp)
+	var hs := skull_at_screen(mp) if input_on else -1
+	if hs >= 0:
+		ht = sim.skull(hs).tile                         # the skull a click would hit (G53d)
 	_hover.visible = ht != Vector2i(-99, -99) and not sim.gone.has(ht) and input_on
+	_hover.material_override = _mat("hover_skull", Color("#ff3030"), 1.5, 0.9) if hs >= 0 else _mat("hover", Color("#ffff40"), 1.0, 0.6)
 	if _hover.visible:
 		_hover.position = w(ht) + Vector3(0, 0.02, 0)
 	_click_t -= delta
