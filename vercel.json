@@ -1,9 +1,5 @@
 {
-  "buildCommand": "",
-  "installCommand": "",
   "framework": null,
-  "outputDirectory": "web",
-  "headers": [
-    { "source": "/(.*)\.(wasm|pck)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
-  ]
+  "buildCommand": "echo prebuilt",
+  "outputDirectory": "web"
 }
