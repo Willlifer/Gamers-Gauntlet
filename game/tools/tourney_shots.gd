@@ -9,6 +9,7 @@ extends SceneTree
 var out := ""
 var tour: Node
 var fails := 0
+var _cfg_keep := ""
 
 
 func _initialize() -> void:
@@ -16,6 +17,8 @@ func _initialize() -> void:
 	if out == "":
 		out = ProjectSettings.globalize_path("res://").path_join("../design/shots").simplify_path()
 	DirAccess.make_dir_recursive_absolute(out)
+	# the walk saves profiles and flags as it goes; the author's cfg is put back at the end
+	_cfg_keep = FileAccess.get_file_as_string(TourneyState.CFG) if FileAccess.file_exists(TourneyState.CFG) else ""
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1600, 900))
 	_go.call_deferred()
@@ -175,4 +178,8 @@ func _go() -> void:
 	await _wait(1.0)
 	await _shot("champion")
 	print("tourney shots: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
+	if _cfg_keep != "":
+		var f := FileAccess.open(TourneyState.CFG, FileAccess.WRITE)
+		f.store_string(_cfg_keep)
+		f.close()
 	quit(0 if fails == 0 else 1)
