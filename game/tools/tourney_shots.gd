@@ -1,5 +1,5 @@
 extends SceneTree
-## Windowed: opens the tournament with 3 bots, walks lobby → range → quick
+## Windowed: opens the tournament with 3 bots, walks lobby → the creator's dice → quick
 ## play (FPS: Mid duel, back on F10's path) → bracket rolls → up next → matchup → (the game is skipped: the human's run is
 ## replaced by a roll) → result → champion, saving a frame of each to
 ## SHOTS=<dir> (default ../design/shots). Exit 0 when every screen appeared.
@@ -62,13 +62,21 @@ func _go() -> void:
 	var lobby: LobbyScreen = await _until(LobbyScreen)
 	await _wait(1.5)
 	await _shot("lobby")
-	lobby.open_range.emit("moba")
-	var rng: RangeScreen = await _until(RangeScreen)
-	await _wait(0.5)
-	await _shot("range_moba")
-	rng.back.emit()
-	lobby = await _until(LobbyScreen)
-	await _wait(0.5)
+	# the creator's dice (G50); the profile is put back after
+	var keep: Dictionary = lobby.state.me().duplicate()
+	lobby.randomize_me()
+	await _wait(0.8)
+	await _shot("lobby_randomized")
+	lobby.state.me().merge(keep, true)
+	TourneyState.save_profile(lobby.state.me())
+	# every game in the pool has a visible Quick play tile, above the players strip (G50)
+	var tiles := 0
+	for c in lobby._root.get_children():
+		if c is TourneyTile and c.get_rect().end.y > 360 and c.get_rect().end.y <= 728:
+			tiles += 1
+	if tiles != TourneyModules.POOL.size():
+		fails += 1
+		print("FAIL: %d quick play tiles for %d games" % [tiles, TourneyModules.POOL.size()])
 	tour.go_quick("fps_mid")
 	await _wait(3.0)
 	await _shot("quick_fps_mid")

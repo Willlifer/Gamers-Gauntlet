@@ -79,20 +79,11 @@ func go_lobby(autostart: bool = false) -> void:
 	var s := LobbyScreen.new()
 	s.state = state
 	s.start.connect(start_tournament)
-	s.open_range.connect(go_range)
 	s.quick_play.connect(go_quick)
 	_swap(s)
 	TourneyMusic.play("lobby")
 	if autostart:
 		start_tournament.call_deferred()
-
-
-func go_range(kind: String) -> void:
-	var s := RangeScreen.new()
-	s.kind = kind
-	s.back.connect(func(): go_lobby())
-	_swap(s)
-	TourneyMusic.play("lobby")
 
 
 ## Quick play: one game, you against a bot, straight from the lobby; nothing

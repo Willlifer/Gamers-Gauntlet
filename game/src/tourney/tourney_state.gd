@@ -119,14 +119,19 @@ static func armour_for(slot: String) -> Array:
 
 
 func _random_look(p: Dictionary) -> void:
+	random_look(p, rng)
+
+
+## A random outfit (weapon, clothes, shade, armour) from `r`: bots at seating, the creator's dice (G50).
+static func random_look(p: Dictionary, r: RandomNumberGenerator) -> void:
 	var w := weapon_models()
-	p.weapon = w[rng.randi() % w.size()]
-	p.top = BWClothing.TOPS[rng.randi() % BWClothing.TOPS.size()]
-	p.bottom = BWClothing.BOTTOMS[rng.randi() % BWClothing.BOTTOMS.size()]
-	p.shade = SHADES[rng.randi() % SHADES.size()]
+	p.weapon = w[r.randi() % w.size()]
+	p.top = BWClothing.TOPS[r.randi() % BWClothing.TOPS.size()]
+	p.bottom = BWClothing.BOTTOMS[r.randi() % BWClothing.BOTTOMS.size()]
+	p.shade = SHADES[r.randi() % SHADES.size()]
 	for slot in ["head", "chest", "legs"]:
 		var a := armour_for(slot)
-		p[slot] = a[rng.randi() % a.size()] if rng.randf() < 0.4 else ""
+		p[slot] = a[r.randi() % a.size()] if r.randf() < 0.4 else ""
 
 
 func all_ready() -> bool:

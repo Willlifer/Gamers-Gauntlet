@@ -4,6 +4,8 @@ extends Node
 ## saved to user://tourney.cfg. The MOBA and shooter ranges share the code
 ## and list different binds; a playable practice target comes with the
 ## first module of each kind.
+## G50: the lobby no longer opens it (the options move into each game's own
+## select / buy phase); kept for tools/aram_shots.gd and for reuse.
 
 signal back
 

@@ -1,15 +1,14 @@
 class_name LobbyScreen
 extends Node
 ## The lobby, after Smash Ultimate's main menu (G27): a grid of slanted
-## tiles over the circling map. The big one starts the tournament; the two
-## ranges sit beside it; Quick play opens any game at once against a bot
+## tiles over the circling map. The big one starts the tournament; Quick
+## play opens any game at once against a bot
 ## (a playtest, nothing counts). The seated players run along the bottom,
 ## a ticker under them describes the tile under the mouse, and the
 ## character creator is a small card on the right (a quarter of the screen
 ## at most).
 
 signal start
-signal open_range(kind: String)
 signal quick_play(module_id: String)
 
 ## Muted tints and the big faded tag per game (restrained: the streaks move, the colour stays quiet).
@@ -18,6 +17,8 @@ const LOOKS := {
 	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "fps_campus": ["#6a3c22", "PAINT"], "mmo_raid": ["#4c2f3d", "RAID"], "mmo_tanks": ["#3a4428", "TANKS", MmoTanksModule.LOGO], "osrs_raid": ["#4e3d26", "OSRS"],
 }
 const CARD := Rect2(1200, 90, 380, 736)     ## the creator: 19% of 1600x900
+const QUICK_AREA := Rect2(20, 380, 1150, 336)  ## the Quick play tiles, above the players strip (y 728)
+const QUICK_COLS := 4
 
 var state: TourneyState
 var _root: Control
@@ -28,6 +29,7 @@ var _me: Dictionary
 var _swatches: HBoxContainer
 var _start_tile: TourneyTile
 var _ticker: Label
+var _card: Control
 
 
 func _ready() -> void:
@@ -44,30 +46,26 @@ func _ready() -> void:
 # ----------------------------------------------------------------- tiles
 
 func _build_tiles() -> void:
-	_start_tile = TourneyTile.make(_root, Rect2(20, 92, 610, 300), "Tournament", "", Color("#6e2622"), "GO")
+	_start_tile = TourneyTile.make(_root, Rect2(20, 92, 1150, 236), "Tournament", "", Color("#6e2622"), "GO")
 	_start_tile.title_size = 54
 	_start_tile.blurb = "Double elimination for 4 to 8. Every match rolls a game; bet on every match. The champion takes the night."
 	_start_tile.pressed.connect(_start)
 	_hook(_start_tile)
-	var mr := TourneyTile.make(_root, Rect2(650, 92, 520, 142), "MOBA range", "QWER, flash, click to move", Color("#2c3546"), "BINDS")
-	mr.blurb = "Set your MOBA keybinds and practise on a dummy."
-	mr.pressed.connect(func(): open_range.emit("moba"))
-	_hook(mr)
-	var sr := TourneyTile.make(_root, Rect2(650, 250, 520, 142), "Shooter range", "WASD, aim, sensitivity", Color("#2c3546"), "AIM")
-	sr.blurb = "Set your shooter binds and mouse sensitivity."
-	sr.pressed.connect(func(): open_range.emit("shooter"))
-	_hook(sr)
 	var ql := TourneyUI.display(_root, "QUICK PLAY", 22, Color(1, 1, 1, 0.9))
-	ql.position = Vector2(26, 404)
+	ql.position = Vector2(26, 340)
 	var hint := TourneyUI.label(_root, "straight into a game against a bot: a playtest, nothing counts  ·  F10 leaves a game", BWStyle.F_SMALL, TourneyUI.DIM)
-	hint.position = Vector2(200, 409)
+	hint.position = Vector2(200, 345)
+	# every game in the pool gets a tile: four across, the rows share the
+	# space above the players strip (G50: a ninth game used to fall under it)
 	var infos := TourneyModules.infos()
+	var rows := maxi(1, ceili(infos.size() / float(QUICK_COLS)))
+	var tile_h := minf(126.0, (QUICK_AREA.size.y - (rows - 1) * 12.0) / rows)
 	for i in infos.size():
 		var info: Dictionary = infos[i]
 		var look: Array = LOOKS.get(str(info.id), ["#2c3546", ""])
-		var col := i % 4
-		var row := i / 4
-		var t := TourneyTile.make(_root, Rect2(20 + col * 288, 442 + row * 140, 276, 126), str(info.name), "", Color(look[0]), str(look[1]))
+		var col := i % QUICK_COLS
+		var row := i / QUICK_COLS
+		var t := TourneyTile.make(_root, Rect2(QUICK_AREA.position.x + col * 288, QUICK_AREA.position.y + row * (tile_h + 12.0), 276, tile_h), str(info.name), "", Color(look[0]), str(look[1]))
 		t.title_size = 22
 		t.blurb = str(info.get("blurb", ""))
 		var id := str(info.id)
@@ -155,10 +153,18 @@ func _build_creator() -> void:
 	p.position = CARD.position
 	p.size = CARD.size
 	_root.add_child(p)
+	_card = p
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	p.add_child(v)
-	TourneyUI.display(v, "YOU", 20)
+	var head := TourneyUI.row(v, 10)
+	TourneyUI.display(head, "YOU", 20)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(gap)
+	var dice := TourneyUI.button(head, "Randomize", randomize_me)
+	dice.add_theme_font_size_override("font_size", 14)
+	dice.tooltip_text = "Roll a random name, title, hair, colour and outfit"
 	var top := TourneyUI.row(v, 10)
 	_stage_box = top
 	_stage = TourneyUI.stage(top, state.unit_for(_me), Vector2(140, 236), true, Color(0, 0, 0, 0))
@@ -233,6 +239,28 @@ func _refresh_swatches() -> void:
 			_refresh_swatches()
 			_restage())
 		b.custom_minimum_size = Vector2(28, 28)
+
+
+## The creator's dice (G50): every field of the card rolled at once (not
+## seeded: it's a look, not a game). The name comes from the bot pool, never
+## one already seated; the card is rebuilt so every dropdown shows the roll.
+func randomize_me() -> void:
+	var r := RandomNumberGenerator.new()
+	r.randomize()
+	var used := state.players.map(func(x): return str(x.name))
+	var names := TourneyState.BOT_NAMES.filter(func(n): return not n in used)
+	if not names.is_empty():
+		_me.name = names[r.randi() % names.size()]
+	_me.title = TourneyState.TITLES[r.randi() % TourneyState.TITLES.size()]
+	_me.exp = ["new", "some", "lots"][r.randi() % 3]
+	var styles := BWHair.styles()
+	_me.hair_style = styles[r.randi() % styles.size()]
+	_me.hair_hex = TourneyState.HAIR_COLOURS[r.randi() % TourneyState.HAIR_COLOURS.size()]
+	TourneyState.random_look(_me, r)
+	_save()
+	_card.queue_free()                  # the dice button is inside it: never free it mid-signal
+	_build_creator()
+	_refresh_players()
 
 
 func _restage() -> void:
