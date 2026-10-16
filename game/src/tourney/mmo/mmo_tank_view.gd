@@ -188,7 +188,9 @@ func pose(u: MmoUnit, v: Dictionary, delta: float) -> void:
 		(v.dust as CPUParticles3D).emitting = u.moving or tf.spinning or tf.wobble > 0.0
 	else:
 		var tgt := sim.unit(u.target)
-		if tgt:
+		if u.flags.has("face"):
+			tur.rotation.y = lerp_angle(tur.rotation.y, 0.0, minf(1.0, delta * 6.0))     # G52: parked, gun to the front
+		elif tgt:
 			var want := atan2(tgt.pos.x - u.pos.x, tgt.pos.y - u.pos.y) - u.yaw
 			tur.rotation.y = lerp_angle(tur.rotation.y, want, minf(1.0, delta * 6.0))
 		(v.dust as CPUParticles3D).emitting = u.moving
@@ -374,6 +376,7 @@ static func sector_col(look: String) -> Color:
 		"cannon": return Color(1.0, 0.32, 0.1, 1.0)
 		"dust": return Color(0.95, 0.62, 0.25, 1.0)
 		"arc": return Color(1.0, 0.1, 0.05, 1.0)
+		"deny": return Color(0.95, 0.04, 0.04, 1.0)           # G52: the light tanks' zones
 	return Color(1.0, 0.3, 0.1, 1.0)
 
 
@@ -382,6 +385,12 @@ func explode(e: Dictionary) -> void:
 	var at := view._v3(e.pos as Vector2)
 	var me := sim.unit(view.me_id)
 	match str(e.what):
+		"deny":
+			# G52: a light tank's round lands in its zone
+			fx.release_at("fire", at + Vector3(0, 0.4, 0), 0.8)
+			view._scorch(at, 1.8)
+			if me and me.pos.distance_to(e.pos as Vector2) < 8.0:
+				view._shake = maxf(view._shake, 0.3)
 		"shell":
 			fx.release_at("fire", at + Vector3(0, 0.5, 0), 1.3)
 			view._scorch(at, 3.0)

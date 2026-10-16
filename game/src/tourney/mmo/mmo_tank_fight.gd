@@ -3,8 +3,10 @@ extends RefCounted
 ## Planet of Tanks (G46), raid night 2: the kit tank parked in the middle of
 ## a clearing in the forest campus. Same classes, same raid of eight, same
 ## WoW rules (MmoSim); this is the boss's brain. MmoSim hands its tick here
-## when `sim.tank` is set. Every attack is telegraphed on the ground and with
-## a vague line of text; the numbers are MmoTune's "Planet of Tanks" section.
+## when `sim.tank` is set. Every attack is telegraphed on the ground (G52: no
+## more lines of text for the moves, the visuals say it; only the two rule
+## changes nothing on screen shows get a line: the soft flanks and the
+## enrage); the numbers are MmoTune's "Planet of Tanks" section.
 ##
 ## Main cycle, the cannon blast: a 120-degree wedge from the tank to the edge
 ## of the clearing, at the closest warrior or paladin (else the closest
@@ -29,8 +31,10 @@ extends RefCounted
 ##   ram        (at 50%, and in the mix from 25%): it turns, rocks, charges to
 ##              the edge flattening anyone in its path, then fires a huge arc
 ##              back across the clearing; twice; then it drives home.
-## At 25% two light tanks roll in and chase people (kill them); at 10%
-## everything runs tank_rush_rate x faster.
+## At 25% two light tanks roll in and park back to back (G52); they take
+## turns firing into a big wedge in front of each (add_zone_*): ground you
+## can't stand on until they die. Optional, but killing them gives the raid
+## room. At tank_rush_at (G52: 15%) everything runs tank_rush_rate (1.5) x faster.
 
 const SPELL_CAST := { "barrage": 1.6, "smoke": 1.4, "treadburn": 4.0, "loose": 3.0, "ram": 1.2 }
 ## The HUD's names: vague, like the warnings.
@@ -92,7 +96,6 @@ func _phases() -> void:
 		phase = 2
 		glow = [1.0, 1.0]
 		_force("loose")
-		_warn("The engine revs. Its treads glow red along the flanks…", "#ff4020")
 	if not _done.has(50) and p <= 0.5:
 		_done[50] = true
 		phase = 3
@@ -102,8 +105,8 @@ func _phases() -> void:
 		phase = 4
 		_bag = []
 		_spawn_adds()
-	if not _done.has(10) and p <= 0.10:
-		_done[10] = true
+	if not _done.has(15) and p <= MmoTune.value("tank_rush_at"):
+		_done[15] = true                                     # G52: the enrage, 15% and x1.5 (was 10% and x2)
 		rate = MmoTune.value("tank_rush_rate")
 		s.frenzied = true
 		s.next_spell_at = minf(s.next_spell_at, s.time + 1.0)
@@ -231,14 +234,13 @@ func _begin(id: String) -> void:
 	b.last_ab = id
 	match id:
 		"barrage":
-			_warn("The turret climbs skyward…", "#ff8a2a")
+			pass
 		"smoke":
 			# a smoke grenade: lobbed at the ground under a random raider (the spot is marked while it flies)
 			var ppl := s.living()
 			var at: Vector2 = (ppl[s.rng.randi() % ppl.size()] as MmoUnit).pos if not ppl.is_empty() else b.pos + b.forward() * 8.0
 			s.spell["at"] = at
 			s._add_area({ "kind": "circle", "pos": at, "r": 2.5, "t": total, "dur": total, "look": "smoke_mark", "owner": "boss" })
-			_warn("The barrel coughs. A canister tumbles through the air…", "#c8c8b0")
 		"treadburn":
 			var r := s.rng.randf()
 			var sides: Array = [-1, 1] if r < MmoTune.value("tread_both") else ([-1] if r < 0.5 + MmoTune.value("tread_both") * 0.5 else [1])
@@ -247,23 +249,17 @@ func _begin(id: String) -> void:
 				glow[0 if side < 0 else 1] = 1.0
 				s._add_area({ "kind": "sector", "pos": b.pos, "dir": tread_dir(side), "half": TREAD_HALF, "r": MmoSim.ARENA_R * 2.0,
 					"t": total, "dur": total, "on_fire": "tread", "look": "dust", "owner": "boss", "side": side })
-			if sides.size() == 2:
-				_warn("BOTH treads scream. Dust everywhere…", "#ffb040")
-			else:
-				_warn("The %s tread screams. Dust billows…" % ("left" if sides[0] < 0 else "right"), "#ffb040")
 		"loose":
 			glow = [2.0, 2.0]
 			wobble = 1.0
 			var whole := (MmoTune.value("loose_wobble") + MmoTune.value("loose_dur")) / rate
 			s.spell["area"] = s._add_area({ "kind": "circle", "pos": b.pos, "r": loose_r(), "t": whole, "dur": whole,
 				"look": "loose", "owner": "boss" })
-			_warn("Its treads burn bright red. It's straining against itself…", "#ff3010")
 		"ram":
 			s.spell["count"] = 0
 			s.spell["stage"] = "turn"
 			_ram_pick()
 			wobble = 2.0
-			_warn("The tank rocks back and forth. The engine roars…", "#ff6a20")
 	s._emit({ "type": "boss_spell", "spell": id, "stage": "cast", "sides": s.spell.get("sides", []) })
 
 
@@ -457,7 +453,6 @@ func _ram(dt: float) -> void:
 				s.spell["arc"] = s._add_area({ "kind": "sector", "pos": b.pos, "dir": dir, "half": deg_to_rad(MmoTune.value("arc_deg")) * 0.5,
 					"r": MmoSim.ARENA_R * 2.0, "t": aim, "dur": aim, "on_fire": "arc", "look": "arc", "owner": "boss" })
 				s._emit({ "type": "boss_spell", "spell": "ram", "stage": "hit_edge" })
-				_warn("It swings the gun back across the clearing…", "#ff3010")
 		"aim":
 			if not s.areas.has(s.spell.arc):
 				s.spell.count = int(s.spell.count) + 1
@@ -465,7 +460,6 @@ func _ram(dt: float) -> void:
 					s.spell.stage = "turn"
 					_ram_pick()
 					wobble = 2.0
-					_warn("It rocks again…", "#ff6a20")
 				else:
 					s.spell.stage = "home"
 					s.spell.ft = 0.0
@@ -547,9 +541,14 @@ func smoke_at(p: Vector2) -> float:
 
 # ------------------------------------------------------------------- adds
 
+## G52: two light tanks drive in from the treeline and park back to back,
+## off the raid's side of the clearing, each nose along the circle.
 func _spawn_adds() -> void:
-	var b := s.boss
 	var n := s.players().size()
+	var ang := (-HOME_DIR).angle() + s.rng.randf_range(-1.1, 1.1)
+	var dir := Vector2(cos(ang), sin(ang))
+	var spot := dir * ADD_RING
+	var t := dir.orthogonal()
 	for k in 2:
 		var u := MmoUnit.new()
 		u.id = "light_tank_%d" % (k + 1)
@@ -560,48 +559,80 @@ func _spawn_adds() -> void:
 		u.hp = u.max_hp
 		u.res_kind = "none"
 		u.radius = 1.0
-		var side := -1.0 if k == 0 else 1.0
-		u.pos = (b.pos + b.right() * side * (b.radius + 3.0)).limit_length(MmoSim.ARENA_R - 2.0)
-		u.yaw = b.yaw
-		u.swing_t = 1.0
+		var face := t * (1.0 if k == 0 else -1.0)
+		var park := spot + face * (MmoTankView.ADD_LEN * 0.5 + 0.15)
+		u.pos = (park + dir * 12.0).limit_length(MmoSim.ARENA_R - 0.5)          # out of the trees
+		u.yaw = atan2(-dir.x, -dir.y)
+		u.flags["park"] = park
+		u.flags["face"] = atan2(face.x, face.y)
+		u.flags["state"] = "drive"
 		s.units.append(u)
 		adds.append(u)
 		s._emit({ "type": "spawn", "id": u.id })
-	_warn("Engines in the treeline! Two light tanks roll out. Kill them!", "#ffd040")
+	add_clock = ADD_WARN
+
+
+const ADD_RING := 13.0           ## G52: how far out the light tanks park
+const ADD_WARN := 2.0            ## G52: their zones show this long before the first shot
+var add_clock := 0.0
+var _add_turn := 0
 
 
 func _tick_adds(dt: float) -> void:
+	var firing: Array = []
 	for a: MmoUnit in adds:
 		if not a.alive:
+			var dead: Variant = a.flags.get("zone")
+			if dead is Dictionary and s.areas.has(dead):
+				(dead as Dictionary).t = 0.0                       # its zone goes with it
+			a.flags.erase("zone")
 			continue
 		s._tick_auras(a)
 		if not a.alive:
 			continue
-		a.flags["retarget"] = float(a.flags.get("retarget", 0.0)) - dt
-		var t := s.unit(a.target)
-		if t == null or not t.alive or float(a.flags.retarget) <= 0.0:
-			var c := catcher()
-			var pool := s.living().filter(func(u: MmoUnit) -> bool: return u != c)
-			if pool.is_empty():
-				pool = s.living()
-			t = pool[s.rng.randi() % pool.size()] if not pool.is_empty() else null
-			a.target = t.id if t else ""
-			a.flags.retarget = 12.0
-		if t == null:
-			a.moving = false
-			continue
-		var d := t.pos - a.pos
-		a.yaw = wrapf(a.yaw + clampf(wrapf(atan2(d.x, d.y) - a.yaw, -PI, PI), -3.0 * dt, 3.0 * dt), -PI, PI)
-		var gap := d.length() - a.radius - t.radius
-		a.moving = gap > 0.3
-		if a.moving:
-			a.pos += d.normalized() * minf(MmoTune.value("add_speed") * dt, gap)
-			a.pos = a.pos.limit_length(MmoSim.ARENA_R - a.radius)
-		a.swing_t = maxf(0.0, a.swing_t - dt)
-		if gap <= 0.8 and a.swing_t <= 0.0:
-			a.swing_t = MmoTune.value("add_every")
-			a.strike_serial += 1
-			s.damage(a, t, MmoTune.value("add_dmg"), "phys", "Light Tank", "hit")
+		a.target = ""
+		match str(a.flags.get("state", "")):
+			"drive":
+				var to: Vector2 = (a.flags.park as Vector2) - a.pos
+				var step := MmoTune.value("add_speed") * dt
+				a.moving = to.length() > 0.05
+				if to.length() <= step:
+					a.pos = a.flags.park
+					a.moving = false
+					a.flags.state = "turn"
+				else:
+					a.pos += to.normalized() * step
+			"turn":
+				var dy := wrapf(float(a.flags.face) - a.yaw, -PI, PI)
+				a.yaw = wrapf(a.yaw + clampf(dy, -2.5 * dt, 2.5 * dt), -PI, PI)
+				if absf(dy) < 0.02:
+					a.yaw = float(a.flags.face)
+					a.flags.state = "set"
+					a.flags["zone"] = s._add_area({ "kind": "sector", "pos": a.pos, "dir": a.forward(), "half": deg_to_rad(MmoTune.value("add_zone_deg")) * 0.5,
+						"r": MmoTune.value("add_zone_r"), "t": 1.0e6, "dur": 1.0e6, "look": "deny", "owner": a.id })
+			"set":
+				firing.append(a)
+	if firing.is_empty():
+		return
+	add_clock -= dt
+	if add_clock > 0.0:
+		return
+	add_clock = MmoTune.value("add_every") / float(firing.size())          # they take turns
+	_add_turn = (_add_turn + 1) % firing.size()
+	_add_fire(firing[_add_turn])
+
+
+## One light tank's shot: everyone in its wedge is hit; the shell lands somewhere in it.
+func _add_fire(a: MmoUnit) -> void:
+	var zone: Dictionary = a.flags.get("zone", {})
+	if zone.is_empty():
+		return
+	a.strike_serial += 1
+	for u: MmoUnit in s.living():
+		if in_sector(u.pos, zone, u.radius * 0.5):
+			s.damage(a, u, MmoTune.value("add_dmg"), "fire", "Light Tank", "mech")
+	var land := (zone.dir as Vector2).rotated(s.rng.randf_range(-float(zone.half), float(zone.half)) * 0.85) * s.rng.randf_range(3.0, float(zone.r) - 1.0)
+	s._emit({ "type": "explode", "pos": (zone.pos as Vector2) + land, "r": 3.0, "what": "deny", "src": a.id })
 
 
 # ------------------------------------------------------------- the ground

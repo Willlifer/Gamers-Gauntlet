@@ -1368,7 +1368,7 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 uniform vec4 col : source_color = vec4(1.0, 0.25, 0.1, 1.0);
 uniform float fill = 0.0;
-uniform int shape = 0;          // 0 disc, 1 strip, 2 ring (safe zone), 3 soft (players' ground spells), 4 sector (G46)
+uniform int shape = 0;          // 0 disc, 1 strip, 2 ring (safe zone), 3 soft (players' ground spells), 4 sector (G46), 5 burning ground (G52)
 uniform float pulse = 0.0;
 uniform float half = 1.0;       // the sector's half angle (rad)
 void fragment() {
@@ -1385,6 +1385,19 @@ void fragment() {
 		float a4 = rim4 * 0.95 + inside4 * (0.16 + 0.06 * stripes) + grow4 * inside4 * 0.34;
 		ALBEDO = col.rgb * (1.0 + rim4 * 0.6);
 		ALPHA = clamp(a4 * col.a, 0.0, 1.0);
+	} else if (shape == 5) {
+		// G52: burning ground you must not stand in: a red disc, a bright red rim, a dark line outside it
+		float d5 = length(p);
+		float in5 = 1.0 - smoothstep(0.995, 1.0, d5);
+		float rim5 = smoothstep(0.84, 0.87, d5) * (1.0 - smoothstep(0.94, 0.95, d5));
+		float out5 = smoothstep(0.94, 0.95, d5) * in5;
+		float lick = 0.5 + 0.5 * sin(TIME * 5.0 - d5 * 14.0);
+		vec3 c5 = mix(vec3(0.85, 0.06, 0.03), vec3(1.0, 0.35, 0.1), lick * 0.35 * (1.0 - d5));
+		c5 = mix(c5, vec3(1.0, 0.22, 0.12), rim5);
+		c5 = mix(c5, vec3(0.08, 0.0, 0.0), out5);
+		float a5 = in5 * (0.5 + 0.08 * lick) + rim5 * 0.5 + out5 * 0.4;
+		ALBEDO = c5;
+		ALPHA = clamp(a5, 0.0, 1.0);
 	} else {
 	float d = shape == 1 ? max(abs(p.x), 0.0) : length(p);
 	float edge = shape == 1 ? abs(p.x) : d;
@@ -1505,7 +1518,12 @@ func _add_area(a: Dictionary) -> void:
 				c = Color(1.0, 0.12, 0.05, 0.6)
 			elif str(a.kind) == "ground":
 				c = Color("#ffd040") if str(a.look) == "consecration" else (Color("#ff4a12") if str(a.look) == "fire_pool" else Color("#9fd8ff"))
-			q.material_override = _tele_mat(c, 3 if str(a.kind) == "ground" else 0)
+			var shape := 3 if str(a.kind) == "ground" else 0
+			if str(a.get("look", "")) == "fire_pool":
+				shape = 5                                         # G52: the burning remainder, a clear red circle
+			q.material_override = _tele_mat(c, shape)
+			if shape == 5:
+				(q.material_override as ShaderMaterial).render_priority = 3      # G52: drawn over the smoke, never washed out
 			q.position.y = 0.05
 		"ring":
 			pm.size = Vector2.ONE * float(a.r) * 2.0
@@ -1613,6 +1631,8 @@ func _sync_areas(_delta: float) -> void:
 		var a: Dictionary = live[id]
 		root.position = _v3(a.pos as Vector2)
 		var fill := 1.0 - clampf(float(a.t) / maxf(0.01, float(a.dur)), 0.0, 1.0)
+		if str(a.get("look", "")) == "deny":
+			fill = 1.0                                        # G52: the light tanks' zones, solid while they live
 		for c in root.get_children():
 			if c is MeshInstance3D and (c as MeshInstance3D).material_override is ShaderMaterial:
 				((c as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("fill", fill)
@@ -1663,7 +1683,7 @@ func _spikes(a: Dictionary) -> void:
 
 
 func _explode(e: Dictionary) -> void:
-	if tank_view and str(e.what) in ["shell", "cannon", "arc", "tread"]:
+	if tank_view and str(e.what) in ["shell", "cannon", "arc", "tread", "deny"]:
 		tank_view.explode(e)
 		return
 	var at := _v3(e.pos as Vector2)

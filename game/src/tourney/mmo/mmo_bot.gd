@@ -184,7 +184,9 @@ func _tank_where(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
 		var away := -north
 		var foe := _foe(s, u)
 		if foe != b and melee:
-			home = foe.pos + (u.pos - foe.pos).normalized() * (foe.radius + 1.6)
+			# G52: a parked light tank's nose is the danger; melee hit it from the side
+			var fs := signf((u.pos - foe.pos).dot(foe.right()))
+			home = foe.pos + foe.right() * (fs if fs != 0.0 else 1.0) * (foe.radius + 1.4)
 		elif melee or u.cls in ["warrior", "paladin"]:
 			var side := (0.45 + 0.12 * (idx % 3)) * (1.0 if idx % 2 == 0 else -1.0)
 			var rr := b.radius + (3.4 if u.cls in ["warrior", "paladin"] else 2.0)

@@ -3,8 +3,8 @@ extends SceneTree
 ## design/shots/mmo/<TAG>_tanks_<scene>.png. Everyone is a bot, you included
 ## (CLASS picks your seat; default warrior, so the gun is on you). Each
 ## moment twice: your camera, and a high view over the clearing ("_top").
-##   pick, start, cannon, barrage, smoke, loose (wobble, fire), treadburn,
-##   ram (rock, edge blast), adds, announce, report
+##   pick, start, cannon, barrage, craters (G52), smoke, loose (wobble, fire), treadburn,
+##   ram (rock, edge blast), adds (G52: parked back to back), announce, report
 ##   [TAG=r1] [CLASS=mage] godot --path . --script res://tools/mmo_tanks_shots.gd
 
 var out := ""
@@ -82,7 +82,7 @@ func _go() -> void:
 	await _wait(0.3)
 	await _shot("cannon")
 	await _top("cannon")
-	var want := ["smoke_throw", "barrage", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds"]
+	var want := ["smoke_throw", "barrage", "craters", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds"]
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 60000:
 		guard += 1
@@ -94,6 +94,8 @@ func _go() -> void:
 			name = "smoke_throw"
 		elif id == "barrage" and st == "fire" and int(s.spell.get("fired", 0)) >= 6:
 			name = "barrage"
+		elif "craters" in want and "barrage" not in want and id != "barrage" and s.areas.filter(func(a: Dictionary) -> bool: return a.get("pool", false)).size() >= 6:
+			name = "craters"                                  # G52: the burning remainder after a barrage
 		elif "smoke" in want and not s.tank.smoke.is_empty() and float(s.tank.smoke.r) > 14.0:
 			name = "smoke"
 		elif id == "loose" and st == "cast" and t > 1.6:
@@ -106,10 +108,9 @@ func _go() -> void:
 			name = "ram_rock"
 		elif id == "ram" and st == "aim" and float(s.spell.get("ft", 0.0)) > 1.5:
 			name = "ram_arc"
-		elif "adds" in want and s.tank.adds.size() > 0 and s.tank.adds.all(func(a: MmoUnit) -> bool: return a.alive) and s.time - float(s.tank.adds[0].flags.get("born", 0.0)) > 0.0:
+		elif "adds" in want and s.tank.adds.size() == 2 and s.tank.adds.all(func(a: MmoUnit) -> bool: return a.alive and str(a.flags.get("state", "")) == "set"):
 			if not s.tank.adds[0].flags.has("born"):
-				s.tank.adds[0].flags["born"] = s.time + 4.0
-				name = ""
+				s.tank.adds[0].flags["born"] = s.time + 2.5           # G52: parked back to back, a couple of shots in
 			elif s.time > float(s.tank.adds[0].flags.born):
 				name = "adds"
 		if name != "" and name in want:

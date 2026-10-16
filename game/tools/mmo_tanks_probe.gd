@@ -7,7 +7,10 @@ extends SceneTree
 ##   - Loose Cannon waits loose_wobble s, then burns the middle, not the rim;
 ##     the flanks take flank_mult after it
 ##   - the phases: Loose Cannon at 75%, the ram (twice) at 50%, two light
-##     tanks at 25%, everything faster at 10%
+##     tanks at 25%, everything faster at 15% (G52: x1.5)
+##   - the light tanks (G52): park back to back, take turns firing into a
+##     wedge in front of each; beside them is safe; a dead one's wedge goes
+##   - no text telegraphs for the moves (G52)
 ##   - bot raids of eight end at a sane length; grades; replay
 ##   [RUNS=n] godot --headless --path . --script res://tools/mmo_tanks_probe.gd
 
@@ -20,6 +23,8 @@ func _initialize() -> void:
 	_treads()
 	_smoke()
 	_loose()
+	_adds()
+	_enrage()
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 6
 	_raids(runs)
 	if _replay(777) != _replay(777):
@@ -174,6 +179,55 @@ func _loose() -> void:
 	_ok(side > tail * 1.3, "the flanks take more after Loose Cannon (%.0f vs %.0f)" % [side, tail])
 
 
+func _adds() -> void:
+	var s := _raid(9)
+	_quiet(s)
+	s.boss.hp = s.boss.max_hp * 0.24
+	_run(s, 0.1)
+	s.tank._forced.clear()                            # just the light tanks: no Loose Cannon or ram
+	s.next_spell_at = INF
+	_ok(s.tank.adds.size() == 2, "two light tanks at 25%")
+	_run(s, 8.0)
+	var a: MmoUnit = s.tank.adds[0]
+	var b2: MmoUnit = s.tank.adds[1]
+	_ok(str(a.flags.get("state", "")) == "set" and str(b2.flags.get("state", "")) == "set", "the light tanks parked")
+	_ok(a.forward().dot(b2.forward()) < -0.99 and (b2.pos - a.pos).dot(a.forward()) < 0.0, "back to back")
+	var za: Dictionary = a.flags.zone
+	var zb: Dictionary = b2.flags.zone
+	var front := _cls(s, "mage")
+	front.pos = a.pos + a.forward() * 9.0
+	var front2 := _cls(s, "hunter")
+	front2.pos = b2.pos + b2.forward() * 9.0
+	var side := _cls(s, "priest")
+	side.pos = a.pos + a.right() * 3.0
+	for u: MmoUnit in [front, front2, side]:
+		u.hp = u.max_hp
+	var hits := {}
+	var ev := _run(s, MmoTune.value("add_every") * 2.0 + 0.1)
+	for e: Dictionary in ev:
+		if e.type == "dmg" and str(e.what) == "Light Tank":
+			hits[str(e.tgt)] = int(hits.get(str(e.tgt), 0)) + 1
+	print("light tanks: %s" % hits)
+	_ok(hits.has(front.id) and hits.has(front2.id), "each fires into its own wedge")
+	_ok(not hits.has(side.id), "beside them is safe")
+	_ok(s.danger_at(front.pos, 0.0) and not s.danger_at(side.pos, 0.0), "the bots see the wedges")
+	a.hp = 1.0
+	s.damage(side, a, 99999.0, "phys", "test", "hit")
+	_run(s, 0.2)
+	_ok(not s.areas.has(za) and s.areas.has(zb), "a dead light tank's zone goes; the other stays")
+
+
+func _enrage() -> void:
+	var s := _raid(10)
+	_quiet(s)
+	s.boss.hp = s.boss.max_hp * 0.16
+	_run(s, 0.2)
+	_ok(s.tank.rate == 1.0, "no enrage at 16%")
+	s.boss.hp = s.boss.max_hp * 0.149
+	_run(s, 0.2)
+	_ok(is_equal_approx(s.tank.rate, 1.5), "enrage at 15%%: x%.2f" % s.tank.rate)
+
+
 func _raids(runs: int) -> void:
 	var wins := 0
 	var lens: Array = []
@@ -182,6 +236,7 @@ func _raids(runs: int) -> void:
 	var adds_dead := 0
 	var multi := 0
 	var grades := {}
+	var warns: Array = []
 	for i in runs:
 		var s := _raid(300 + i * 11)
 		var bots := {}
@@ -199,9 +254,11 @@ func _raids(runs: int) -> void:
 						seen[e.spell] = s.boss.hp_pct()
 				if e.type == "announce":
 					multi += 1
+				if e.type == "warn":
+					warns.append(str(e.text))
 				if e.type == "death" and str(e.id).begins_with("light_tank"):
 					adds_dead += 1
-		for k in [75, 50, 25, 10]:
+		for k in [75, 50, 25, 15]:
 			if s.tank._done.has(k):
 				phases[k] = int(phases.get(k, 0)) + 1
 		if s.winner == "raid":
@@ -230,6 +287,11 @@ func _raids(runs: int) -> void:
 	_ok(mean > 90.0 and mean < 420.0, "a sane fight length (%d s)" % int(mean))
 	for k in ["barrage", "smoke", "treadburn", "loose", "ram"]:
 		_ok(specials.has(k), "%s happened" % k)
+	var kinds := {}
+	for w: String in warns:
+		kinds[w] = true
+	print("  text lines over %d raids: %s" % [runs, kinds.keys()])
+	_ok(kinds.size() <= 4, "G52: only a few lines of text left (%d kinds)" % kinds.size())
 
 
 func _replay(seed: int) -> int:
