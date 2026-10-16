@@ -1,36 +1,26 @@
-# Handoff — 2026-10-15
+# Handoff — 2026-10-16
 
 **Where:** `C:\Users\ferth\Documents\Gamers Gauntlet` (renamed 10-16); game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
 
-**Git:** branch `main`, internal only. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers.
+**Git:** branch `main`, ~30 local commits since `1f1a933` (origin/main), **not pushed**: the author says when. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers. The web build (`web/`) predates this batch.
 
-## This session (G27–G32, `history/2026-10-15_session.md`)
-- **Playtest rulings (G31):** the FPS feels great; Temu's stealth stays; the Chris loops are fine; MOBA polish is the author's; the raid's verdict is shelved.
-- **Build order (G32):** more modules first, online last.
-- **The tournament look (G27):** Smash-style lobby tiles with **Quick play** for every game (F10 leaves). The creator is a card on the right. The bracket rolls are slot reels and has two sides with portraits. There's no vote: the top ready match plays next. A game's map circles behind every screen.
-- **FPS:** bullets travel at 5× the slingshot ball with a trail and damage what they hit, both ways (G28). New module **FPS: Mid duel** on the Dust hallway (G29).
-- **Raid: Cinderbrand (G30):** an unavoidable burn worth 25% HP over 30 s; run it off, get cleansed or be healed through it.
-- **New module: OSRS: Warden's Trial (G34).** Game squares and 0.6 s ticks. You pray against projectiles and dodge lightning, boulders, slams and the row tear-out. The twist is the Sun Sigil. The fastest kill wins.
-- **Raid, later (G35-G40):** silent below 50%, frenzy below 25%. Scorched Earth: half the courtyard burns at 45 s, then turns in 15 s bursts with 30 s rests, a random way each time, with chevrons on the edges. Bombs can leave burning ground. **Eight spells a class** on one bar (the old 16 shelved). Raids of eight with duplicate classes allowed.
-- **Class themes (G41):** warrior charges, paladin group heals, priest HoTs and DoTs (Renew on the Giant = Shadow Word: Pain), mage burns, hunter and rogue dash in and out. Bots won't dash into hazards; PAR re-measured.
-- **Load-in (G42):** `VersusScreen` between the matchup and the game: black, left player, right player, then the map and challenge name slam in.
-- **Blender kit (G43):** pistol, Desert Eagle, marksman rifle, carbine, automatic rifle, tank, campus map, each from the author's photo through a blind-reviewed gauntlet (`gg_<id>.py` → `art/gauntlet/*.glb`, loaded by `GKGlb`). FPS: a radial loadout every life, rolled sidearm (92FS or 50% Desert Eagle), Dual Berettas ($1, LMB/RMB, trick reload), new module Campus paintball.
-- **Hidden MMO Tank (G44):** a faint tank in the pick screen's corner; the hunter underneath; never a bot.
-- **OSRS (G45):** the prayable projectiles fly 3 s from anywhere and keep coming through the slams.
-- **New module: Planet of Tanks (G46):** raid night 2 against the kit tank in a campus clearing: cannon blast (stacks per body, announced), barrage, smokescreen, treadburn, Loose Cannon at 75%, the ram at 50%, light tanks at 25%, x2 at 10%. Own logo.
-- **Raid verdict: a grade (G33):** output, mechanics, AoEs avoided, survival and activity, weighted into S-F. The higher grade wins. There is a report card at the end.
+## This session (G50–G56, `history/2026-10-16_session.md`)
+The author's notes doc `“The Gamer”.docx` (text: `design/requests/2026-10-16_the_gamer.md`), worked by six parallel agents, then the author's follow-ups:
+- **Lobby/Twins (G50):** every tile shows, Randomize, ranges gone; your three Twins fighters get two elements + two weapons, fire first.
+- **FPS (G51, G51c):** recoil, scopes, reticle, sway, optics, trail, muzzle flash; Dust spawns; rooftop rebuilt (shots now cross the court, walkable bridge, the floor below). Author: "guns look great, physics feel good".
+- **Raids (G52):** consumables bar, faster spins, combo at 75%, burning Cinderbrand; tanks without the announcer, parked light tanks, x1.5 at 15%; first-time cards; callouts as visuals.
+- **OSRS (G53 a–d):** phantoms (mage/ranger) fire, shields, the lightning dagger and the skate, skull phases after the author's video, pose-read middle-column slam.
+- **MOBA (G54):** left move / right attack, cast modes, tooltips, +25% reaches, 0.3 s cast root, lower camera, pit pings and rocks.
+- **Look (G55):** skipping, godly float, cool walk, cast gestures; champions dressed.
+- **Settings (G56):** one tabbed panel opened from every game.
 
 ## Do this first
-1. **The author plays:** the look (L-14), the raid with Cinderbrand and the grade (L-3), the OSRS Warden's Trial (L-15), the FPS loadouts / guns / campus (L-16), the hidden Tank (L-17), Planet of Tanks (L-19). Act on their notes.
-2. **Rename the folder (L-1).** On 10-15 the lock was two hung headless `tourney_probe` runs from 10-14, 21:36 (not the editor). The auto-mode permission check blocked killing them. The author ends them in Task Manager, then `Rename-Item` and update the memory paths. The probe itself passes in ~46 s; the hang didn't reproduce.
-3. **Next module:** the author picks (G32).
+1. **The author plays** with `design/PLAYTEST.md` (look-outs, nothing owed) and sends notes.
+2. **Push when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys). Check the PiP scopes, the transparency and the flash in the browser.
 
 ## Run
-- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module fps_mid` (aram, pit, fps_roof, fps_mid, fps_campus, mmo_raid, mmo_tanks, osrs_raid, bw_twins).
-- The whole tournament: `--path .`. Full command list in CLAUDE.md.
+- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_raid` (aram, pit, fps_roof, fps_mid, fps_campus, mmo_raid, mmo_tanks, osrs_raid, bw_twins). `-- --fresh` shows the first-time cards again.
 
-**Green (2026-10-15):**
-- tourney_probe OK; tourney_shots OK (10 screens + the load-in beats).
-- fps_probe 17/17 (new); osrs_probe OK (new); kit_probe 601/601.
-- mmo_probe OK (G41 theme checks, 12/12 bot kills, grades within 8, replay); mmo_input OK; mmo_audio OK.
-- moba_probe and the B/W self-test were not rerun: their code wasn't touched.
+**Green (2026-10-16):** tourney_probe (needs a >600 s timeout now), tourney_shots, moba_probe, moba_input, fps_probe, kit_probe 1210/1210, mmo_probe RUNS=20, mmo_tanks_probe, mmo_input, mmo_audio_check, osrs_probe, osrs_input (windowed), twins_probe.
+**Not green:** mmo_probe at its default 6 raids: bot grade spread 9.9 vs the 8 limit (was 15.3 before this batch; passes at RUNS=20).
+**Not rerun:** the B/W self-test (no `src/game`/`src/core` edits), moba_ref_shots.

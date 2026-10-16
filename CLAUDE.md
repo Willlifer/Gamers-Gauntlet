@@ -34,8 +34,9 @@ a `history/` summary when the session was long.
 ## Shape
 
 - **The shell** (`game/src/tourney/`): lobby with join code and the character
-  creator (hair style + colour, name, title, experience), the testing ranges
-  (keybinds, sensitivity; `user://tourney.cfg`), Quick play (any game vs a
+  creator (hair style + colour, name, title, experience, Randomize), one
+  settings panel for every game (`TourneySettings`, G56; `user://tourney.cfg`),
+  first-time cards (`[seen]`, `-- --fresh`), Quick play (any game vs a
   bot, F10 leaves), the double-elimination bracket with slot-reel rolls (the
   top ready match plays next), the
   matchup with bets (house 5 a side, bets 5–25, winners split by stake), the
@@ -64,7 +65,8 @@ a `history/` summary when the session was long.
     plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
 - **Scope:** more modules first, online last (G32).
 - **The look** (G27, `src/tourney/ui/`): `TourneyTile` (menu tiles), `SlotReel` (the rolls), `TourneyBackdrop` (a game's map circling behind every screen), `TourneyPortraits` (plate portraits); palette and builders in `TourneyUI`.
-- **The range** (`RangeScreen`): binds plus a live practice MobaView with a dummy.
+- **The range** (`RangeScreen`): no longer in the lobby (G50); kept for `aram_shots`.
+- **Play look-outs:** `design/PLAYTEST.md` (a checklist per batch; nothing owed). The author's request docs: `design/requests/`.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
 
@@ -73,7 +75,9 @@ a `history/` summary when the session was long.
 Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7-stable_win64_console.exe`, from `game/`:
 
 - `--path .` plays (`-- --bots 3 --autostart` seats bots and starts).
-- `--headless --path . --script res://tools/tourney_probe.gd`: bracket, bets and coin maths for 4, 5 and 8 players; exit 0.
+- `--headless --path . --script res://tools/tourney_probe.gd`: bracket, bets and coin maths for 4, 5 and 8 players; exit 0 (give it a timeout over 600 s: the MMO sims take 10–40 s each).
+- `--headless --path . --script res://tools/moba_input.gd`: the MOBA controls through real input events (G54); `tools/twins_probe.gd`: the Twins kits, fire first, the swap (G50); `--path . --script res://tools/osrs_input.gd` (**windowed**): skull-first clicks (G53d).
+- `tourney_shots` puts `user://tourney.cfg` back when it ends; it also shoots the settings tabs to `design/shots/g56/`.
 - `--path . --script res://tools/tourney_shots.gd`: walks every screen windowed and saves frames to `design/shots/`; exit 0.
 - `--headless --path . --script res://tools/moba_probe.gd`: bot vs bot over every champion pairing; matches end, replays match; exit 0.
 - `[MODULE=pit] --path . --script res://tools/aram_shots.gd`: ARAM (or the pit) on autopilot plus the range, frames to `design/shots/`; exit 0.

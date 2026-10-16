@@ -10,10 +10,23 @@ row is newer; then fix this doc.
   enabled modules (`TourneyModules.POOL`). The rolls are slot reels: games,
   then first-round players, stopping in a cascade, the last pick rolling in
   over 0.5 s. The top ready match (layout order) plays next: no vote (G27).
-- Lobby: Smash-style tiles. Tournament, the two ranges, and **Quick play**:
-  any game at once against a bot, nothing counts, back to the lobby at the
-  end or on F10. The creator is a card on the right (under a quarter of the
-  screen). In a tournament match, F10 forfeits (G27).
+- Lobby: Smash-style tiles. Tournament and **Quick play**: any game at once
+  against a bot, nothing counts, back to the lobby at the end or on F10; the
+  grid sizes its rows so every game in the pool shows (G50). The creator is a
+  card on the right (under a quarter of the screen) with **Randomize** (name
+  from the bot pool, title, hair, outfit, armour) and a settings gear. In a
+  tournament match, F10 forfeits (G27). The testing ranges are gone (G50).
+- **Settings** (G56, `TourneySettings`): one panel, tabs MOBA / Shooter /
+  Raid / OSRS / General, opened from the lobby gear (General), the MOBA
+  champion select (MOBA), O in the FPS buy phase (Shooter), the raid class
+  pick (Raid) and the OSRS weapon pick (OSRS); pick clocks wait while it is
+  open. Stores unchanged: `user://tourney.cfg` (`[binds]`, `[moba]`,
+  `[fps_binds]`, `[audio]`, `[seen]`) and the tune cfgs. Raid and OSRS keys
+  are listed read-only (hardcoded in their views).
+- **First-time cards** (G52b, G53c): the first time a profile plays a raid or
+  the OSRS trial, a ~10 s skippable card explains the bar/inventory and the
+  key mechanics (it explains; the fight gives no extra help). `[seen]` flags;
+  `--fresh`, the "every time" toggles, or General → "Show first-time cards again".
 - Look: ink panels over a game's map circling slowly behind every screen
   (`TourneyBackdrop`; the matchup shows that match's map when it has one),
   one warm accent, gold for winners, blue and red for the two sides. The
@@ -28,18 +41,46 @@ row is newer; then fix this doc.
 
 ## bw_twins: the Black | White Twins fight
 Black | White's own combat (thunder, fire, wind vs Noon and Dusk). Fewest
-turns to win takes it (G4).
+turns to win takes it (G4). Your three carry two elements (equal rank; every
+element skill offers both) and two weapons ("Swap weapon" under Attack, free):
+thunder + dark with bow / staff; fire + dark with lance / staff; wind +
+thunder with bow / daggers (G50, `BWFightModule.KITS`). Fire is the fastest
+unit on the court, so it opens every cycle. Noon and Dusk move with the godly
+float (G55). Check: `tools/twins_probe.gd`.
 
 ## aram: MOBA ARAM duel
 Merr (fire mage), Temu (the kit slingshot, poison, stealth when still),
 Braves (shotgun pistols). One lane with minion waves; first to 3 kills; HP
-returns only on death. League's camera, controls and HUD (G3, G14, G15).
-Numbers: `MobaChamps.CHAMPS`, live in `MobaTune` (F1).
+returns only on death. League's camera and HUD (G3, G14, G15).
+Numbers: `MobaChamps.CHAMPS` and `MobaChamps.SHAPES` (every reach, speed and
+shape, read by casts, the indicator, tooltips and bots), live in `MobaTune` (F1).
+- **Controls (G54):** left click moves only; right click attacks the enemy
+  under / nearest the cursor (on empty ground it moves). Cast mode in
+  settings: Quick (press casts), Slow (press shows range + shape, press or
+  left click casts, right click / Esc cancels), Release (hold shows, release
+  casts). Flash and ignite/smite always cast on press. Hover any ability for
+  a tooltip. Flash is yellow, smite teal, each labelled.
+- **Numbers (G54):** every reach +25% (autos Merr 687, Temu 625, Braves 531;
+  areas unchanged); champions 1400 HP; Q/W/E/R root the caster 0.3 s, then
+  fire (`cast_until`); flash 525; Braves' E 106; Merr's Q 30% slower, W
+  erupts 30% slower, R at half speed. Camera pitch 47.6°; the auto-attack
+  ring hides after 30 s.
+- **Look (G55, `MobaDress`, `GGAnim`):** Merr floats (godly float) in mage
+  gear (hat, robe, scarf); Temu skips in ranger gear (feathered cap, quiver
+  strap); Braves cool-walks in pauldron, plated legs and a shell bandolier,
+  gun steel grey along his leg. Every Q/W/E/R plays a cast gesture timed to
+  the stop. Hidden Temu: invisible to the opponent, 75% transparent to his own side.
 
 ## pit: MOBA Objective take
 Each player leads three (themself + the two champions they didn't pick)
 around the Giant (27,000 HP) in its pit. Slam every 8 s, nova every 12 s.
 Smite: 600 true damage, the boss only. The last hit wins (G12).
+- **G54:** the Giant stands at (5.5, 0), the east half by the wall, among
+  seven mirrored rocks that block walking, skillshots and sight; its damage
+  is down 75% (auto 32.5, slam 55, nova 40). Each player's own champion has
+  2x health and damage; only the players carry smite. **Pings:** V = go in,
+  C = hold, at the cursor (12 s, own team only); bot allies answer. The tick
+  order alternates sides, so a same-tick smite race is even.
 
 ## fps_roof: FPS Rooftop duel (prototype)
 First person on the kit rooftops against a bot, first to 5. Shift tap crouch,
@@ -64,10 +105,34 @@ Numbers: `FpsTune` (F1); the guns: `FpsWeapons.SPECS`.
   `bullet_speed`) with a trail (`bullet_trail`, 8 m), and hurt whoever they
   meet: rifle 85 (head x2.5), pellet 13 (x1.5); the bot's 34, a head 100.
   The bot's accuracy roll now picks where it aims; the bullet still has to land.
+- **Feel (G51, G51c; author: "guns look great, physics feel good"):**
+  - Recoil: the Desert Eagle's punch carried to the sniper, marksman and
+    shotgun; the carbine about doubled. F1 "Recoil per gun": a preset per
+    gun (Desert Eagle, Rifle, Sniper, Shotgun, Pistol, Carbine, Baked) plus a 0–3x trim.
+  - Reticle: `cross_gap` 0, tighter standing still (`rest_spread` 0.45),
+    looser running (`move_spread` 4.5). Sway 2.3 with sideways drift, doubled
+    scoped; per gun 0.7 (pistols, automatic rifle, carbine), 1.0 (snipers).
+  - Pistols aimed at 0.66 m from the eye; scopes 0.11 m off the eye. A
+    picture-in-picture lens on the sniper, marksman and scoped rifles.
+  - **Optics** (automatic rifle, carbine; `FpsOptic`): red dot (12%
+    parallax), scope (PiP), or irons; picked on the radial, V cycles;
+    defaults red dot / irons.
+  - Trail 30 m, fading in over 1.1 m from the barrel. `FpsMuzzleFlash`: a
+    white core, tongues, orange glow, per gun; no black box.
+  - Run speed 6.6; the floaty 12 m/s is `campus_speed`, campus only.
+  - Settings (sensitivity, FOV, `FpsBinds` keys): O in the buy phase.
+- **Rooftop map (G51c):** mirrored roofs (same cover and spawns), more cover
+  (ducts, a water tank, skylights, HVAC); each block's top storey is open
+  below, by a ramped stairwell; the bridge is walkable (ramps). The parapet
+  fences only stop bodies now (`GKAsset.BARRIER_LAYER`), so shots and sight
+  cross the court. The bot follows you downstairs; it does not use the bridge.
 
 ## fps_mid: FPS Mid duel (prototype)
-The same duel on the kit's Dust2-mid hallway (G29): you at the T end, the bot
-in the tower half of the lane. Same guns, bullets, bot and `FpsTune`.
+The same duel on the kit's Dust2-mid hallway (G29). Same guns, bullets, bot
+and `FpsTune`. **G51:** each end has a crate-and-wall T screen with two
+hidden spawn pockets; the match seed picks the pocket for each life. Crate
+stacks break the long sight lines into lanes. The bot walks only where a
+straight line is clear (`FpsWorld.walk_clear`) and hunts you.
 
 ## fps_campus: FPS Campus paintball (G43)
 The same duel on the Blender-built autumn campus (`campus.glb`): a stone
@@ -129,6 +194,17 @@ A WoW Classic raid against the Giant in a round courtyard (G22).
   bot (`MmoClasses.PAR`) 35, mechanics done 30, AoEs avoided 15, survival
   12, activity 8 → 0-100 → S 96 / A 88 / B 76 / C 64 / D 50 / F. The higher
   letter wins, then the higher score. The report card shows the parts.
+- **Consumables (G52, both raids, `MmoItems`):** a second bar on Shift+1–8:
+  healing and mana potions, healthstone, Elixir of Giants' Might, Restorative
+  (cleanses, Cinderbrand too), Swiftness, Stoneshield, Dense Dynamite; each
+  on its own cooldown, off the GCD. A use counts toward activity; potion
+  heals aren't healing done. Bots use them. PAR re-measured.
+- **G52 changes:** the floor turns from 70 s, resting 12 s, with 1 s of
+  warning (`scorch_spin_warn`); chevrons are lone arrows (no backward W).
+  After 75%, Earthshatter and the bombs come back to back (4 s,
+  `combo_fuse`). Cinderbrand sets the player visibly on fire. The 25%
+  speed-up and the timer enrage show as a screen-edge pulse and a glowing,
+  ember-throwing Giant (G52b).
 - **Numbers:** `MmoTune` (F1).
 
 ## mmo_tanks: Planet of Tanks (raid night 2, G46)
@@ -138,20 +214,20 @@ campus (`MmoTankArena`). The boss's brain is `MmoTankFight`; its view
 `MmoTankView`; numbers on F1 (`MmoTune`, section "Planet of Tanks"); the
 logo `art/ui/planet_of_tanks_logo*.png` (made by `tools/logo/planet_of_tanks_logo.py`)
 on the lobby tile, the load-in and the class pick. Every attack is
-telegraphed on the ground with a vague line of text ("The turret climbs
-skyward…").
+telegraphed on the ground only: no announcer text since G52/G52b except the
+pull line. (The text lines described below were removed; the visuals stay.)
 - **Main cycle, the cannon blast:** every `cannon_every` s a 120° wedge from
   the tank to the edge (`cannon_warn` s of telegraph) at the closest warrior
   or paladin (else the closest anyone). Each extra body caught raises
-  everyone's damage by `cannon_stack` (x1.75, x2.5…); the announcer calls
-  DOUBLE / TRIPLE / QUAD / MEGA HIT in big gold letters (and out loud when the
-  OS has a voice and `audio/general/text_to_speech` is on). A warrior or
+  everyone's damage by `cannon_stack` (x1.75, x2.5…); a stack of red
+  chevrons (one per body) and the multiplier pop over each player caught
+  (G52b; the banner and voice are gone). A warrior or
   paladin drags it away from the raid. Paused during barrage, Loose Cannon
   and the ram.
 - **Specials** (one at a time, `spell_gap` between, like the Giant):
   - *Barrage:* the gun climbs; 10 rounds land at random (every third on
-    someone), each leaving a burning crater until 1 s after the next special
-    is announced.
+    someone), each leaving a burning crater (a red disc with a bright rim,
+    drawn over the smoke, G52) until 1 s after the next special is announced.
   - *Smokescreen:* a smoke grenade, ground-targeted: the gun lobs a canister
     at the spot under a random raider (marked grey while it flies), and from
     there it spreads (`smoke_speed`) over
@@ -165,13 +241,18 @@ skyward…").
 - **75%:** the treads glow red; **Loose Cannon:** bright red treads, a 3 s
   side-to-side wobble, then it spins and sprays the middle 75% of the
   clearing for 4 s. Then the treads cool to orange and its **flanks** take
-  `flank_mult` (x1.5) damage for the rest of the fight.
+  `flank_mult` (x1.5) damage for the rest of the fight (shown by pulsing
+  flank plates, orange rings and a "Soft Flanks" icon, G52b).
 - **50%: the ram**, twice: it turns, rocks fore and aft (`ram_rock`), charges
   to the edge (flattening anyone in its path), then fires a huge 110° arc back
   across the clearing (hug the wall beside it). Then it drives home.
-- **25%:** two light tanks roll out and chase people (`add_*`); bots focus
-  them. All specials (Loose Cannon and the ram included) in the mix.
-- **10%:** everything `tank_rush_rate` (x2) faster.
+- **25%:** two light tanks roll out (dust, a camera nudge) and park back to
+  back 13 m out on the raid's side; they take turns firing into a red 70°,
+  17 m wedge each (700 every 1.6 s each; 32,000 HP for six). Beside them is
+  safe; a dead tank's wedge goes. Optional, but killing them buys room (G52).
+  All specials (Loose Cannon and the ram included) in the mix.
+- **15%:** everything `tank_rush_rate` (x1.5) faster (`tank_rush_at`; G52),
+  shown by a red-orange screen-edge pulse, hot treads and exhaust flames.
 - **Bots:** the first warrior (else paladin) holds the gun north, close in;
   the other warriors and paladins stand farther out; the raid south;
   telegraphs: the nearest safe spot (`MmoTankFight.safe_spots`).
@@ -183,14 +264,35 @@ After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
   4 prayer potions, 25% each; eating delays your next attack 3 ticks.
 - **Weapons:** bow 10-45 every 4 ticks, staff 15-55 every 5; 85% to land;
   range 10 squares. Pick one first; the other sits in the inventory to swap.
-- **The Warden (1,200 HP):** projectiles every 5 ticks (4 in phase 3), magic
-  or ranged, landing 3 s (5 ticks) after launch from any distance, so a near
-  one is visibly slow; the prayer is judged on impact. They never pause for a
-  special: they keep coming through the slams and the tear-out (G45). A melee
-  smack next to it. Specials every
-  11 ticks: lightning (phase 1); boulders, slam, lightning (phase 2); and in
-  phase 3 lightning, boulders, slam, twin volleys, and the far row torn out
-  every 18 ticks down to 5 rows.
+- **Inventory (G53):** also a 4-dose damage potion (bow/staff x1.2 for 40
+  ticks) and the **lightning dagger**: 1 damage every tick, melee (straight
+  next to the target, not diagonal). Clicking a target walks to a square
+  beside it and strikes on the tick you arrive (one command), so a chain of
+  clicks **skates** up a line of targets, one per tick at most. Swapping
+  weapons caps the wait at the new weapon's speed (min 1 tick).
+- **The Warden (1,200 HP):** prayable projectiles every 5 ticks (4 in phase
+  3), landing 3 s (5 ticks) after launch; the prayer is judged on impact;
+  they keep coming through the slams (G45). On screen, magic is cast by the
+  **mage** phantom (west; robes, staff, the orb leaves the staff tip) and
+  arrows loosed by the **ranger** phantom (east, bow), each winding up the
+  tick before (G53d; visual only). The Warden does the specials and a melee
+  smack next to it. Specials every 11 ticks: lightning; boulders (no shadow,
+  only the landing marker); slam; twin volleys in phase 3.
+- **Slam (G53d, after the author's reference video):** three hits 4 ticks
+  apart (2 below 50%). Only one of the middle three columns is safe per hit,
+  named by the pose: west fist raised → west-middle, both → centre, east →
+  east-middle; never the same twice running; each pose shows 4 ticks before
+  its hit. A three-square marker lights the spared square gold.
+- **Rows:** the farthest row is torn out per 8% HP lost (`rip_pct`), down to 5 rows.
+- **Shields (G53b):** from tick 30, every 35 ticks, it shields against magic,
+  then bowfire, by turns; that style does 0 (a blue or green bubble and an icon).
+- **Skull phases (G53b-d):** at 75 / 50 / 25% its HP holds and it is
+  shielded; 5–10 skulls rise in two rows either side of a lane near you. One
+  hit breaks a skull; they charge 2 + 1.67 ticks per skull (swell, shake,
+  ring pink to white-hot), and each one left bursts for 15. Skate them with
+  the dagger. A click on or near a skull always targets it. Skulls never
+  rise during a slam (they wait), and no slam starts during skulls. Shown by
+  purple screen edges, a skull burst over the Warden and "Rise, and burn!".
 - **Sun Sigil** (the twist): stand on it as it ignites → next 3 attacks x2.
 - **Verdict:** the same seeded fight for both; a kill beats a death, then
   the faster kill, then more damage, then less taken. Numbers: `OsrsTune` (F1).
