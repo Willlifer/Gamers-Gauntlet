@@ -113,7 +113,7 @@ static func variants(name: String) -> int:
 
 
 static func path_of(name: String, n: int) -> String:
-	return "%s%s_%d.wav" % [DIR, name, n]
+	return "%s%s_%d.%s" % [DIR, name, n, "ogg" if OS.has_feature("web") else "wav"]   # G49 (Arena): the web build ships Ogg twins
 
 
 ## Seconds from the start of a variation to its loudest 10 ms (whooshes are
@@ -176,6 +176,8 @@ func _stream(path: String, loop: bool) -> AudioStream:
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_begin = 0
 		w.loop_end = int(round(w.get_length() * w.mix_rate))
+	elif loop and st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = true
 	_streams[path] = st
 	return st
 

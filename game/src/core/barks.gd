@@ -58,4 +58,4 @@ static func fill(line: String, ctx: Dictionary) -> String:
 
 
 static func clip_path(clip: String) -> String:
-	return "res://audio/barks/%s.wav" % clip.to_lower().replace(" ", "_")
+	return "res://audio/barks/%s.%s" % [clip.to_lower().replace(" ", "_"), "ogg" if OS.has_feature("web") else "wav"]   # G49 (Arena)

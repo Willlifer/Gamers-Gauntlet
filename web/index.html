@@ -4,7 +4,17 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
 		<title>Gamers Gauntlet</title>
+		<!-- G49: the Gamers Gauntlet loading screen. Godot's default web shell (4.7) with our own status overlay; set as html/custom_html_shell of the "Web" preset. -->
 		<style>
+:root {
+	--bg: #0b0d12;
+	--bg2: #161a24;
+	--gold: #f2c14e;
+	--gold2: #e8892b;
+	--ink: #e9e6dc;
+	--dim: #8a8f9c;
+}
+
 html, body, #canvas {
 	margin: 0;
 	padding: 0;
@@ -12,8 +22,8 @@ html, body, #canvas {
 }
 
 body {
-	color: white;
-	background-color: black;
+	color: var(--ink);
+	background-color: var(--bg);
 	overflow: hidden;
 	touch-action: none;
 }
@@ -26,67 +36,112 @@ body {
 	outline: none;
 }
 
-#status, #status-splash, #status-progress {
-	position: absolute;
-	left: 0;
-	right: 0;
-}
-
-#status, #status-splash {
-	top: 0;
-	bottom: 0;
+#status, #status * {
+	box-sizing: border-box;
 }
 
 #status {
-	background-color: #242424;
+	position: absolute;
+	inset: 0;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
+	gap: 1.4rem;
+	padding: 0 16px;
 	visibility: hidden;
+	background: radial-gradient(ellipse at 50% 40%, var(--bg2) 0%, var(--bg) 70%);
+	font-family: 'Bahnschrift', 'DIN Alternate', 'Arial Narrow', 'Roboto Condensed', Arial, sans-serif;
+	text-align: center;
 }
 
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
+#gg-mark {
+	font-weight: 700;
+	font-stretch: condensed;
+	letter-spacing: 0.06em;
+	line-height: 0.95;
+	font-size: clamp(2.4rem, 9vw, 6rem);
+	text-transform: uppercase;
+	background: linear-gradient(180deg, #fff6d8 0%, var(--gold) 45%, var(--gold2) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+	filter: drop-shadow(0 4px 0 #00000088);
 }
 
-#status-splash.show-image--false {
-	display: none;
+#gg-sub {
+	color: var(--dim);
+	font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+	letter-spacing: 0.3em;
+	text-transform: uppercase;
+	margin-top: -0.6rem;
 }
 
-#status-splash.fullsize--true {
-	height: 100%;
+#gg-progress {
+	width: min(520px, 100%);
+}
+
+#gg-bar {
 	width: 100%;
-	object-fit: contain;
+	height: 14px;
+	border-radius: 7px;
+	background: #ffffff14;
+	box-shadow: inset 0 0 0 1px #ffffff22;
+	overflow: hidden;
 }
 
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
+#gg-fill {
+	height: 100%;
+	width: 0%;
+	border-radius: 7px;
+	background: linear-gradient(90deg, var(--gold2), var(--gold));
+	transition: width 0.25s ease-out;
 }
 
-#status-progress, #status-notice {
-	display: none;
+#gg-fill.busy {
+	width: 35% !important;
+	animation: gg-slide 1.1s ease-in-out infinite alternate;
 }
 
-#status-progress {
-	bottom: 10%;
-	width: 50%;
-	margin: 0 auto;
+@keyframes gg-slide {
+	from { transform: translateX(-20%); }
+	to { transform: translateX(210%); }
+}
+
+#gg-line {
+	font-size: 0.95rem;
+	color: var(--ink);
+	min-height: 1.3em;
+	font-variant-numeric: tabular-nums;
+}
+
+#gg-tip {
+	max-width: 520px;
+	color: var(--dim);
+	font-size: 0.9rem;
+	line-height: 1.4;
+	min-height: 2.8em;
+	transition: opacity 0.4s;
+}
+
+#gg-note {
+	position: absolute;
+	bottom: 14px;
+	left: 16px;
+	right: 16px;
+	color: #ffffff40;
+	font-size: 0.75rem;
 }
 
 #status-notice {
+	display: none;
 	background-color: #5b3943;
 	border-radius: 0.5rem;
 	border: 1px solid #9b3943;
 	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
 	line-height: 1.3;
-	margin: 0 2rem;
-	overflow: hidden;
+	max-width: 520px;
 	padding: 1rem;
-	text-align: center;
 	z-index: 1;
 }
 		</style>
@@ -104,21 +159,53 @@ body {
 		</noscript>
 
 		<div id="status">
-			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
+			<div id="gg-mark">Gamers<br>Gauntlet</div>
+			<div id="gg-sub">a party tournament</div>
+			<div id="gg-progress">
+				<div id="gg-bar"><div id="gg-fill" class="busy"></div></div>
+			</div>
+			<div id="gg-line">Getting ready…</div>
+			<div id="gg-tip"></div>
 			<div id="status-notice"></div>
+			<div id="gg-note">The first visit downloads the whole game (about 32 MB). Next time it starts from your browser's cache.</div>
 		</div>
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":27846036,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":24597248,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
 	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
+	const statusProgress = document.getElementById('gg-progress');
 	const statusNotice = document.getElementById('status-notice');
+	const fill = document.getElementById('gg-fill');
+	const line = document.getElementById('gg-line');
+	const tip = document.getElementById('gg-tip');
+
+	const TIPS = [
+		'Planet of Tanks: warriors and paladins, drag the main gun away from the raid. It hits harder for every body it catches.',
+		'Planet of Tanks: the smoke grenade lands where someone is standing. Keep away, then rush through the thin middle.',
+		'OSRS: Warden\'s Trial: pray against the projectiles. They always take 3 seconds to land.',
+		'MMO: Raid night: your grade is compared with everyone else\'s. Stay out of the fire.',
+		'MOBA: ARAM duel: first to 3 kills. Your health only comes back when you die.',
+		'MOBA: Objective take: save smite for the last hit on the Giant.',
+		'FPS: Campus paintball: you can walk straight through the bushes.',
+		'Black | White: the Twins: click inside the rim to move, T ends your turn, Space recentres the camera.',
+		'Bets: back the player you think wins. Winners split the pot by stake.',
+	];
+	let tipIndex = Math.floor(Math.random() * TIPS.length);
+	function nextTip() {
+		tip.style.opacity = 0;
+		setTimeout(() => {
+			tip.textContent = TIPS[tipIndex % TIPS.length];
+			tip.style.opacity = 1;
+			tipIndex++;
+		}, 400);
+	}
+	nextTip();
+	const tipTimer = setInterval(nextTip, 6000);
 
 	let initializing = true;
 	let statusMode = '';
@@ -128,6 +215,7 @@ const engine = new Engine(GODOT_CONFIG);
 			return;
 		}
 		if (mode === 'hidden') {
+			clearInterval(tipTimer);
 			statusOverlay.remove();
 			initializing = false;
 			return;
@@ -143,8 +231,8 @@ const engine = new Engine(GODOT_CONFIG);
 			statusNotice.removeChild(statusNotice.lastChild);
 		}
 		const lines = text.split('\n');
-		lines.forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
+		lines.forEach((l) => {
+			statusNotice.appendChild(document.createTextNode(l));
 			statusNotice.appendChild(document.createElement('br'));
 		});
 	}
@@ -158,6 +246,7 @@ const engine = new Engine(GODOT_CONFIG);
 		} else {
 			setStatusNotice('An unknown error occurred.');
 		}
+		line.textContent = 'Something went wrong. Try reloading the page.';
 		setStatusMode('notice');
 		initializing = false;
 	}
@@ -202,11 +291,12 @@ const engine = new Engine(GODOT_CONFIG);
 		engine.startGame({
 			'onProgress': function (current, total) {
 				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
+					const pct = Math.min(100, Math.floor((current / total) * 100));
+					fill.classList.remove('busy');
+					fill.style.width = pct + '%';
+					line.textContent = pct < 100 ? 'Loading the arena… ' + pct + '%' : 'Starting the engine…';
 				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
+					fill.classList.add('busy');
 				}
 			},
 		}).then(() => {

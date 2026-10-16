@@ -222,7 +222,7 @@ func _bark(u: MmoUnit, pool: Array, always := false) -> void:
 		return
 	_hurt_t[u.id] = now
 	var clip := str(pool[randi() % pool.size()])
-	var st := load("res://audio/barks/%s.wav" % clip) as AudioStream
+	var st := load("res://audio/barks/%s.%s" % [clip, "ogg" if OS.has_feature("web") else "wav"]) as AudioStream   # G49: Ogg on web
 	if st == null:
 		return
 	var p := AudioStreamPlayer3D.new()
