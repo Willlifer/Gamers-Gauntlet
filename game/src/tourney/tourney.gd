@@ -19,6 +19,8 @@ static var simulate_all := false
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	BWSettings.init(true)
+	if OS.has_feature("web"):
+		BWWebInstanceShim.install(get_tree())                                  # D492: WebGL instance-uniform cap (Black | White hex board, bodies)
 	BWMusic.ensure(self)
 	TourneyMusic.ensure(self)
 	BWEsc.ensure(self)

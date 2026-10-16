@@ -10,6 +10,8 @@ var _round := 0
 
 func _ready() -> void:
 	BWSettings.init(true)
+	if OS.has_feature("web"):
+		BWWebInstanceShim.install(get_tree())                                  # D492: WebGL instance-uniform cap (Black | White hex board, bodies)
 	BWMusic.ensure(self)
 	TourneyMusic.ensure(self)
 	BWSettings.apply_all()
