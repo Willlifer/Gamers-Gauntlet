@@ -220,6 +220,26 @@ func _go() -> void:
 		await _shot("%d_%s_aimed_arms_length" % [n, id])
 		n += 1
 		pl.debug_aim = false
+	# G51c: a shot across the court, roof A to roof B, the bullet in the air
+	if w.map_id == "rooftop":
+		bot.set_physics_process(false)
+		pl.set_loadout("sniper", "pistol")
+		pl.global_position = Vector3(-9.0 * 1.25 - 3.0, w.map.meta.roof_height + 0.05, -12.0)
+		bot.global_position = Vector3(9.0 * 1.25 + 4.0, w.map.meta.roof_height + 0.05, -14.0)
+		await _wait(0.8)
+		_look_at(bot.eye())
+		await _wait(0.3)
+		pl._cool = 0.0
+		pl._held_before = false
+		pl.debug_fire = true
+		await physics_frame
+		await physics_frame
+		pl.debug_fire = false
+		await _shot("%d_across_the_court" % n)
+		n += 1
+		await _wait(0.4)
+		await _shot("%d_across_the_court_hit" % n)
+		n += 1
 	# sheet: 5 across, as many rows as frames
 	var rows := ceili(shots.size() / 5.0)
 	var sheet := Image.create(1600, 180 * rows, false, Image.FORMAT_RGB8)
