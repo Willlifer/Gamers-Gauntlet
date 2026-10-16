@@ -655,10 +655,27 @@ func _on_event(e: Dictionary) -> void:
 			var su := sim.unit(str(e.id))
 			if su and not _views.has(su.id):
 				_add_unit(su)
+			if su and su.kind == "add" and tank_view:
+				tank_view.kick(su.pos)                          # G52b: the light tanks' arrival: dust and a nudge
+				_shake = maxf(_shake, 0.55)
 		"announce":
+			# G52b: a stacked hit marker over everyone caught, not a banner
 			if tank_view:
-				tank_view.announce(str(e.text), str(e.get("sub", "")))
-			_hud.log_line("[Announcer]: %s %s" % [str(e.text), str(e.get("sub", ""))], Color("#ffd040"))
+				tank_view.multi_hit(e.get("ids", []), int(e.get("n", 2)), float(e.get("mult", 1.0)))
+			_hud.log_line("%s %s" % [str(e.text), str(e.get("sub", ""))], Color("#ffd040"))
+		"frenzy":
+			# G52b: the speed-up (Planet of Tanks 15%, the Giant's 25%) as a screen-edge pulse, the boss glowing
+			_hud.edge_pulse(1.0)
+			_hud.edge_base = maxf(_hud.edge_base, 0.3)
+			_shake = maxf(_shake, 0.5)
+			if not tank_view:
+				_giant_rage(1)
+		"enrage":
+			_hud.edge_pulse(1.0)
+			_hud.edge_base = maxf(_hud.edge_base, 0.65)
+			_shake = maxf(_shake, 0.7)
+			if not tank_view:
+				_giant_rage(2)
 		"area":
 			_add_area(e.area as Dictionary)
 		"area_end":
@@ -1000,6 +1017,33 @@ func _brand_flames() -> Node3D:
 	l.position = Vector3(0, 1.2, 0)
 	n.add_child(l)
 	return n
+
+
+## G52b: the Giant's speed-up (1, frenzy) and enrage (2): it glows red, embers off it.
+func _giant_rage(level: int) -> void:
+	var v: Dictionary = _views.get("boss", {})
+	if v.is_empty():
+		return
+	var root: Node3D = v.root
+	var fx: Node3D = v.get("rage_fx")
+	if fx == null:
+		fx = Node3D.new()
+		var l := OmniLight3D.new()
+		l.light_color = Color("#ff3010")
+		l.omni_range = 2.6                             # x5: the Giant is scaled
+		l.position = Vector3(0, 1.4, 0)
+		fx.add_child(l)
+		var p := _sparkles(Color("#ff5020"))
+		p.emission_sphere_radius = 0.9
+		p.position = Vector3(0, 1.3, 0)
+		p.amount = 60
+		p.lifetime = 1.2
+		p.initial_velocity_max = 2.0
+		fx.add_child(p)
+		root.add_child(fx)
+		v["rage_fx"] = fx
+	(fx.get_child(0) as OmniLight3D).light_energy = 1.6 if level == 1 else 3.5
+	(fx.get_child(1) as CPUParticles3D).amount = 60 if level == 1 else 140
 
 
 func _sparkles(col: Color) -> CPUParticles3D:
@@ -1636,6 +1680,11 @@ func _sync_areas(_delta: float) -> void:
 		var fill := 1.0 - clampf(float(a.t) / maxf(0.01, float(a.dur)), 0.0, 1.0)
 		if str(a.get("look", "")) == "deny":
 			fill = 1.0                                        # G52: the light tanks' zones, solid while they live
+			var age := float(a.dur) - float(a.t)              # G52b: they flash in
+			var fl := clampf(1.0 - age / 1.6, 0.0, 1.0) * (0.5 + 0.5 * sin(age * 22.0))
+			for c in root.get_children():
+				if c is MeshInstance3D and (c as MeshInstance3D).material_override is ShaderMaterial:
+					((c as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("col", MmoTankView.sector_col("deny").lerp(Color(1, 0.85, 0.5), fl))
 		for c in root.get_children():
 			if c is MeshInstance3D and (c as MeshInstance3D).material_override is ShaderMaterial:
 				((c as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("fill", fill)

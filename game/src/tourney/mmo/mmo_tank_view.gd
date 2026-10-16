@@ -129,6 +129,77 @@ func build_unit(u: MmoUnit, root: Node3D, v: Dictionary) -> void:
 	v["fired"] = u.strike_serial
 	v["plate_h"] = bb.end.y * k + 0.6
 	v["dust"] = _track_dust(root)
+	if u.kind == "boss":
+		_flank_marks(n, bb, k, v)
+		_exhaust(n, bb, v)
+
+
+## G52b: the soft flanks, shown: a plate along each side that pulses, and a
+## target ring standing off it. Hidden until Loose Cannon opens them.
+func _flank_marks(n: Node3D, bb: AABB, k: float, v: Dictionary) -> void:
+	var marks: Array = []
+	for side in [-1, 1]:
+		var g := Node3D.new()
+		var plate := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.04, bb.size.y * 0.42, bb.size.z * 0.6)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.albedo_color = Color(1.0, 0.75, 0.2, 0.0)
+		bm.material = m
+		plate.mesh = bm
+		plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		g.add_child(plate)
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.5 / k
+		tm.outer_radius = 0.66 / k
+		var rm := StandardMaterial3D.new()
+		rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		rm.albedo_color = Color("#ffb030")
+		rm.no_depth_test = true
+		tm.material = rm
+		ring.mesh = tm
+		ring.rotation.z = PI * 0.5
+		ring.position = Vector3(float(side) * 1.1 / k, 0, 0)
+		var dot := MeshInstance3D.new()
+		var sm := SphereMesh.new()
+		sm.radius = 0.14 / k
+		sm.height = 0.28 / k
+		sm.material = rm
+		dot.mesh = sm
+		dot.position = ring.position
+		g.add_child(ring)
+		g.add_child(dot)
+		g.position = Vector3(float(side) * (bb.size.x * 0.5 + 0.03), bb.position.y + bb.size.y * 0.42, bb.get_center().z)
+		g.visible = false
+		n.add_child(g)
+		marks.append(g)
+	v["flank_marks"] = marks
+
+
+## G52b: exhaust flames off the tail, lit at the 15% speed-up.
+func _exhaust(n: Node3D, bb: AABB, v: Dictionary) -> void:
+	var pipes: Array = []
+	for side in [-1, 1]:
+		var p := view._sparkles(Color("#ff7020"))
+		p.emission_sphere_radius = 0.12
+		p.amount = 50
+		p.lifetime = 0.45
+		p.direction = Vector3(0, 0.6, -1)
+		p.spread = 18.0
+		p.initial_velocity_min = 3.0
+		p.initial_velocity_max = 5.5
+		p.gravity = Vector3(0, 2.0, 0)
+		p.scale_amount_min = 0.25
+		p.scale_amount_max = 0.5
+		p.position = Vector3(float(side) * bb.size.x * 0.28, bb.position.y + bb.size.y * 0.55, bb.position.z + 0.1)
+		p.emitting = false
+		n.add_child(p)
+		pipes.append(p)
+	v["exhaust"] = pipes
 
 
 func _track_dust(root: Node3D) -> CPUParticles3D:
@@ -184,7 +255,21 @@ func pose(u: MmoUnit, v: Dictionary, delta: float) -> void:
 		if tf.spinning:
 			wob.z = sin(t * 31.0) * 0.03
 		body.rotation = body.rotation.lerp(wob, minf(1.0, delta * 12.0))
-		_glow(v, tf.glow, delta)
+		var rush := tf.rate > 1.0
+		var g: Array = tf.glow
+		if rush:                                          # G52b: past 15% the whole tank runs hot
+			g = [maxf(float(g[0]), 1.7), maxf(float(g[1]), 1.7)]
+		_glow(v, g, delta)
+		for p: CPUParticles3D in v.get("exhaust", []):
+			p.emitting = rush
+		var soft := u.has_aura("soft_flanks")
+		for m: Node3D in v.get("flank_marks", []):
+			m.visible = soft
+			if soft:
+				var pl := (m.get_child(0) as MeshInstance3D).mesh.surface_get_material(0) as StandardMaterial3D
+				pl.albedo_color.a = 0.25 + 0.3 * (0.5 + 0.5 * sin(t * 5.0))
+				var r := 1.0 + 0.12 * sin(t * 5.0)
+				(m.get_child(1) as Node3D).scale = Vector3.ONE * r
 		(v.dust as CPUParticles3D).emitting = u.moving or tf.spinning or tf.wobble > 0.0
 	else:
 		var tgt := sim.unit(u.target)
@@ -277,6 +362,9 @@ func _muzzle(v: Dictionary, s: float) -> void:
 ## Dressing for an area MmoView has just laid down.
 func decorate(a: Dictionary, root: Node3D) -> void:
 	match str(a.get("look", "")):
+		"deny":
+			kick(a.pos as Vector2)                            # G52b: parked: dust, a nudge, the wedge flashes in (MmoView._sync_areas)
+			view._shake = maxf(view._shake, 0.35)
 		"smoke_mark":
 			var can := MeshInstance3D.new()
 			var cy := CylinderMesh.new()
@@ -464,6 +552,7 @@ void fragment() {
 
 func sync(_delta: float) -> void:
 	_sync_smoke()
+	_sync_marks(_delta)
 	if _ann_t > 0.0:
 		_ann_t -= _delta
 		if _ann_t <= 0.0:
@@ -549,6 +638,80 @@ func _sync_smoke() -> void:
 	_smoke_puffs.emission_ring_radius = r - 1.0
 	_smoke_puffs.emission_ring_inner_radius = maxf(0.0, r - MmoTune.value("smoke_band"))
 	_smoke_puffs.emitting = float(sm.fade) > 0.25
+
+
+# ------------------------------------------------------------ hit markers
+
+var _marks: Array = []           ## { node, t, id }
+
+
+## G52b: DOUBLE / TRIPLE HIT, drawn: over everyone caught, a stack of `n`
+## red chevrons that pops in and fades, and the damage multiplier under it.
+func multi_hit(ids: Array, n: int, mult: float) -> void:
+	for id: String in ids:
+		var u := sim.unit(id)
+		if u == null or not view._views.has(id):
+			continue
+		var root := Node3D.new()
+		add_child(root)
+		for i in mini(n, 6):
+			var ch := _chevron(Color(1.0, 0.25 + 0.12 * i, 0.08))
+			ch.position = Vector3(0, i * 0.5, 0)
+			ch.scale = Vector3.ONE * 1.8
+			root.add_child(ch)
+		root.scale = Vector3.ONE * 0.1
+		var tw := create_tween()
+		tw.tween_property(root, "scale", Vector3.ONE * 1.25, 0.12).set_trans(Tween.TRANS_BACK)
+		tw.tween_property(root, "scale", Vector3.ONE, 0.1)
+		_marks.append({ "node": root, "t": 0.0, "id": id })
+		view._floater(u, "x%.2f" % mult, Color("#ff8a30"), true)
+	if not ids.is_empty():
+		BWSfx.play("ph_colossus_thrust", Vector3.ZERO, { "gain_db": -2.0, "pitch": 1.3 })
+
+
+func _chevron(col: Color) -> Node3D:
+	var c := Node3D.new()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = col
+	m.no_depth_test = true
+	m.render_priority = 4
+	for s in [-1, 1]:
+		var arm := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.42, 0.11, 0.02)
+		bm.material = m
+		arm.mesh = bm
+		arm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		arm.position = Vector3(s * 0.15, 0.08, 0)
+		arm.rotation.z = s * 0.6                        # a V pointing down at the head
+		c.add_child(arm)
+	return c
+
+
+func _sync_marks(delta: float) -> void:
+	var cam := view.camera()
+	for mk: Dictionary in _marks.duplicate():
+		mk.t = float(mk.t) + delta
+		var node: Node3D = mk.node
+		var vv: Dictionary = view._views.get(str(mk.id), {})
+		if float(mk.t) > 1.8 or vv.is_empty():
+			node.queue_free()
+			_marks.erase(mk)
+			continue
+		node.global_position = (vv.root as Node3D).global_position + Vector3(0, 2.9 + float(mk.t) * 0.25, 0)
+		var to := cam.global_position - node.global_position
+		node.rotation.y = atan2(to.x, to.z)
+		if float(mk.t) > 1.3:
+			node.scale = Vector3.ONE * maxf(0.05, 1.0 - (float(mk.t) - 1.3) * 2.0)
+
+
+## G52b: a dust kick where the light tanks break out of the trees.
+func kick(p: Vector2) -> void:
+	var at := view._v3(p, 0.3)
+	for i in 3:
+		view._puff(at + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)), Color(0.62, 0.5, 0.34, 0.7))
+	view._fx._burst_parts(at, "wind", 14, 0.0, { "up": 2.5, "spread": 4.0, "g": 6.0, "shape": 2, "life": 0.7, "s0": 0.18 })
 
 
 # --------------------------------------------------------------- announcer

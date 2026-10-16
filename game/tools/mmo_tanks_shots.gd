@@ -82,7 +82,7 @@ func _go() -> void:
 	await _wait(0.3)
 	await _shot("cannon")
 	await _top("cannon")
-	var want := ["smoke_throw", "barrage", "craters", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds"]
+	var want := ["smoke_throw", "barrage", "craters", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds", "flanks", "adds_in", "rush"]
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 60000:
 		guard += 1
@@ -113,6 +113,19 @@ func _go() -> void:
 				s.tank.adds[0].flags["born"] = s.time + 2.5           # G52: parked back to back, a couple of shots in
 			elif s.time > float(s.tank.adds[0].flags.born):
 				name = "adds"
+		# G52b: the visual callouts
+		if name == "" and "flanks" in want and s.boss.has_aura("soft_flanks") and s.spell.is_empty():
+			name = "flanks"
+		if name == "" and "adds_in" in want:
+			for ad: MmoUnit in s.tank.adds:
+				var z: Variant = ad.flags.get("zone")
+				if z is Dictionary and float(z.dur) - float(z.t) > 0.35:
+					name = "adds_in"
+		if name == "" and "rush" in want and s.tank.rate > 1.0:
+			if not s.boss.flags.has("rush_seen"):
+				s.boss.flags["rush_seen"] = s.time + 0.6
+			elif s.time > float(s.boss.flags.rush_seen):
+				name = "rush"
 		if name != "" and name in want:
 			await _wait(0.6)
 			await _shot(name)
@@ -122,10 +135,13 @@ func _go() -> void:
 		v._tick()
 		if guard % 6 == 0:
 			await process_frame
-	# the announcer
-	v.tank_view.announce("TRIPLE HIT!", "3 caught in the blast: x2.50 damage each. Spread from the tank!")
-	await _wait(0.5)
-	await _shot("announce")
+	# G52b: a triple hit, marked over the three caught (was the announcer's banner)
+	var three: Array = s.living().slice(0, 3).map(func(u: MmoUnit) -> String: return u.id)
+	v.tank_view.multi_hit(three, 3, 2.5)
+	await _wait(0.35)
+	await _shot("multihit")
+	await _top("multihit")
+
 	while s.winner == "" and s.time < 900.0:
 		v._tick()
 	await _wait(2.6)

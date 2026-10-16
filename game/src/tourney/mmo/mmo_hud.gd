@@ -63,6 +63,9 @@ var _center: Label
 var _center_t := 0.0
 var _help: Label
 var tooltip: Tooltip
+var _edge: ColorRect                   ## G52b: the screen-edge pulse (frenzy, enrage)
+var _edge_burst := 0.0
+var edge_base := 0.0                   ## a steady throb while it lasts (0..1)
 
 
 func _ready() -> void:
@@ -102,6 +105,16 @@ func _label(parent: Control, text: String, pos: Vector2, size_: int, col: Color,
 
 
 func _build() -> void:
+	# G52b: the screen-edge pulse, under everything else
+	_edge = ColorRect.new()
+	_edge.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = EDGE_SHADER
+	var em := ShaderMaterial.new()
+	em.shader = sh
+	_edge.material = em
+	_root.add_child(_edge)
 	# unit frames
 	_player_f = UnitFrame.new(self, false, 1.0)
 	_player_f.position = Vector2(6, 6)
@@ -240,6 +253,22 @@ func _build() -> void:
 	_root.add_child(tooltip)
 
 
+const EDGE_SHADER := """
+shader_type canvas_item;
+uniform float k = 0.0;
+void fragment() {
+	vec2 d = abs(UV - 0.5) * 2.0;
+	float e = smoothstep(0.62, 1.0, max(d.x, d.y * 0.92)) + 0.35 * smoothstep(0.75, 1.15, length(d));
+	COLOR = vec4(mix(vec3(1.0, 0.45, 0.08), vec3(0.9, 0.05, 0.02), e), clamp(e * k, 0.0, 0.85));
+}
+"""
+
+
+## G52b: a red-orange pulse round the screen's edge (`burst` 0..1, fades over ~2 s).
+func edge_pulse(burst: float) -> void:
+	_edge_burst = maxf(_edge_burst, burst)
+
+
 # ------------------------------------------------------------------ feed
 
 func log_line(text: String, col := Color(1, 1, 1)) -> void:
@@ -339,6 +368,10 @@ func update(delta: float) -> void:
 	_dead.text = "You have died.  A healer can bring you back." if me and not me.alive else ""
 	for b: MmoIcon in _buttons:
 		b.lit = maxf(0.0, b.lit - delta * 4.0)
+	_edge_burst = maxf(0.0, _edge_burst - delta * 0.5)
+	var throb := edge_base * (0.45 + 0.35 * sin(Time.get_ticks_msec() / 260.0))
+	var wave := _edge_burst * (0.75 + 0.25 * sin(Time.get_ticks_msec() / 90.0))
+	(_edge.material as ShaderMaterial).set_shader_parameter("k", maxf(throb, wave))
 
 
 func flash_slot(slot: int) -> void:

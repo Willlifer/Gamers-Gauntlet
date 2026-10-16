@@ -92,8 +92,10 @@ func _cannon() -> void:
 		var took := hp0 - w.hp
 		var want: float = MmoTune.value("cannon_dmg") * (1.0 + MmoTune.value("cannon_stack") * (n - 1)) * float(MmoClasses.CLASSES.warrior.armor)
 		_ok(absf(took - want) < 2.0, "cannon on %d: the warrior takes %.0f (want %.0f)" % [n, took, want])
-		var called := ev.any(func(e: Dictionary) -> bool: return e.type == "announce")
-		_ok(called == (n >= 2), "the announcer calls a multi-hit (n=%d, called %s)" % [n, called])
+		var called := ev.filter(func(e: Dictionary) -> bool: return e.type == "announce")
+		_ok(called.is_empty() == (n < 2), "a multi-hit is marked (n=%d, events %d)" % [n, called.size()])
+		if n >= 2 and not called.is_empty():
+			_ok((called[0].ids as Array).size() == n, "G52b: the marker goes over all %d caught" % n)
 		print("cannon on %d: %.0f each" % [n, took])
 
 
@@ -162,6 +164,7 @@ func _loose() -> void:
 	_ok(not inner.alive or inner.hp < h0 - 2000.0, "Loose Cannon: the middle is shredded")
 	_ok(outer.hp == ho, "Loose Cannon: the rim is safe")
 	_ok(s.tank.flank_open, "Loose Cannon opens the flanks")
+	_ok(s.boss.has_aura("soft_flanks"), "G52b: the soft flanks show on its frame")
 	# flank damage
 	var r := _cls(s, "warrior")
 	r.alive = true
@@ -291,7 +294,7 @@ func _raids(runs: int) -> void:
 	for w: String in warns:
 		kinds[w] = true
 	print("  text lines over %d raids: %s" % [runs, kinds.keys()])
-	_ok(kinds.size() <= 4, "G52: only a few lines of text left (%d kinds)" % kinds.size())
+	_ok(kinds.size() <= 1, "G52b: no text but the pull (%d kinds)" % kinds.size())
 
 
 func _replay(seed: int) -> int:

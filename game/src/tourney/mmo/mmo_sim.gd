@@ -918,6 +918,7 @@ func _tick_boss() -> void:
 	if not enraged and time - pull_time >= MmoTune.value("enrage"):
 		enraged = true
 		_emit({ "type": "warn", "text": "The Giant goes into a rage!", "col": "#ff2020" })
+		_emit({ "type": "enrage" })                       # G52b: shown too (the text is gone below 50%)
 	# the target: top threat (a taunt holds it for 3 s; 10% over to pull it off)
 	b.flags["taunt_t"] = maxf(0.0, float(b.flags.get("taunt_t", 0.0)) - TICK)
 	var cur := unit(b.target)

@@ -77,7 +77,7 @@ func tick() -> void:
 	var b := s.boss
 	if not s.enraged and s.time - s.pull_time >= MmoTune.value("enrage"):
 		s.enraged = true
-		_warn("The engine howls. Nothing will stop it now.", "#ff2020")
+		s._emit({ "type": "enrage" })                          # G52b: on screen, not in text (MmoTankView)
 	_phases()
 	var tgt := catcher()
 	b.target = tgt.id if tgt else ""
@@ -110,17 +110,12 @@ func _phases() -> void:
 		rate = MmoTune.value("tank_rush_rate")
 		s.frenzied = true
 		s.next_spell_at = minf(s.next_spell_at, s.time + 1.0)
-		_warn("The needle's in the red. EVERYTHING FASTER!", "#ff2020")
-		s._emit({ "type": "frenzy" })
+		s._emit({ "type": "frenzy" })                          # G52b: a screen-edge pulse, the tank glows, exhaust flames
 
 
 func _force(id: String) -> void:
 	_forced.append(id)
 	s.next_spell_at = minf(s.next_spell_at, s.time + 1.5)
-
-
-func _warn(text: String, col: String) -> void:
-	s._emit({ "type": "warn", "text": text, "col": col, "always": true })
 
 
 ## The cannon's mark: the closest living warrior or paladin, else the closest anyone.
@@ -371,7 +366,8 @@ func _loose(dt: float) -> void:
 		glow = [0.5, 0.5]
 		if not flank_open:
 			flank_open = true
-			_warn("The treads cool to an angry orange. Its flanks look soft!", "#ffa040")
+			# G52b: shown, not said: the flank plates pulse, targets on them, and a debuff on its frame
+			s.add_aura(b, { "id": "soft_flanks", "name": "Soft Flanks", "dur": 1.0e6, "glyph": "crack", "col": "#ffa040", "debuff": true })
 		s._emit({ "type": "boss_spell", "spell": "loose", "stage": "end" })
 		_end(0.8)
 
@@ -676,7 +672,9 @@ func area_fired(a: Dictionary) -> void:
 			s._emit({ "type": "explode", "pos": a.pos, "dir": a.dir, "r": float(a.r), "half": float(a.half), "what": "cannon", "n": n })
 			if n >= 2:
 				var word: String = { 2: "DOUBLE", 3: "TRIPLE", 4: "QUAD" }.get(n, "MEGA")
-				s._emit({ "type": "announce", "text": "%s HIT!" % word, "sub": "%d caught in the blast: x%.2f damage each. Spread from the tank!" % [n, 1.0 + MmoTune.value("cannon_stack") * (n - 1)], "n": n })
+				# G52b: drawn as a stacked hit marker over each one caught (MmoTankView.multi_hit), not a banner
+				s._emit({ "type": "announce", "text": "%s HIT!" % word, "sub": "%d caught in the blast: x%.2f damage each." % [n, 1.0 + MmoTune.value("cannon_stack") * (n - 1)],
+					"n": n, "mult": 1.0 + MmoTune.value("cannon_stack") * (n - 1), "ids": hits.map(func(u: MmoUnit) -> String: return u.id) })
 		"shell":
 			for u: MmoUnit in s.living():
 				if u.pos.distance_to(a.pos as Vector2) <= float(a.r) + MmoSim.DODGE_PAD:

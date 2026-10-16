@@ -113,6 +113,12 @@ func _go() -> void:
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 40000:
 		guard += 1
+		# G52b: the 25% speed-up, shown: the screen edge pulses, the Giant glows
+		if s.frenzied and not shots.has("frenzy"):
+			await _wait(0.8)
+			await _shot("frenzy")
+			await _top("frenzy")
+			continue
 		# Cinderbrand (G30): a frame of the raid burning, a couple of seconds in
 		var burning: Array = s.living().filter(func(p: MmoUnit) -> bool: return p.has_aura(MmoSim.BRAND))
 		if "brand" in want and burning.size() >= 1:
