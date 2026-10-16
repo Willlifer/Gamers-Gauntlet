@@ -10,33 +10,47 @@ extends RefCounted
 ## never cuts a blocked corner. The Warden is a 5x5 piece in the void north
 ## of the floor.
 ##
-## The Warden:
-##   projectiles  magic (blue orb) or ranged (arrow), shown over its head as
-##                it looses; each lands `flight_s` (3 s, five ticks) after
-##                launch wherever you stand, so a near one crawls and a far
-##                one streaks (G45), and does nothing if the matching protect
-##                prayer is up when it lands (checked on impact). They keep
-##                coming during every special. In phase 3 a twin volley
-##                sends the other style a tick behind (a flick). Stand next
-##                to it and it smacks you (melee, one tick).
+## The flanks (G53): the two red phantoms either side of the floor take
+## turns firing the prayable auto attacks:
+##   projectiles  magic (blue orb) or ranged (arrow), from the west or east
+##                phantom by turns; each lands `flight_s` (3 s, five ticks)
+##                after launch wherever you stand, so a near one crawls and a
+##                far one streaks (G45), and does nothing if the matching
+##                protect prayer is up when it lands (checked on impact). They
+##                keep coming during every special. In phase 3 a twin volley
+##                sends the other style from the other phantom a tick behind
+##                (a flick).
+## The Warden (the one you hit) does the specials, and smacks you if you
+## stand next to it (melee, one tick):
 ##   lightning    shadows grow on squares; a bolt strikes each when it's full.
 ##                A struck square can't be picked again for a few ticks.
 ##   boulders     shadows under falling rocks (one on you); a rock that lands
 ##                blocks its square for a while.
-##   slam         the floor glows east, then west, then both sides; stand in
-##                the safe columns when each lands.
-##   tear-out     phase 3: the furthest row cracks and falls away, again and
-##                again, down to `rows_left` rows.
+##   slam         the floor glows east, then west, then everything but the
+##                centre column; stand in the safe columns when each lands.
+##                Below 50% the three hits come faster (slam_gap_fast).
+##   tear-out     every `rip_pct` of its HP lost (8%), the furthest row cracks
+##                and falls away, down to `rows_left` rows.
+##   skulls       at 75%, 50% and 25% it stops (shielded, no specials) and
+##                raises 5-10 skulls on the floor (seeded). Each skull blocks
+##                its square and takes 1 from any hit, so the lightning
+##                dagger (1 a tick) clears them and a bow or staff is far too
+##                slow; every skull left when the timer runs out bursts on you.
 ## The twist, the Sun Sigil: a gold sigil lights on a square now and then;
 ## stand on it when it ignites and your next attacks hit twice as hard. It
 ## tends to light where it's dangerous to stand.
 ## Phases by the Warden's HP: 1 above 66%, 2 above 33%, 3 below.
+## Your inventory: the weapons you aren't holding (bow, staff, lightning
+## dagger: click to wield), a damage potion (each dose: bow / staff hits
+## x boost_mult for boost_ticks), sharks, prayer potions.
 
 const TICK := 0.6
 const W := 15
 const H := 12
 const BOSS_RECT := Rect2i(5, -5, 5, 5)          ## the Warden's squares
 const STYLES := ["magic", "ranged"]
+const WEAPONS := ["bow", "staff", "dagger"]
+const SKULL_AT := [0.75, 0.5, 0.25]             ## skull phases at these HP fractions
 
 var rng := RandomNumberGenerator.new()
 var tick := 0
@@ -50,11 +64,14 @@ var falls: Array = []          # boulders { tile, t, total }
 var slams: Array = []          # { cols: [x], t, total, side }
 var rip := {}                  # { row, t, total } while a row is cracking
 var sigils: Array = []         # { tile, t, total }
+var skulls: Array = []         # { id, tile, hp, max } during a skull phase
+var skull_phase := {}          # { t, total, n } while skulls are up
 var cooled := {}               # Vector2i -> ticks before lightning may pick it again
 var over := ""                 # "" | "win" | "dead" | "time"
 var events: Array = []
 var _special_i := 0
 var _next_proj := 1
+var _next_skull := 1
 
 
 func _init(seed: int = 1) -> void:
@@ -62,13 +79,16 @@ func _init(seed: int = 1) -> void:
 	var hp := OsrsTune.value("hp")
 	var pr := OsrsTune.value("prayer")
 	me = { "tile": Vector2i(7, 9), "trail": [Vector2i(7, 9)], "path": [], "hp": hp, "max_hp": hp, "pray": pr, "max_pray": pr,
-		"prayer": "", "drain": 0, "weapon": "bow", "attack": false, "atk_cd": 0, "food": int(OsrsTune.value("food")),
-		"doses": int(OsrsTune.value("potions")) * 4, "run": true, "alive": true, "empowered": 0, "acted": "",
+		"prayer": "", "drain": 0, "weapon": "bow", "attack": false, "target": -1, "atk_cd": 0, "food": int(OsrsTune.value("food")),
+		"doses": int(OsrsTune.value("potions")) * 4, "boost_doses": int(OsrsTune.value("boost_doses")), "boost": 0,
+		"run": true, "alive": true, "empowered": 0, "acted": "",
 		# the record
-		"dmg_done": 0.0, "dmg_taken": 0.0, "blocked": 0, "unblocked": 0, "dodged": 0, "struck": 0, "sigils": 0, "attacks": 0 }
+		"dmg_done": 0.0, "dmg_taken": 0.0, "blocked": 0, "unblocked": 0, "dodged": 0, "struck": 0, "sigils": 0, "attacks": 0,
+		"skulls": 0, "skulls_left": 0 }
 	var bh := OsrsTune.value("boss_hp")
-	boss = { "hp": bh, "max_hp": bh, "auto_cd": 8, "special_cd": 14, "rip_cd": int(OsrsTune.value("rip_every")),
-		"sigil_cd": 15, "last_style": "", "twin": "", "anim": "", "anim_tick": -99, "phase": 1 }
+	boss = { "hp": bh, "max_hp": bh, "auto_cd": 8, "special_cd": 14, "rips": 0,
+		"sigil_cd": 15, "last_style": "", "last_src": "", "flank": 0, "twin": "", "twin_src": "", "anim": "", "anim_tick": -99,
+		"phase": 1, "skull_i": 0 }
 
 
 # ------------------------------------------------------------------ squares
@@ -78,7 +98,22 @@ static func inside(t: Vector2i) -> bool:
 
 
 func walkable(t: Vector2i) -> bool:
-	return inside(t) and not gone.has(t) and not rocks.has(t)
+	return inside(t) and not gone.has(t) and not rocks.has(t) and skull_at(t) < 0
+
+
+## The skull on square `t` (its id), or -1.
+func skull_at(t: Vector2i) -> int:
+	for k in skulls:
+		if k.tile == t:
+			return int(k.id)
+	return -1
+
+
+func skull(id: int) -> Dictionary:
+	for k in skulls:
+		if int(k.id) == id:
+			return k
+	return {}
 
 
 ## Squares from `t` to the Warden's nearest square (Chebyshev, like OSRS range).
@@ -134,8 +169,10 @@ func phase() -> int:
 
 # --------------------------------------------------------------------- step
 
-## orders: { move: Vector2i, attack: bool, pray: "magic"|"ranged"|"melee"|"off",
-##   eat: true, drink: true, swap: true, run: bool }
+## orders: { move: Vector2i, attack: bool, target: skull id, pray: "magic"|"ranged"|"melee"|"off",
+##   eat: true, drink: true, boost: true, wield: "bow"|"staff"|"dagger", swap: true (bow <-> staff), run: bool }
+## `attack` alone attacks the Warden; `target` attacks a skull; `move` with
+## `attack` keeps attacking what you were after you arrive.
 func step(o: Dictionary) -> Array:
 	events = []
 	if over != "":
@@ -147,6 +184,7 @@ func step(o: Dictionary) -> Array:
 	_boss_turn()
 	_resolve()
 	_prayer_drain()
+	me.boost = maxi(0, int(me.boost) - 1)
 	for k in cooled.keys():
 		cooled[k] = int(cooled[k]) - 1
 		if int(cooled[k]) <= 0:
@@ -186,8 +224,11 @@ func _orders(o: Dictionary) -> void:
 		elif float(me.pray) > 0.0:
 			me.prayer = p
 		_ev({ "type": "pray", "prayer": me.prayer })
+	var wield := str(o.get("wield", ""))
 	if o.get("swap", false):
-		me.weapon = "staff" if me.weapon == "bow" else "bow"
+		wield = "staff" if me.weapon == "bow" else "bow"
+	if wield in WEAPONS and wield != me.weapon:
+		me.weapon = wield
 		me.atk_cd = maxi(int(me.atk_cd), 1)
 		_ev({ "type": "swap", "weapon": me.weapon })
 	if o.get("eat", false) and int(me.food) > 0 and float(me.hp) < float(me.max_hp):
@@ -203,20 +244,48 @@ func _orders(o: Dictionary) -> void:
 		me.pray = float(me.pray) + add
 		me.acted = "drink"
 		_ev({ "type": "drink", "restore": add })
+	elif o.get("boost", false) and int(me.boost_doses) > 0:
+		me.boost_doses = int(me.boost_doses) - 1
+		me.boost = int(OsrsTune.value("boost_ticks"))
+		me.acted = "boost"
+		_ev({ "type": "boost", "ticks": int(me.boost) })
 	if o.has("move"):
 		me.path = path(me.tile, o.move)
 		me.attack = bool(o.get("attack", false))
+	elif o.has("target"):
+		if not skull(int(o.target)).is_empty():
+			me.target = int(o.target)
+			me.attack = true
+			me.path = []
 	elif o.has("attack"):
 		me.attack = bool(o.attack)
 		if me.attack:
+			me.target = -1
 			me.path = []
+
+
+## Your reach with what you hold.
+func reach() -> int:
+	return int(OsrsTune.value("dagger_range" if me.weapon == "dagger" else "range"))
+
+
+## Squares from `t` to what you're attacking (the Warden or a skull).
+func target_dist(t: Vector2i) -> int:
+	if int(me.target) >= 0:
+		var k := skull(int(me.target))
+		if not k.is_empty():
+			return _cheb(t, k.tile)
+	return boss_dist(t)
 
 
 func _walk() -> void:
 	me.trail = [me.tile]
 	if not me.alive:
 		return
-	if me.attack and (me.path as Array).is_empty() and boss_dist(me.tile) > int(OsrsTune.value("range")):
+	if int(me.target) >= 0 and skull(int(me.target)).is_empty():
+		me.target = -1                                       # it broke: stop, like OSRS
+		me.attack = false
+	if me.attack and (me.path as Array).is_empty() and target_dist(me.tile) > reach():
 		me.path = _path_into_range()
 	var steps := 2 if me.run else 1
 	for i in steps:
@@ -236,35 +305,63 @@ func _walk() -> void:
 
 
 func _path_into_range() -> Array:
-	var best: Array = []
-	var r := int(OsrsTune.value("range"))
-	var p := path(me.tile, Vector2i(me.tile.x, 0))
+	var r := reach()
+	var goal := Vector2i(me.tile.x, 0)
+	if int(me.target) >= 0:
+		goal = skull(int(me.target)).tile
+	var p := path(me.tile, goal)
 	for i in p.size():
-		if boss_dist(p[i]) <= r:
+		if target_dist(p[i]) <= r:
 			return p.slice(0, i + 1)
-	return best if not best.is_empty() else p
+	return p
 
 
 func _attack() -> void:
 	me.atk_cd = maxi(0, int(me.atk_cd) - 1)
 	if not me.alive or not me.attack or not (me.path as Array).is_empty():
 		return
-	if boss_dist(me.tile) > int(OsrsTune.value("range")) or int(me.atk_cd) > 0:
+	if target_dist(me.tile) > reach() or int(me.atk_cd) > 0:
 		return
 	var w := str(me.weapon)
 	me.atk_cd = int(OsrsTune.value(w + "_speed"))
 	me.attacks = int(me.attacks) + 1
+	var dagger := w == "dagger"
 	var dmg := 0.0
-	if rng.randf() < OsrsTune.value("accuracy"):
+	if dagger:
+		dmg = OsrsTune.value("dagger_dmg")
+	elif rng.randf() < OsrsTune.value("accuracy"):
 		dmg = float(rng.randi_range(int(OsrsTune.value(w + "_lo")), int(OsrsTune.value(w + "_hi"))))
-	var emp := int(me.empowered) > 0
+	var fly := 1 if w != "staff" else 2
+	if int(me.target) >= 0:                                  # a skull: any hit takes 1
+		var k := skull(int(me.target))
+		var hit := 1 if dmg > 0.0 else 0
+		k.hp = int(k.hp) - hit
+		_ev({ "type": "attack", "weapon": w, "dmg": float(hit), "empowered": false, "land": tick + fly, "skull": int(k.id), "tile": k.tile })
+		if int(k.hp) <= 0:
+			skulls.erase(k)
+			me.skulls = int(me.skulls) + 1
+			me.target = -1
+			me.attack = false
+			_ev({ "type": "skull_dead", "id": int(k.id), "tile": k.tile, "left": skulls.size() })
+		return
+	var emp := int(me.empowered) > 0 and not dagger
 	if emp:
 		me.empowered = int(me.empowered) - 1
 		dmg = roundf(dmg * OsrsTune.value("sigil_mult"))
-	dmg = minf(dmg, float(boss.hp))
+	if int(me.boost) > 0 and not dagger:
+		dmg = roundf(dmg * OsrsTune.value("boost_mult"))
+	if not skull_phase.is_empty():
+		dmg = 0.0                                            # shielded while its skulls are up
+	dmg = clampf(dmg, 0.0, float(boss.hp) - _hp_floor())
 	boss.hp = float(boss.hp) - dmg
 	me.dmg_done = float(me.dmg_done) + dmg
-	_ev({ "type": "attack", "weapon": w, "dmg": dmg, "empowered": emp, "land": tick + (1 if w == "bow" else 2) })
+	_ev({ "type": "attack", "weapon": w, "dmg": dmg, "empowered": emp, "land": tick + fly, "skull": -1, "shielded": not skull_phase.is_empty() })
+
+
+## HP the Warden can't be hit below yet: the next skull phase's threshold.
+func _hp_floor() -> float:
+	var i := int(boss.skull_i)
+	return float(boss.max_hp) * float(SKULL_AT[i]) if i < SKULL_AT.size() else 0.0
 
 
 # --------------------------------------------------------------------- boss
@@ -274,22 +371,32 @@ func _boss_turn() -> void:
 	if ph != int(boss.phase):
 		boss.phase = ph
 		_ev({ "type": "phase", "phase": ph })
-	# projectiles (and the melee smack)
-	# They never pause for a special: they keep coming through the slams and the
-	# tear-out (G45), so you pray and dodge at once.
-	if str(boss.twin) != "":                     # phase 3's twin, a tick behind
-		_launch(str(boss.twin), flight_ticks(), -1.0)
+	# the skull phases: at 75%, 50%, 25% (the Warden can't be hit below them first)
+	if skull_phase.is_empty() and int(boss.skull_i) < SKULL_AT.size() and float(boss.hp) <= _hp_floor() + 0.001:
+		boss.skull_i = int(boss.skull_i) + 1
+		_skulls_rise()
+	var quiet := not skull_phase.is_empty()
+	# the flanks' projectiles (and the Warden's melee smack)
+	# They never pause for a special or the skulls: they keep coming through the
+	# slams and the tear-out (G45), so you pray and dodge at once.
+	if str(boss.twin) != "":                     # phase 3's twin, a tick behind, from the other phantom
+		_launch(str(boss.twin), flight_ticks(), -1.0, str(boss.twin_src))
 		boss.twin = ""
 	boss.auto_cd = int(boss.auto_cd) - 1
 	if int(boss.auto_cd) <= 0:
 		boss.auto_cd = int(OsrsTune.value("auto_every_p3" if ph == 3 else "auto_every"))
 		if boss_dist(me.tile) <= 1:
-			_launch("melee", 1, OsrsTune.value("melee_hit"))
+			_launch("melee", 1, OsrsTune.value("melee_hit"), "warden")
 		else:
 			var style: String = STYLES[rng.randi() % 2]
-			_launch(style, flight_ticks(), -1.0)
+			var src: String = ["west", "east"][int(boss.flank) % 2]
+			boss.flank = int(boss.flank) + 1
+			_launch(style, flight_ticks(), -1.0, src)
 			if ph == 3 and rng.randf() < OsrsTune.value("twin_chance"):
 				boss.twin = "ranged" if style == "magic" else "magic"
+				boss.twin_src = "east" if src == "west" else "west"
+	if quiet:
+		return
 	# specials
 	boss.special_cd = int(boss.special_cd) - 1
 	if int(boss.special_cd) <= 0:
@@ -301,11 +408,11 @@ func _boss_turn() -> void:
 			"lightning": _lightning(int(OsrsTune.value("lightning_n_p3" if ph == 3 else "lightning_n")))
 			"boulders": _boulders()
 			"slam": _slam()
-	# phase 3: tear out the far row
-	if ph == 3 and rip.is_empty():
-		boss.rip_cd = int(boss.rip_cd) - 1
-		if int(boss.rip_cd) <= 0 and rows_left() > int(OsrsTune.value("rows_left")):
-			boss.rip_cd = int(OsrsTune.value("rip_every"))
+	# the far row torn out, one per rip_pct of HP lost
+	if rip.is_empty():
+		var want := int(floor((1.0 - float(boss.hp) / float(boss.max_hp)) / OsrsTune.value("rip_pct") + 0.0001))
+		if int(boss.rips) < want and rows_left() > int(OsrsTune.value("rows_left")):
+			boss.rips = int(boss.rips) + 1
 			var row := far_row()
 			var w := int(OsrsTune.value("rip_warn"))
 			rip = { "row": row, "t": w, "total": w }
@@ -322,6 +429,38 @@ func _boss_turn() -> void:
 			_ev({ "type": "sigil", "tile": at })
 
 
+## 5-10 skulls (seeded) on free squares, not next to you or each other.
+func _skulls_rise() -> void:
+	_anim("upheaval")
+	var lo := int(OsrsTune.value("skull_min"))
+	var n := rng.randi_range(lo, maxi(lo, int(OsrsTune.value("skull_max"))))
+	var pool := floor_tiles().filter(func(t: Vector2i) -> bool: return walkable(t) and _cheb(t, me.tile) >= 2 and not _sigil_on(t))
+	var spare: Array = []
+	var hp := int(OsrsTune.value("skull_hp"))
+	while skulls.size() < n and not pool.is_empty():
+		var t: Vector2i = pool.pop_at(rng.randi() % pool.size())
+		if skulls.any(func(k: Dictionary) -> bool: return _cheb(k.tile, t) <= 1):
+			spare.append(t)
+			continue
+		skulls.append({ "id": _next_skull, "tile": t, "hp": hp, "max": hp })
+		_next_skull += 1
+	while skulls.size() < n and not spare.is_empty():          # a cramped floor: next to each other then
+		skulls.append({ "id": _next_skull, "tile": spare.pop_at(rng.randi() % spare.size()), "hp": hp, "max": hp })
+		_next_skull += 1
+	var total := int(OsrsTune.value("skull_base")) + int(OsrsTune.value("skull_per")) * skulls.size()
+	skull_phase = { "t": total, "total": total, "n": skulls.size() }
+	if not (me.path as Array).is_empty():
+		me.path = path(me.tile, me.path[-1])                  # your path may cross a new skull
+	_ev({ "type": "skulls", "n": skulls.size(), "ticks": total, "at": int(boss.skull_i) })
+
+
+func _sigil_on(t: Vector2i) -> bool:
+	for sg in sigils:
+		if sg.tile == t:
+			return true
+	return false
+
+
 func _anim(id: String) -> void:
 	boss.anim = id
 	boss.anim_tick = tick
@@ -334,13 +473,15 @@ static func flight_ticks() -> int:
 	return maxi(1, roundi(OsrsTune.value("flight_s") / TICK))
 
 
-func _launch(style: String, flight: int, dmg: float) -> void:
+## `src`: who looses it: "west" / "east" (the flanking phantoms) or "warden" (its smack).
+func _launch(style: String, flight: int, dmg: float, src := "west") -> void:
 	if dmg < 0.0:
 		dmg = float(rng.randi_range(int(OsrsTune.value("auto_lo")), int(OsrsTune.value("auto_hi"))))
-	var p := { "id": _next_proj, "style": style, "launch": tick, "land": tick + flight, "dmg": dmg }
+	var p := { "id": _next_proj, "style": style, "launch": tick, "land": tick + flight, "dmg": dmg, "src": src }
 	_next_proj += 1
 	projs.append(p)
 	boss.last_style = style
+	boss.last_src = src
 	_ev({ "type": "proj", "proj": p })
 
 
@@ -408,22 +549,29 @@ func _boulders() -> void:
 	_ev({ "type": "boulders", "n": picks.size() })
 
 
-## East, then west, then both sides (the centre columns are the safe ones then).
+## East, then west, then everything but the centre column (G53); below 50%
+## the hits come slam_gap_fast ticks apart instead of slam_gap.
 func _slam() -> void:
 	_anim("upheaval")
 	var w := int(OsrsTune.value("slam_warn"))
-	var east: Array = range(8, W)
-	var west: Array = range(0, 7)
-	var both: Array = range(0, 6) + range(9, W)
+	var gap := slam_gap()
+	var c := W / 2
+	var east: Array = range(c + 1, W)
+	var west: Array = range(0, c)
+	var both: Array = range(0, c) + range(c + 1, W)
 	slams.append({ "cols": east, "t": w, "total": w, "side": "east" })
-	slams.append({ "cols": west, "t": w + 4, "total": w, "side": "west" })
-	slams.append({ "cols": both, "t": w + 8, "total": w, "side": "both" })
+	slams.append({ "cols": west, "t": w + gap, "total": w, "side": "west" })
+	slams.append({ "cols": both, "t": w + gap * 2, "total": w, "side": "both" })
 	_ev({ "type": "slam", "side": "east" })
+
+
+func slam_gap() -> int:
+	return int(OsrsTune.value("slam_gap_fast" if float(boss.hp) <= float(boss.max_hp) * 0.5 else "slam_gap"))
 
 
 func _sigil_spot() -> Vector2i:
 	var r := int(OsrsTune.value("range"))
-	var pool := floor_tiles().filter(func(t: Vector2i) -> bool: return _cheb(t, me.tile) >= 2 and _cheb(t, me.tile) <= 4 and boss_dist(t) <= r)
+	var pool := floor_tiles().filter(func(t: Vector2i) -> bool: return _cheb(t, me.tile) >= 2 and _cheb(t, me.tile) <= 4 and boss_dist(t) <= r and walkable(t))
 	if pool.is_empty():
 		return Vector2i(-1, -1)
 	return pool[rng.randi() % pool.size()]
@@ -462,7 +610,7 @@ func _resolve() -> void:
 			_ev({ "type": "boulder", "tile": f.tile })
 			var on_me: bool = f.tile == me.tile
 			_hazard(on_me, OsrsTune.value("boulder_dmg"), "boulder")
-			if OsrsTune.value("boulder_stay") > 0.0 and not gone.has(f.tile):
+			if OsrsTune.value("boulder_stay") > 0.0 and not gone.has(f.tile) and skull_at(f.tile) < 0:
 				rocks[f.tile] = int(OsrsTune.value("boulder_stay"))
 				if on_me:
 					_shove()
@@ -485,11 +633,28 @@ func _resolve() -> void:
 			for s in sigils.duplicate():
 				if int(s.tile.y) == row:
 					sigils.erase(s)
+			for k in skulls.duplicate():
+				if int(k.tile.y) == row:
+					skulls.erase(k)
+					_ev({ "type": "skull_dead", "id": int(k.id), "tile": k.tile, "left": skulls.size(), "fell": true })
 			_ev({ "type": "rip", "row": row })
 			rip = {}
 			if int(me.tile.y) == row:
 				_hazard(true, OsrsTune.value("rip_dmg"), "fall")
 				_shove()
+	if not skull_phase.is_empty():
+		skull_phase.t = int(skull_phase.t) - 1
+		if skulls.is_empty():
+			_ev({ "type": "skulls_end", "left": 0 })
+			_skulls_done()
+		elif int(skull_phase.t) <= 0:
+			var n := skulls.size()
+			me.skulls_left = int(me.skulls_left) + n
+			_ev({ "type": "skulls_end", "left": n, "tiles": skulls.map(func(k: Dictionary) -> Vector2i: return k.tile) })
+			skulls = []
+			_skulls_done()
+			if me.alive:
+				_hurt(OsrsTune.value("skull_dmg") * n, "skulls")
 	for s: Dictionary in sigils.duplicate():
 		s.t = int(s.t) - 1
 		if int(s.t) <= 0:
@@ -499,6 +664,14 @@ func _resolve() -> void:
 				me.empowered = int(OsrsTune.value("sigil_hits"))
 				me.sigils = int(me.sigils) + 1
 			_ev({ "type": "sigil_fire", "tile": s.tile, "took": hit })
+
+
+func _skulls_done() -> void:
+	skull_phase = {}
+	if int(me.target) >= 0:
+		me.target = -1
+		me.attack = false
+	boss.special_cd = maxi(int(boss.special_cd), 4)            # a breath before the next special
 
 
 ## A danger landed: it hit you or you dodged it (only counted when it was near).
@@ -577,7 +750,8 @@ func danger(ticks: int) -> Dictionary:
 func result() -> Dictionary:
 	return { "how": over, "ticks": tick, "secs": tick * TICK, "boss_dmg": float(me.dmg_done),
 		"boss_pct": 1.0 - float(boss.hp) / float(boss.max_hp), "taken": float(me.dmg_taken),
-		"blocked": int(me.blocked), "unblocked": int(me.unblocked), "dodged": int(me.dodged), "struck": int(me.struck), "sigils": int(me.sigils) }
+		"blocked": int(me.blocked), "unblocked": int(me.unblocked), "dodged": int(me.dodged), "struck": int(me.struck), "sigils": int(me.sigils),
+		"skulls": int(me.skulls), "skulls_left": int(me.skulls_left) }
 
 
 ## True when run `a` beats run `b`.
@@ -594,4 +768,4 @@ static func beats(a: Dictionary, b: Dictionary) -> bool:
 
 
 func state_hash() -> int:
-	return hash([tick, me.tile, me.hp, me.pray, boss.hp, gone.size(), rocks.size(), projs.size(), bolts.size()])
+	return hash([tick, me.tile, me.hp, me.pray, boss.hp, gone.size(), rocks.size(), projs.size(), bolts.size(), me.weapon, me.skulls, me.boost_doses, skulls.size()])

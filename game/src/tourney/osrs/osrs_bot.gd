@@ -4,13 +4,19 @@ extends RefCounted
 ## OsrsTune.bot_react of the time, decided once per projectile), steps off
 ## squares about to be hit (bot_dodge of the time, per threat), eats under
 ## half HP, drinks under 30 prayer, takes a nearby Sun Sigil when it's safe,
-## and otherwise attacks. Seeded: the same seed plays the same way.
+## and otherwise attacks. G53: it keeps a damage-potion dose going, and in a
+## skull phase it wields the lightning dagger and breaks the nearest skull,
+## then wields its main weapon again (`dagger` false: it stays on the main
+## weapon, which is too slow). Seeded: the same seed plays the same way.
 
 var rng := RandomNumberGenerator.new()
 var react := -1.0             ## chance it prays right (-1: OsrsTune.bot_react)
 var dodge := -1.0             ## chance it dodges a telegraph (-1: OsrsTune.bot_dodge)
 var _choice := {}             # projectile id -> the prayer it will use
+var dagger := true            ## swaps to the lightning dagger for the skulls
+var boost := true             ## drinks the damage potion
 var _dodge := {}              # "tick:tile" threat key -> dodges it?
+var _main := ""               # the bow or staff it picked
 
 
 func _init(seed: int = 1) -> void:
@@ -22,6 +28,14 @@ func think(s: OsrsSim) -> Dictionary:
 	var me: Dictionary = s.me
 	if not me.alive:
 		return o
+	if _main == "" or str(me.weapon) != "dagger":
+		_main = str(me.weapon) if str(me.weapon) != "dagger" else "bow"
+	var skulls := not s.skull_phase.is_empty() and not s.skulls.is_empty()
+	# weapons: the dagger for the skulls, the main weapon otherwise
+	if skulls and dagger and str(me.weapon) != "dagger":
+		o["wield"] = "dagger"
+	elif not skulls and str(me.weapon) == "dagger":
+		o["wield"] = _main
 	# prayer: the next projectile to land
 	var next: Dictionary = {}
 	for p: Dictionary in s.projs:
@@ -39,6 +53,8 @@ func think(s: OsrsSim) -> Dictionary:
 		o["eat"] = true
 	elif float(me.pray) < 30.0 and int(me.doses) > 0:
 		o["drink"] = true
+	elif boost and int(me.boost) <= 0 and int(me.boost_doses) > 0 and not skulls and me.attack:
+		o["boost"] = true
 	# danger: step to the nearest safe square in range
 	var bad := s.danger(2)
 	if bad.has(me.tile):
@@ -58,9 +74,28 @@ func think(s: OsrsSim) -> Dictionary:
 			o["move"] = t
 			o["attack"] = true
 			return o
+	if skulls:
+		var want := _skull(s)
+		if want >= 0 and (int(me.target) != want or not me.attack):
+			o["target"] = want
+		return o
 	if not me.attack and (me.path as Array).is_empty():
 		o["attack"] = true
 	return o
+
+
+## The skull to break: the one it's on, else the nearest by a walk.
+func _skull(s: OsrsSim) -> int:
+	if int(s.me.target) >= 0 and not s.skull(int(s.me.target)).is_empty():
+		return int(s.me.target)
+	var best := -1
+	var bd := 999
+	for k: Dictionary in s.skulls:
+		var d := OsrsSim._cheb(k.tile, s.me.tile)
+		if d < bd:
+			bd = d
+			best = int(k.id)
+	return best
 
 
 func _safe(s: OsrsSim, bad: Dictionary) -> Vector2i:

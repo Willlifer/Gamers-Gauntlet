@@ -5,8 +5,12 @@ extends SceneTree
 ## tick, walking one. Prayer blocks the matching projectile. A projectile flies
 ## 3 s from any square, is judged on impact, and keeps coming through a slam. Lightning,
 ## boulders, slams and the tear-out hit only the squares they mark. The Sun
-## Sigil empowers. Bot runs end, kill sometimes, die sometimes, and replay
-## the same. Exit 0 when every check passes.
+## Sigil empowers. G53: the flanking phantoms fire the projectiles, the
+## Warden the specials; a row torn out per 8% lost; the slam's third hit
+## spares only the centre column and speeds up below 50%; the damage potion;
+## the lightning dagger; the skull phases (seeded, shielded, dagger clears,
+## the main weapon is too slow, leftovers burst). Bot runs end, kill
+## sometimes, die sometimes, and replay the same. Exit 0 when every check passes.
 
 var fails := 0
 
@@ -24,6 +28,12 @@ func _initialize() -> void:
 	_flight()
 	_hazards()
 	_sigil()
+	_flanks()
+	_tearout()
+	_slam_g53()
+	_potion()
+	_dagger()
+	_skulls()
 	_runs()
 	print("osrs probe: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
 	quit(0 if fails == 0 else 1)
@@ -33,7 +43,8 @@ func _quiet(s: OsrsSim) -> void:
 	s.boss.auto_cd = 9999
 	s.boss.special_cd = 9999
 	s.boss.sigil_cd = 9999
-	s.boss.rip_cd = 9999
+	s.boss.rips = 9999
+	s.boss.skull_i = 3
 
 
 func _squares() -> void:
@@ -122,8 +133,8 @@ func _flight() -> void:
 	t.step({})
 	t.step({})
 	OsrsTune._values.erase("twin_chance")
-	var ok: bool = t.projs.size() == 2 and t.projs[0].style != t.projs[1].style and int(t.projs[1].land) == int(t.projs[0].land) + 1 		and int(t.projs[1].land) - int(t.projs[1].launch) == OsrsSim.flight_ticks()
-	_ok(ok, "phase 3's twin: the other style, landing a tick behind, also a 3 s flight")
+	var ok: bool = t.projs.size() == 2 and t.projs[0].style != t.projs[1].style and int(t.projs[1].land) == int(t.projs[0].land) + 1 		and int(t.projs[1].land) - int(t.projs[1].launch) == OsrsSim.flight_ticks() and t.projs[0].src != t.projs[1].src
+	_ok(ok, "phase 3's twin: the other style from the other phantom, landing a tick behind, also a 3 s flight")
 	# through the slam: projectiles launch and land while the floor glows
 	var u := OsrsSim.new(11)
 	_quiet(u)
@@ -189,7 +200,7 @@ func _hazards() -> void:
 	var s4 := OsrsSim.new(6)
 	_quiet(s4)
 	s4.boss.hp = float(s4.boss.max_hp) * 0.3
-	s4.boss.rip_cd = 1
+	s4.boss.rips = 0
 	s4.me.tile = Vector2i(7, 11)
 	for i in 8:
 		s4.step({})
@@ -212,6 +223,221 @@ func _sigil() -> void:
 	OsrsTune._values.erase("accuracy")
 
 
+## G53: the flanking phantoms take turns with the prayable shots; the Warden
+## only smacks (melee) when you stand next to it, and does the specials.
+func _flanks() -> void:
+	var s := OsrsSim.new(20)
+	_quiet(s)
+	s.me.tile = Vector2i(7, 9)
+	var srcs: Array = []
+	for i in 40:
+		s.boss.auto_cd = mini(int(s.boss.auto_cd), 5)
+		for e: Dictionary in s.step({ "pray": "magic" } if i == 0 else {}):
+			if str(e.type) == "proj":
+				srcs.append(str(e.proj.src))
+	var alt := srcs.size() >= 6
+	for i in range(1, srcs.size()):
+		if srcs[i] == srcs[i - 1] or not srcs[i] in ["west", "east"]:
+			alt = false
+	_ok(alt, "the prayable shots come from the west and east phantoms by turns (%s)" % ",".join(srcs.slice(0, 6)))
+	var m := OsrsSim.new(21)
+	_quiet(m)
+	m.me.tile = Vector2i(7, 0)
+	m.boss.auto_cd = 1
+	m.step({})
+	_ok(not m.projs.is_empty() and m.projs[0].style == "melee" and m.projs[0].src == "warden", "next to the Warden it smacks you itself (melee)")
+
+
+## G53: one far row per rip_pct (8%) of the Warden's HP lost, from the start, down to rows_left.
+func _tearout() -> void:
+	var s := OsrsSim.new(22)
+	_quiet(s)
+	s.boss.rips = 0
+	s.me.tile = Vector2i(7, 2)
+	s.boss.hp = float(s.boss.max_hp) * 0.95
+	for i in 12:
+		s.step({})
+	_ok(s.rows_left() == OsrsSim.H, "at 95%% no row is torn out yet (%d rows)" % s.rows_left())
+	s.boss.hp = float(s.boss.max_hp) * (1.0 - 0.08 * 3 - 0.01)
+	for i in 40:
+		s.step({})
+	_ok(s.rows_left() == OsrsSim.H - 3, "at 75%%: three rows torn out, one per 8%% lost (%d rows)" % s.rows_left())
+	s.boss.hp = 50.0
+	for i in 80:
+		s.step({})
+	_ok(s.rows_left() == int(OsrsTune.value("rows_left")), "never below %d rows (%d)" % [int(OsrsTune.value("rows_left")), s.rows_left()])
+	var t := OsrsSim.new(23)
+	var rips := 0
+	var b := OsrsBot.new(23)
+	while t.over == "":
+		for e: Dictionary in t.step(b.think(t)):
+			if str(e.type) == "rip":
+				rips += 1
+	_ok(rips >= 6, "a bot fight tears out %d rows (was 0-3 before G53)" % rips)
+
+
+## G53: the slam's third hit leaves only the centre column; below 50% the hits come faster.
+func _slam_g53() -> void:
+	var s := OsrsSim.new(24)
+	_quiet(s)
+	s._slam()
+	var third: Array = s.slams[2].cols
+	var safe: Array = []
+	for x in OsrsSim.W:
+		if not third.has(x):
+			safe.append(x)
+	_ok(safe == [OsrsSim.W / 2], "the third slam spares only the centre column (%s)" % str(safe))
+	var gap := int(s.slams[1].t) - int(s.slams[0].t)
+	var f := OsrsSim.new(25)
+	_quiet(f)
+	f.boss.hp = float(f.boss.max_hp) * 0.45
+	f._slam()
+	var fgap := int(f.slams[1].t) - int(f.slams[0].t)
+	_ok(gap == 4 and fgap == 2 and int(f.slams[2].t) - int(f.slams[1].t) == 2, "slam hits %d ticks apart above 50%%, %d below" % [gap, fgap])
+	# below 50% you can still make it: from the east (hit 2) to the centre in time for hit 3
+	f.me.tile = Vector2i(3, 9)
+	var hp0 := float(f.me.hp)
+	var steps := 0
+	while not f.slams.is_empty() and steps < 20:
+		var o := {}
+		if f.slams.size() == 2:
+			o = { "move": Vector2i(7, 9) }
+		f.step(o)
+		steps += 1
+	_ok(is_equal_approx(float(f.me.hp), hp0), "the fast slam: east side, then a run to the centre column dodges all three")
+
+
+## G53: a damage potion; a dose makes bow / staff hits x boost_mult for boost_ticks.
+func _potion() -> void:
+	OsrsTune._values["accuracy"] = 1.0
+	OsrsTune._values["bow_lo"] = 40.0
+	OsrsTune._values["bow_hi"] = 40.0
+	var s := OsrsSim.new(26)
+	_quiet(s)
+	s.boss.hp = 9999.0
+	s.boss.max_hp = 9999.0
+	s.me.tile = Vector2i(7, 5)
+	var d0 := int(s.me.boost_doses)
+	s.step({ "attack": true })
+	var plain := float(s.me.dmg_done)
+	s.step({ "boost": true })
+	for i in 3:
+		s.step({})
+	var boosted := float(s.me.dmg_done) - plain
+	_ok(d0 == int(OsrsTune.value("boost_doses")) and int(s.me.boost_doses) == d0 - 1, "the damage potion has %d doses; a sip takes one" % d0)
+	_ok(is_equal_approx(boosted, roundf(40.0 * OsrsTune.value("boost_mult"))), "boosted, a 40 hits for %.0f" % boosted)
+	for i in int(OsrsTune.value("boost_ticks")):
+		s.step({})
+	var before := float(s.me.dmg_done)
+	for i in 4:
+		s.step({})
+	_ok(int(s.me.boost) == 0 and is_equal_approx(float(s.me.dmg_done) - before, 40.0), "after %d ticks it wears off" % int(OsrsTune.value("boost_ticks")))
+	for k in ["accuracy", "bow_lo", "bow_hi"]:
+		OsrsTune._values.erase(k)
+
+
+## G53: the lightning dagger: click it to wield; a 1 every tick, within 4 squares.
+func _dagger() -> void:
+	var s := OsrsSim.new(27)
+	_quiet(s)
+	s.boss.hp = 9999.0
+	s.boss.max_hp = 9999.0
+	s.me.tile = Vector2i(7, 9)
+	s.step({ "wield": "dagger", "attack": true })
+	_ok(s.me.weapon == "dagger", "the lightning dagger wields from the inventory")
+	for i in 6:
+		s.step({})
+	_ok(OsrsSim.boss_dist(s.me.tile) <= int(OsrsTune.value("dagger_range")), "it walks into the dagger's %d-square reach" % int(OsrsTune.value("dagger_range")))
+	var a0 := int(s.me.attacks)
+	var d0 := float(s.me.dmg_done)
+	for i in 10:
+		s.step({})
+	_ok(int(s.me.attacks) - a0 == 10 and is_equal_approx(float(s.me.dmg_done) - d0, 10.0), "it hits every tick for 1 (%d hits, %.0f damage in 10 ticks)" % [int(s.me.attacks) - a0, float(s.me.dmg_done) - d0])
+	s.step({ "wield": "bow" })
+	_ok(s.me.weapon == "bow", "and the bow wields back")
+
+
+## G53: the skull phases at 75 / 50 / 25%.
+func _skulls() -> void:
+	var s := OsrsSim.new(28)
+	_quiet(s)
+	s.boss.skull_i = 0
+	s.me.tile = Vector2i(7, 6)
+	OsrsTune._values["accuracy"] = 1.0
+	s.boss.hp = float(s.boss.max_hp) * 0.76
+	var hit_floor := false
+	for i in 8:
+		s.step({ "attack": true })
+		if not s.skull_phase.is_empty():
+			hit_floor = is_equal_approx(float(s.boss.hp), float(s.boss.max_hp) * 0.75)
+			break
+	OsrsTune._values.erase("accuracy")
+	var n := s.skulls.size()
+	_ok(hit_floor and n >= 5 and n <= 10, "at 75%% the Warden stops at %.0f and raises %d skulls" % [float(s.boss.hp), n])
+	var apart := true
+	for k: Dictionary in s.skulls:
+		if s.walkable(k.tile) or OsrsSim._cheb(k.tile, s.me.tile) < 2:
+			apart = false
+	_ok(apart, "skulls block their squares, none next to you")
+	var tl: Array = []
+	for k in 2:
+		var same := OsrsSim.new(29)
+		_quiet(same)
+		same.boss.skull_i = 0
+		same.me.tile = Vector2i(7, 6)
+		same.boss.hp = float(same.boss.max_hp) * 0.75
+		same.step({})
+		tl.append(same.skulls.map(func(q: Dictionary) -> Vector2i: return q.tile))
+	_ok(not tl[0].is_empty() and tl[0] == tl[1], "seeded: the same seed raises the same skulls (%d)" % tl[0].size())
+	var hp0 := float(s.boss.hp)
+	for i in 6:
+		s.step({ "attack": true })
+	_ok(is_equal_approx(float(s.boss.hp), hp0), "the Warden is shielded while its skulls are up")
+	# the dagger breaks a skull in skull_hp ticks
+	var k0: Dictionary = s.skulls[0]
+	var shp := int(OsrsTune.value("skull_hp"))
+	s.step({ "wield": "dagger", "target": int(k0.id) })
+	var t := 0
+	while not s.skull(int(k0.id)).is_empty() and t < 30:
+		s.step({})
+		t += 1
+	_ok(s.skull(int(k0.id)).is_empty() and int(s.me.skulls) == 1, "the dagger breaks a %d-HP skull (%d ticks, walking included)" % [shp, t + 1])
+	_ok(not s.me.attack, "a broken skull stops your attack (click the next one)")
+	# leftovers burst at the end
+	var left := s.skulls.size()
+	var hpm := float(s.me.hp)
+	s.me.hp = 999.0
+	s.me.max_hp = 999.0
+	var burst := 0.0
+	while not s.skull_phase.is_empty():
+		for e: Dictionary in s.step({}):
+			if str(e.type) == "hurt" and str(e.what) == "skulls":
+				burst = float(e.dmg)
+	_ok(is_equal_approx(burst, OsrsTune.value("skull_dmg") * left) and s.skulls.is_empty(), "%d skulls left burst for %.0f (%.0f each)" % [left, burst, OsrsTune.value("skull_dmg")])
+	# a bot with the dagger clears every skull phase; on the bow it can't
+	var cleared := [0, 0]
+	var bursts := [0, 0]
+	var phases := [0, 0]
+	for mode in 2:
+		for i in 10:
+			var r := OsrsSim.new(900 + i)
+			var b := OsrsBot.new(900 + i)
+			b.dagger = mode == 0
+			var bowd := false
+			while r.over == "":
+				for e: Dictionary in r.step(b.think(r)):
+					if str(e.type) == "skulls":
+						phases[mode] += 1
+					elif str(e.type) == "skulls_end":
+						if int(e.left) == 0:
+							cleared[mode] += 1
+						else:
+							bursts[mode] += int(e.left)
+	print("  skull phases: dagger bots cleared %d / %d (%d skulls burst); bow-only bots cleared %d / %d (%d skulls burst)" % [cleared[0], phases[0], bursts[0], cleared[1], phases[1], bursts[1]])
+	_ok(phases[0] > 0 and cleared[0] >= phases[0] * 0.8, "a good player clears the skulls with the dagger (%d / %d)" % [cleared[0], phases[0]])
+	_ok(phases[1] > 0 and cleared[1] == 0 and bursts[1] >= phases[1] * 3, "the main weapon is too slow: never clears, %d skulls burst over %d phases" % [bursts[1], phases[1]])
+
+
 func _runs() -> void:
 	var kills := 0
 	var deaths := 0
@@ -227,8 +453,8 @@ func _runs() -> void:
 		elif s.over == "dead":
 			deaths += 1
 		var r := s.result()
-		print("  run %2d: %-4s %3.0f s  dealt %4.0f  taken %3.0f  prayed %d/%d  dodged %d hit %d  sigils %d" % [i, r.how, r.secs, r.boss_dmg, r.taken,
-			r.blocked, int(r.blocked) + int(r.unblocked), r.dodged, r.struck, r.sigils])
+		print("  run %2d: %-4s %3.0f s  dealt %4.0f  taken %3.0f  prayed %d/%d  dodged %d hit %d  sigils %d  skulls %d broken %d burst" % [i, r.how, r.secs, r.boss_dmg, r.taken,
+			r.blocked, int(r.blocked) + int(r.unblocked), r.dodged, r.struck, r.sigils, r.skulls, r.skulls_left])
 	print("  bots: %d kills (mean %.0f s), %d deaths, %d timeouts" % [kills, secs / maxf(1, kills), deaths, 20 - kills - deaths])
 	_ok(kills >= 6, "a good bot kills the Warden in a fair share of runs (%d / 20)" % kills)
 	# a careless player (prays right 60%, dodges half the time) dies often: it's meant to be hard for a new player
