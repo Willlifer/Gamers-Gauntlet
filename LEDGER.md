@@ -25,7 +25,6 @@ Last reviewed: 2026-10-15 (playtest rulings, the tournament look, FPS bullets an
 
 | ID | Item | State | Unblocked by / note |
 |---|---|---|---|
-| L-1 | Rename the folder `Documents\Black White Arena` → `Documents\Gamers Gauntlet` (G26). Failed twice on a file lock (Godot open; a Claude session started inside it). | OWED | Close Godot and any session in the folder, then `Rename-Item`, re-import in the Project Manager, and update memory paths. |
 | L-2 | The Twins module should be decided by a room vote (G4); today the fewest turns wins. | OWED | Needs online play or a local vote screen. |
 | L-3 | Raid fight: Cinderbrand (G30), Scorched Earth (G37) and the grade (G33) need play: is the burn too much, are the weights and letters right? | AWAITING PLAY | The author plays the raid (F1: `brand_*`, Verdict). Re-measure PAR with `mmo_probe` after any balance change. |
 | L-6 | MOBA polish (the numbers marked OPEN in `moba_champs.gd`, feel). The pit's fantasy: a fed unit dropped in that can change the game, and so can the opponent (G31). | AWAITING PLAY | The author is adjusting it on F1 (G19). |
@@ -44,6 +43,7 @@ Last reviewed: 2026-10-15 (playtest rulings, the tournament look, FPS bullets an
 
 | ID | Item | Closed | How |
 |---|---|---|---|
+| L-1 | Rename the folder to `Documents\Gamers Gauntlet` (G26). | 2026-10-16 | The author renamed it. |
 | S-1 | Live feel numbers for playtests. | 2026-10-14 | MobaTune, FpsTune and MmoTune: one cfg each plus an F1 panel (G19). |
 | S-2 | Chris recordings: trim and loop. | 2026-10-14 | `tools/audio/trim_chris.py`; originals in `game/audio/source/chris` (G24). |
 | L-4 | FPS feel. | 2026-10-15 | The author: "feels great, super fun"; polish later (G31). |

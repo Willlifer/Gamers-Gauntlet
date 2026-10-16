@@ -1,6 +1,6 @@
 # Handoff — 2026-10-15
 
-**Where:** `C:\Users\ferth\Documents\Black White Arena` → still to be renamed `Documents\Gamers Gauntlet` (L-1); game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
+**Where:** `C:\Users\ferth\Documents\Gamers Gauntlet` (renamed 10-16); game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
 
 **Git:** branch `main`, internal only. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers.
 
