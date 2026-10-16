@@ -7,8 +7,17 @@ extends GKDef
 ## top floor in dark grey siding over beige stucco, balconies, and around them
 ## streets, parked cars, trees, lawns and two taller towers.
 ## Play: the two roofs (spawn_a* on the left block, spawn_b* on the right),
-## fenced by invisible walls at the parapets. `bridge` adds a scaffold walk
-## across the gap (a gameplay addition the photo doesn't have).
+## fenced by invisible walls at the parapets (GKAsset.BARRIER_LAYER: they stop
+## bodies, not bullets, so you can shoot across). `bridge` adds a scaffold
+## walk across the gap, ramped up from each roof (a gameplay addition the
+## photo doesn't have).
+## G51c (the author's round-2 notes): fair. The west block's playable part
+## is the east block mirrored (its roof kit, cover and spawns too; the rest
+## of it is a taller annex, out of play); more cover (duct runs, a water
+## tank, a skylight row); and `interior`: the top storey under each roof is
+## open, down a ramped stairwell from the roof, with pillars, partitions and
+## crates inside. meta.stairs lists each stairwell's top and bottom, so the
+## bot (no pathfinding) can take it as a two-point route.
 ## Real metres, +y up, the camera side is +z; scaled by `scale`.
 
 func id() -> String:
@@ -24,7 +33,7 @@ func kind() -> String:
 
 
 func version() -> int:
-	return 1
+	return 2
 
 
 func schema() -> Array[Dictionary]:
@@ -33,8 +42,9 @@ func schema() -> Array[Dictionary]:
 		pi("floors", "Storeys", "Layout", 6, 3, 9),
 		pf("gap", "Court between blocks (m)", "Layout", 18.0, 6.0, 30.0, 0.5),
 		pb("bridge", "Scaffold walk across the gap", "Layout", true),
+		pb("interior", "Top storey open, stairwell down (G51c)", "Layout", true),
 		pi("fans", "Fan clusters per roof", "Cover", 5, 0, 10),
-		pi("hvac", "HVAC units per roof", "Cover", 3, 0, 8),
+		pi("hvac", "HVAC units per roof", "Cover", 4, 0, 8),
 		pi("seed", "Dressing seed", "Cover", 5, 0, 999),
 		pb("city", "Streets, cars, towers", "Dressing", true),
 		pf("sun_yaw", "Sun direction (deg)", "Light", -52.0, -180.0, 180.0, 1.0),
@@ -67,17 +77,30 @@ func _build(p: Dictionary) -> GKAsset:
 	var floors: int = p.floors
 	var H := floors * STOREY + 0.6
 	var gap: float = p.gap
-	# block A, the big one: a front bar along the street and a back wing on its
-	# left, so its notch opens the parking court toward block B (as photographed)
+	# block B (east) is the field's unit; block A's playable part is B
+	# mirrored across the court (G51c: fair to both spawns), and the rest of
+	# A is a taller annex to the west, out of play (the photo's bigger block)
 	var ax1 := -gap * 0.5
-	var a_rects := [Rect2(ax1 - 58.0, -8.0, 58.0, 16.0), Rect2(ax1 - 58.0, -38.0, 32.0, 30.0)]
-	# block B: smaller, one long block; the driveway between the two at the street
 	var bx0 := gap * 0.5
 	var b_rects := [Rect2(bx0, -20.0, 40.0, 28.0)]
-	_block(g, a, a_rects, H, floors, rng)
-	_block(g, a, b_rects, H, floors, rng)
-	_roof_kit(g, a, a_rects, H, rng, int(p.fans), int(p.hvac), Vector3(ax1 - 30.0, H, -14.0), true)
-	_roof_kit(g, a, b_rects, H, rng, int(p.fans), int(p.hvac), Vector3(bx0 + 7.0, H, 2.0), false)
+	var a_rects := [Rect2(-bx0 - 40.0, -20.0, 40.0, 28.0)]
+	var annex := [Rect2(-bx0 - 58.0, -38.0, 18.0, 46.0)]
+	var MIR := Transform3D(Basis.from_scale(Vector3(-1, 1, 1)), Vector3.ZERO)
+	var interior: bool = p.interior
+	var hole := Rect2(bx0 + 16.0, -2.6, 8.0, 2.6)            # the stairwell (east-block coords)
+	for side in ["b", "a"]:
+		if side == "a":
+			g.push(MIR)
+		var krng := RandomNumberGenerator.new()               # the same dressing on both roofs
+		krng.seed = int(p.seed)
+		_block(g, a, b_rects, H, floors, krng, interior, hole)
+		_roof_kit(g, a, b_rects, H, krng, int(p.fans), int(p.hvac), Vector3(bx0 + 8.0, H, -13.0), false, hole if interior else Rect2())
+		if interior:
+			_stairwell(g, a, hole, H)
+			_interior(g, a, b_rects[0], H, hole)
+		if side == "a":
+			g.pop()
+	_block(g, a, annex, H + STOREY, floors + 1, rng)
 	if p.bridge:
 		_bridge(g, a, ax1, bx0, H, 1.0)
 	if p.city:
@@ -86,10 +109,10 @@ func _build(p: Dictionary) -> GKAsset:
 		GKArch.block(g, a, "asphalt_lot", Vector3(-140, -0.3, -140), Vector3(140, 0.0, 80))
 	g.pop()
 	a.add_part("world", g.commit())
-	# barriers: a 3 m fence above every parapet (the roofs are the field)
-	for r in a_rects + b_rects:
-		var rr: Rect2 = r
-		_fence(a, rr, H, M, a_rects + b_rects)
+	# barriers: a 3 m fence above every playable parapet, open where the bridge lands
+	var gaps := [] if not p.bridge else [1.0 - 1.1, 1.0 + 1.1]
+	for side in ["b", "a"]:
+		_fence(a, b_rects[0], H, M * (MIR if side == "a" else Transform3D.IDENTITY), b_rects, gaps)
 	if p.bridge:
 		GKArch.barrier(a, Vector3(ax1, H, 1.0 - 1.3), Vector3(bx0, H + 3.5, 1.0 - 1.2), M)
 		GKArch.barrier(a, Vector3(ax1, H, 1.0 + 1.2), Vector3(bx0, H + 3.5, 1.0 + 1.3), M)
@@ -100,19 +123,30 @@ func _build(p: Dictionary) -> GKAsset:
 		# the photo: a drone over the street corner south-east of block B, looking across both roofs
 		"ref_cam": look.call(Vector3(bx0 + 24.0, H + 48.0, 52.0), Vector3(-14.0, H - 8.0, -12.0)),
 		# eye level from each roof's front outer corner (clusters keep 5 m off the edges)
-		"eye_a": look.call(Vector3(ax1 - 56.0, H + 1.72, 6.0), Vector3(bx0 + 20.0, H + 1.0, -6.0)),
-		"eye_b": look.call(Vector3(bx0 + 38.5, H + 1.72, 6.0), Vector3(ax1 - 30.0, H + 1.0, -10.0)),
+		"eye_a": look.call(Vector3(-bx0 - 38.5, H + 1.72, 6.0), Vector3(bx0 + 20.0, H + 1.0, -6.0)),
+		"eye_b": look.call(Vector3(bx0 + 38.5, H + 1.72, 6.0), Vector3(-bx0 - 20.0, H + 1.0, -6.0)),
 	}
 	for k in 3:
-		a.markers["spawn_a%d" % k] = Transform3D(Basis(Vector3.UP, -PI * 0.5), M * Vector3(ax1 - 50.0, H, -24.0 + k * 3.0))
+		a.markers["spawn_a%d" % k] = Transform3D(Basis(Vector3.UP, -PI * 0.5), M * Vector3(-bx0 - 34.0, H, -12.0 + k * 3.0))
 		a.markers["spawn_b%d" % k] = Transform3D(Basis(Vector3.UP, PI * 0.5), M * Vector3(bx0 + 34.0, H, -12.0 + k * 3.0))
+	if interior:
+		a.markers["floor_a"] = Transform3D(Basis.IDENTITY, M * Vector3(-bx0 - 30.0, H - STOREY, -10.0))
+		a.markers["floor_b"] = Transform3D(Basis.IDENTITY, M * Vector3(bx0 + 30.0, H - STOREY, -10.0))
 	var roofs := { "a": [], "b": [] }
 	for side in ["a", "b"]:
 		for r in (a_rects if side == "a" else b_rects):
 			var rr: Rect2 = r
 			(roofs[side] as Array).append([rr.position.x * s, rr.position.y * s, rr.end.x * s, rr.end.y * s])
+	# the stairwells for the bot: walk to `top` on the roof, then to `bottom` inside
+	var stairs := []
+	if interior:
+		for side in ["b", "a"]:
+			var sx := 1.0 if side == "b" else -1.0
+			var cz := hole.get_center().y
+			stairs.append({ "side": side, "top": M * Vector3(sx * (hole.position.x - 1.2), H, cz), "bottom": M * Vector3(sx * (hole.end.x + 1.5), H - STOREY, cz) })
 	a.meta = { "roofs": roofs, "ref_cam_fov": 46.0, "eye_a_fov": 70.0, "eye_b_fov": 70.0, "roof_height": H * s,
-		"notes": "Two roofs; spawn_a* west, spawn_b* east; the scaffold walk joins them when `bridge` is on." }
+		"floor_height": (H - STOREY) * s, "stairs": stairs, "bot_hunt": true,
+		"notes": "Two mirrored roofs; spawn_a* west, spawn_b* east; the scaffold walk joins them when `bridge` is on; with `interior` a stairwell on each roof leads down to the open top storey." }
 	var yaw := deg_to_rad(float(p.sun_yaw))
 	var el := deg_to_rad(float(p.sun_height))
 	var to_sun := Vector3(sin(yaw) * cos(el), sin(el), cos(yaw) * cos(el))
@@ -123,7 +157,7 @@ func _build(p: Dictionary) -> GKAsset:
 	return a
 
 
-func _fence(a: GKAsset, r: Rect2, H: float, M: Transform3D, all: Array) -> void:
+func _fence(a: GKAsset, r: Rect2, H: float, M: Transform3D, all: Array, gap_z := []) -> void:
 	# one wall per side, skipping where it would cut another rect of the same roof
 	var x0 := r.position.x
 	var x1 := r.end.x
@@ -142,25 +176,36 @@ func _fence(a: GKAsset, r: Rect2, H: float, M: Transform3D, all: Array) -> void:
 			var orr: Rect2 = o
 			if orr != r and orr.grow(0.3).has_point(Vector2(c.x, c.z)):
 				inside_other = true
-		if not inside_other:
-			GKArch.barrier(a, lo, hi, M)
+		if inside_other:
+			continue
+		# the court-side wall opens where the bridge lands
+		if not gap_z.is_empty() and absf(lo.x - (x0 - 0.2)) < 0.01 and absf(hi.x - x0) < 0.01:
+			GKArch.barrier(a, lo, Vector3(hi.x, hi.y, float(gap_z[0])), M)
+			GKArch.barrier(a, Vector3(lo.x, lo.y, float(gap_z[1])), hi, M)
+			continue
+		GKArch.barrier(a, lo, hi, M)
 
 
 ## One building: stucco mass, the grey siding top floor, a plinth, windows
 ## on a grid with some balcony bays, parapets with coping, the roof slab.
-func _block(g: GKMesh, a: GKAsset, rects: Array, H: float, floors: int, rng: RandomNumberGenerator) -> void:
+func _block(g: GKMesh, a: GKAsset, rects: Array, H: float, floors: int, rng: RandomNumberGenerator, hollow := false, hole := Rect2()) -> void:
 	for r in rects:
 		var rr: Rect2 = r
 		var lo := Vector3(rr.position.x, 0, rr.position.y)
 		var hi := Vector3(rr.end.x, H, rr.end.y)
-		GKArch.block(g, a, "stucco_beige", lo, hi)
+		if hollow:
+			_hollow_top(g, a, rr, H, hole)
+		else:
+			GKArch.block(g, a, "stucco_beige", lo, hi)
 		# the top storey clad in dark siding, a hair proud of the stucco
 		g.box("siding_grey", Vector3((lo.x + hi.x) * 0.5, H - STOREY * 0.5 - 0.15, (lo.z + hi.z) * 0.5), Vector3(rr.size.x + 0.12, STOREY + 0.3, rr.size.y + 0.12))
 		# a band at each floor line, darker plinth at the foot
 		g.box("stucco_beige:#b9a888", Vector3((lo.x + hi.x) * 0.5, 0.6, (lo.z + hi.z) * 0.5), Vector3(rr.size.x + 0.1, 1.2, rr.size.y + 0.1))
 		g.box("concrete_light", Vector3((lo.x + hi.x) * 0.5, STOREY + 0.6, (lo.z + hi.z) * 0.5), Vector3(rr.size.x + 0.16, 0.18, rr.size.y + 0.16))
 		# roof slab top (the walkable surface) and parapets
-		g.box("roof_membrane", Vector3((lo.x + hi.x) * 0.5, H + 0.02, (lo.z + hi.z) * 0.5), Vector3(rr.size.x - 0.1, 0.04, rr.size.y - 0.1))
+		for piece in _around(rr.grow(-0.05), hole if hollow else Rect2()):
+			var pc: Rect2 = piece
+			g.box("roof_membrane", Vector3(pc.get_center().x, H + 0.02, pc.get_center().y), Vector3(pc.size.x, 0.04, pc.size.y))
 		_parapets(g, a, rr, H, rects)
 		# windows on every outward face, avoiding faces shared with another rect
 		var faces := [[Vector3(0, 0, 1), Vector3(lo.x, 0, hi.z), Vector3(hi.x, 0, hi.z)],
@@ -310,8 +355,9 @@ func _balcony(g: GKMesh, base: Vector3, n: Vector3, _dir: Vector3, top: bool) ->
 
 ## Roof dressing: a stair bulkhead with a door, an elevator overrun, a hatch,
 ## and clusters of mushroom exhaust fans: the cover.
-func _roof_kit(g: GKMesh, a: GKAsset, rects: Array, H: float, rng: RandomNumberGenerator, clusters: int, units: int, stair_at: Vector3, left: bool) -> void:
+func _roof_kit(g: GKMesh, a: GKAsset, rects: Array, H: float, rng: RandomNumberGenerator, clusters: int, units: int, stair_at: Vector3, left: bool, hole := Rect2()) -> void:
 	var main: Rect2 = rects[0]
+	_extra_cover(g, a, main, H)
 	# stair bulkhead
 	var sb := Vector3(4.6, 3.2, 3.6)
 	GKArch.block(g, a, "siding_grey", stair_at - Vector3(sb.x * 0.5, 0, sb.z * 0.5), stair_at + Vector3(sb.x * 0.5, sb.y, sb.z * 0.5))
@@ -328,6 +374,18 @@ func _roof_kit(g: GKMesh, a: GKAsset, rects: Array, H: float, rng: RandomNumberG
 	a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, Vector3(hx, H + 0.3, hz)), Vector3(1.6, 0.6, 1.0))
 	# fan clusters on a loose grid over all the roof rects
 	var placed: Array[Vector2] = [Vector2(stair_at.x, stair_at.z), Vector2(eo.x, eo.z)]
+	# keep clear of the stairwell, the bridge landing and the G51c cover
+	# (these keep 4.5 m off; clusters keep 9 m apart from each other)
+	var keep_off: Array[Vector2] = []
+	if hole.has_area():
+		for t in 5:
+			keep_off.append(Vector2(lerpf(hole.position.x - 2.0, hole.end.x, t / 4.0), hole.get_center().y))
+	for q: Vector2 in EXTRA_SPOTS:
+		keep_off.append(Vector2(main.position.x, main.position.y) + q)
+	for t in 4:                                   # the bridge landing and the walk off it
+		keep_off.append(Vector2(main.position.x + 1.0 + t * 2.5, 1.0))
+	for k in 3:                                   # the spawns (spawn_b*: 34 m in, 8-14 m down)
+		keep_off.append(Vector2(main.position.x + 34.0, main.position.y + 8.0 + k * 3.0))
 	var tries := 0
 	var made := 0
 	while made < clusters and tries < 200:
@@ -339,6 +397,9 @@ func _roof_kit(g: GKMesh, a: GKAsset, rects: Array, H: float, rng: RandomNumberG
 		var ok := true
 		for q in placed:
 			if q.distance_to(c) < 9.0:
+				ok = false
+		for q in keep_off:
+			if q.distance_to(c) < 4.5:
 				ok = false
 		if not ok:
 			continue
@@ -369,8 +430,8 @@ func _roof_kit(g: GKMesh, a: GKAsset, rects: Array, H: float, rng: RandomNumberG
 		var r: Rect2 = rects[rng.randi() % rects.size()]
 		var c := Vector2(rng.randf_range(r.position.x + 4.0, r.end.x - 4.0), rng.randf_range(r.position.y + 3.5, r.end.y - 3.5))
 		var ok := true
-		for q in placed:
-			if q.distance_to(c) < 6.0:
+		for q in placed + keep_off:
+			if q.distance_to(c) < (6.0 if q in placed else 4.0):
 				ok = false
 		if not ok:
 			continue
@@ -403,6 +464,131 @@ func _fan(g: GKMesh, a: GKAsset, at: Vector3, k: float) -> void:
 	a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, at + Vector3(0, 0.55 * k, 0)), Vector3(0.95, 1.1, 0.95) * k)
 
 
+## G51c cover on every roof, in the roof's own frame (x from its court-side
+## edge, z from its north edge): two duct runs (waist high), a water tank on
+## its stand (full cover), a skylight row (crouch cover).
+const EXTRA_SPOTS := [Vector2(16.0, 4.0), Vector2(30.0, 23.0), Vector2(33.0, 5.5), Vector2(28.0, 13.0)]
+
+
+func _extra_cover(g: GKMesh, a: GKAsset, r: Rect2, H: float) -> void:
+	var o := Vector3(r.position.x, H, r.position.y)
+	# duct runs: galvanised boxes on little legs
+	for d in [[Vector3(16.0, 0, 4.0), Vector3(6.5, 0.9, 0.8)], [Vector3(30.0, 0, 23.0), Vector3(0.8, 0.9, 6.0)]]:
+		var c: Vector3 = o + (d[0] as Vector3)
+		var sz: Vector3 = d[1]
+		g.box("hvac_metal", c + Vector3(0, 0.15 + sz.y * 0.5, 0), sz, 0.03)
+		for sx in [-0.45, 0.45]:
+			g.box("iron_dark", c + Vector3(sz.x * sx, 0.075, sz.z * sx), Vector3(0.1, 0.15, 0.1))
+		a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, c + Vector3(0, (0.15 + sz.y) * 0.5, 0)), Vector3(sz.x, 0.15 + sz.y, sz.z))
+	# the water tank: a drum on a steel stand
+	var t := o + Vector3(33.0, 0, 5.5)
+	for sx in [-0.9, 0.9]:
+		for sz in [-0.9, 0.9]:
+			g.box("iron_dark", t + Vector3(sx, 0.35, sz), Vector3(0.12, 0.7, 0.12))
+	g.box("iron_dark", t + Vector3(0, 0.72, 0), Vector3(2.1, 0.08, 2.1))
+	g.lathe("hvac_metal", t + Vector3(0, 0.76, 0), t + Vector3(0, 3.3, 0), [Vector2(0.0, 1.25), Vector2(0.95, 1.25), Vector2(1.0, 0.9), Vector2(1.08, 0.0)], 20)
+	a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, t + Vector3(0, 1.65, 0)), Vector3(2.4, 3.3, 2.4))
+	# a skylight row: low glazed humps
+	var sk := o + Vector3(28.0, 0, 13.0)
+	for k in 3:
+		var c := sk + Vector3((k - 1) * 1.9, 0, 0)
+		g.box("concrete_light", c + Vector3(0, 0.2, 0), Vector3(1.6, 0.4, 1.4), 0.02)
+		g.box("window_dark", c + Vector3(0, 0.55, 0), Vector3(1.4, 0.3, 1.2), 0.08)
+	a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, sk + Vector3(0, 0.38, 0)), Vector3(5.4, 0.76, 1.4))
+
+
+## The top storey made hollow (G51c): the building solid up to the top floor,
+## then four walls, a floor and a roof slab cut round the stairwell.
+func _hollow_top(g: GKMesh, a: GKAsset, r: Rect2, H: float, hole: Rect2) -> void:
+	var y0 := H - STOREY
+	var lo := Vector3(r.position.x, 0, r.position.y)
+	var hi := Vector3(r.end.x, H, r.end.y)
+	GKArch.block(g, a, "stucco_beige", lo, Vector3(hi.x, y0, hi.z))
+	g.box("concrete_light:#8f8c86", Vector3(r.get_center().x, y0 + 0.01, r.get_center().y), Vector3(r.size.x - 0.6, 0.02, r.size.y - 0.6))
+	var t := 0.3
+	for w in [[Vector3(lo.x, y0, lo.z), Vector3(hi.x, H - 0.3, lo.z + t)], [Vector3(lo.x, y0, hi.z - t), Vector3(hi.x, H - 0.3, hi.z)],
+			[Vector3(lo.x, y0, lo.z), Vector3(lo.x + t, H - 0.3, hi.z)], [Vector3(hi.x - t, y0, lo.z), Vector3(hi.x, H - 0.3, hi.z)]]:
+		GKArch.block(g, a, "stucco_beige:#cfc6b6", w[0], w[1])
+	for piece in _around(r, hole):
+		var pc: Rect2 = piece
+		GKArch.block(g, a, "concrete_light", Vector3(pc.position.x, H - 0.3, pc.position.y), Vector3(pc.end.x, H, pc.end.y))
+
+
+## `r` minus the rect `cut` (inside it), as up to four rects.
+static func _around(r: Rect2, cut: Rect2) -> Array:
+	if not cut.has_area() or not r.intersects(cut):
+		return [r]
+	var c := r.intersection(cut)
+	var out := []
+	if c.position.y > r.position.y:
+		out.append(Rect2(r.position.x, r.position.y, r.size.x, c.position.y - r.position.y))
+	if c.end.y < r.end.y:
+		out.append(Rect2(r.position.x, c.end.y, r.size.x, r.end.y - c.end.y))
+	if c.position.x > r.position.x:
+		out.append(Rect2(r.position.x, c.position.y, c.position.x - r.position.x, c.size.y))
+	if c.end.x < r.end.x:
+		out.append(Rect2(c.end.x, c.position.y, r.end.x - c.end.x, c.size.y))
+	return out
+
+
+## The stairwell: a ramp from the roof at the hole's court-side end down to
+## the top floor at its far end, railed along the open sides (the rails
+## stop bodies, not bullets).
+func _stairwell(g: GKMesh, a: GKAsset, hole: Rect2, H: float) -> void:
+	var y0 := H - STOREY
+	var run := hole.size.x
+	var ang := atan2(STOREY, run)
+	var ln := sqrt(run * run + STOREY * STOREY)
+	var c := Vector3(hole.get_center().x, (H + y0) * 0.5 - 0.08, hole.get_center().y)
+	var b := Basis(Vector3.BACK, -ang)
+	g.box("concrete_light", c, Vector3(ln, 0.16, hole.size.y - 0.1), 0.0, b)
+	a.add_box_xf(g.xf * Transform3D(b, c), Vector3(ln, 0.16, hole.size.y - 0.1))
+	# treads: dark strips across the ramp
+	for k in 12:
+		var f := (k + 0.5) / 12.0
+		g.box("hvac_dark", Vector3(hole.position.x + run * f, H - STOREY * f + 0.005, c.z), Vector3(0.06, 0.02, hole.size.y - 0.2), 0.0)
+	# rails round the hole on the roof: both long sides and the far end
+	for z in [hole.position.y, hole.end.y]:
+		_rail(g, a, Vector3(hole.position.x, H, z), Vector3(hole.end.x, H, z))
+	_rail(g, a, Vector3(hole.end.x, H, hole.position.y), Vector3(hole.end.x, H, hole.end.y))
+
+
+func _rail(g: GKMesh, a: GKAsset, p0: Vector3, p1: Vector3) -> void:
+	var d := p1 - p0
+	var n := maxi(1, int(d.length() / 1.6))
+	for k in n + 1:
+		var q := p0 + d * (float(k) / n)
+		g.cyl("steel", q, q + Vector3(0, 1.0, 0), 0.025, 6)
+	for hy in [0.5, 1.0]:
+		g.cyl("steel", p0 + Vector3(0, hy, 0), p1 + Vector3(0, hy, 0), 0.025, 6)
+	var lo := Vector3(minf(p0.x, p1.x) - 0.05, p0.y, minf(p0.z, p1.z) - 0.05)
+	var hi := Vector3(maxf(p0.x, p1.x) + 0.05, p0.y + 1.05, maxf(p0.z, p1.z) + 0.05)
+	a.add_box_xf(g.xf * Transform3D(Basis.IDENTITY, (lo + hi) * 0.5), hi - lo, true)
+
+
+## Inside the top storey: a grid of pillars, partition walls with gaps,
+## crate stacks and desks, so a fight indoors has corners. In the roof's
+## own frame (x from the court-side edge, z from the north edge).
+func _interior(g: GKMesh, a: GKAsset, r: Rect2, H: float, _hole: Rect2) -> void:
+	var y0 := H - STOREY
+	var o := Vector3(r.position.x, y0, r.position.y)
+	var top := STOREY - 0.3
+	for px in [8.0, 16.0, 24.0, 32.0]:
+		for pz in [7.0, 21.0]:
+			GKArch.block(g, a, "concrete_light", o + Vector3(px - 0.3, 0, pz - 0.3), o + Vector3(px + 0.3, top, pz + 0.3))
+	# partitions (2.6 m, 0.2 thick), each with a way round
+	for w in [[Vector3(19.0, 0, 13.0), Vector3(25.0, 0, 13.2)], [Vector3(13.0, 0, 3.0), Vector3(13.2, 0, 9.0)],
+			[Vector3(29.0, 0, 17.0), Vector3(35.0, 0, 17.2)], [Vector3(35.0, 0, 5.0), Vector3(35.2, 0, 11.0)],
+			[Vector3(4.0, 0, 13.0), Vector3(9.0, 0, 13.2)]]:
+		GKArch.block(g, a, "plaster_white:#ddd6c8", o + (w[0] as Vector3), o + (w[1] as Vector3) + Vector3(0, 2.6, 0))
+	# crates and desks (crouch cover)
+	for c in [[Vector3(6.0, 0, 5.0), Vector3(1.4, 1.1, 1.4)], [Vector3(28.0, 0, 8.0), Vector3(2.4, 0.8, 1.2)], [Vector3(18.0, 0, 23.0), Vector3(1.4, 1.1, 1.4)],
+			[Vector3(31.0, 0, 24.0), Vector3(2.4, 0.8, 1.2)], [Vector3(10.0, 0, 21.0), Vector3(1.2, 1.4, 1.2)], [Vector3(37.0, 0, 15.0), Vector3(1.2, 1.1, 2.0)]]:
+		var p: Vector3 = o + (c[0] as Vector3)
+		var sz: Vector3 = c[1]
+		GKArch.block(g, a, "wood_old" if sz.y > 1.0 else "hvac_metal", p - Vector3(sz.x * 0.5, 0, sz.z * 0.5), p + Vector3(sz.x * 0.5, sz.y, sz.z * 0.5), 0.02)
+
+
 ## A scaffold walkway across the gap: deck of boards on tube frames, rails.
 func _bridge(g: GKMesh, a: GKAsset, x0: float, x1: float, H: float, z: float) -> void:
 	var y := H + PARAPET + 0.02
@@ -412,11 +598,19 @@ func _bridge(g: GKMesh, a: GKAsset, x0: float, x1: float, H: float, z: float) ->
 	while gx < x1 + 0.45:
 		g.box("hvac_dark", Vector3(gx, y + 0.062, z), Vector3(0.03, 0.004, w - 0.1))      # grating bars
 		gx += 0.12
-	# steps up over the parapets on each side
-	for side in [[x0 - 1.6, x0 - 0.5], [x1 + 0.5, x1 + 1.6]]:
-		var s0: float = side[0]
-		var s1: float = side[1]
-		GKArch.block(g, a, "hvac_metal", Vector3(s0, H + 0.0, z - w * 0.5), Vector3(s1, H + 0.55, z + w * 0.5))
+	# ramps up from each roof over the parapet to the deck (G51c: walkable)
+	for side in [-1.0, 1.0]:
+		var edge := x0 - 0.5 if side < 0.0 else x1 + 0.5          # the deck's end, over the parapet
+		var run := 3.8
+		var rise := y + 0.06 - H
+		var ln := sqrt(run * run + rise * rise)
+		var c := Vector3(edge + side * run * 0.5, H + rise * 0.5 - 0.05, z)
+		var b := Basis(Vector3.BACK, -side * atan2(rise, run))
+		g.box("hvac_metal", c, Vector3(ln, 0.1, w), 0.0, b)
+		a.add_box_xf(g.xf * Transform3D(b, c), Vector3(ln, 0.1, w))
+		for k in 8:
+			var f := (k + 0.5) / 8.0
+			g.box("hvac_dark", Vector3(edge + side * run * f, y + 0.06 - rise * f + 0.01, z), Vector3(0.05, 0.02, w - 0.1))
 	var k := 0
 	var xx := x0 - 0.5
 	while xx <= x1 + 0.5:

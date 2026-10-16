@@ -21,7 +21,12 @@ var version := 1                 ## the generator's version
 var params := {}                 ## the exact parameters it was built from
 var parts: Array[Dictionary] = []      ## { name, mesh: ArrayMesh, xform: Transform3D, shadow: bool }
 var markers := {}                ## name -> Transform3D
-var colliders: Array[Dictionary] = []  ## { size: Vector3, xform: Transform3D } boxes; env only
+var colliders: Array[Dictionary] = []  ## { size: Vector3, xform: Transform3D, barrier: bool } boxes; env only
+## Physics layer of the invisible walls (barrier boxes, G51c): bodies that
+## should be fenced in add it to their mask; shots and sight lines, which
+## test the level's layer 1, pass through, so a roof edge doesn't stop a
+## bullet between buildings.
+const BARRIER_LAYER := 16
 var lights := {}                 ## env only: sun, sky and fog numbers (GKStage reads them)
 var meta := {}                   ## hands, socket, class, notes, budgets...
 var warnings: PackedStringArray = []
@@ -40,13 +45,13 @@ func add_box_collider(center: Vector3, size: Vector3, basis := Basis.IDENTITY) -
 ## A box placed by any transform (scaled, rotated or mirrored): the scale
 ## goes into the size, the rotation is kept orthonormal and right-handed,
 ## so physics gets a valid shape.
-func add_box_xf(xf: Transform3D, size: Vector3) -> void:
+func add_box_xf(xf: Transform3D, size: Vector3, barrier := false) -> void:
 	var b := xf.basis
 	var sc := Vector3(b.x.length(), b.y.length(), b.z.length())
 	var o := Basis(b.x / sc.x, b.y / sc.y, b.z / sc.z)
 	if o.determinant() < 0.0:
 		o.x = -o.x                     # a box is symmetric: flip an axis back
-	colliders.append({ "size": (size * sc).abs(), "xform": Transform3D(o.orthonormalized(), xf.origin) })
+	colliders.append({ "size": (size * sc).abs(), "xform": Transform3D(o.orthonormalized(), xf.origin), "barrier": barrier })
 
 
 func triangle_count() -> int:
@@ -98,14 +103,22 @@ func instantiate(with_collision := true, plain := false) -> Node3D:
 	if with_collision and not colliders.is_empty():
 		var body := StaticBody3D.new()
 		body.name = "Collision"
+		var walls := StaticBody3D.new()           # the invisible walls, on their own layer
+		walls.name = "Barriers"
+		walls.collision_layer = BARRIER_LAYER
+		walls.collision_mask = 0
 		for c in colliders:
 			var cs := CollisionShape3D.new()
 			var bs := BoxShape3D.new()
 			bs.size = c.size
 			cs.shape = bs
 			cs.transform = c.xform
-			body.add_child(cs)
+			(walls if c.get("barrier", false) else body).add_child(cs)
 		root.add_child(body)
+		if walls.get_child_count() > 0:
+			root.add_child(walls)
+		else:
+			walls.free()
 	return root
 
 

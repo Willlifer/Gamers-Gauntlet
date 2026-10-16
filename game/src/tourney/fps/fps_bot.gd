@@ -31,6 +31,7 @@ var crouched := false
 var roof: Array = []                       ## Rect2s it may walk (world xz)
 var target: Node3D                         ## the player
 var _goal := Vector3.INF
+var _route: Array[Vector3] = []            # G51c: waypoints still to walk after _goal (a stairwell)
 var _state := "move"
 var _t := 0.0                              # time in the state
 var _seen := 0.0                           # how long it has seen you
@@ -45,7 +46,7 @@ var _yaw := 0.0
 func _ready() -> void:
 	_rng.seed = 77
 	collision_layer = 8
-	collision_mask = 1
+	collision_mask = 1 | GKAsset.BARRIER_LAYER
 	_body = CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.38
@@ -117,7 +118,10 @@ func _physics_process(delta: float) -> void:
 			if sees and _seen > 0.15:
 				_set_state("engage")
 			elif _goal == Vector3.INF or _flat(global_position).distance_to(_flat(_goal)) < 0.6:
-				_set_state("hold")
+				if not _route.is_empty():
+					_goal = _route.pop_front()       # on to the next waypoint (down or up the stairs)
+				else:
+					_set_state("hold")
 			else:
 				_run_to(_goal, delta)
 		"hold":
@@ -152,6 +156,7 @@ func _physics_process(delta: float) -> void:
 	if velocity.length() < 0.3 and _state == "move":
 		_stuck += delta
 		if _stuck > 1.0:
+			_route.clear()
 			_goal = _pick_spot()
 			_stuck = 0.0
 	else:
@@ -196,6 +201,9 @@ func _face(p: Vector3, delta: float) -> void:
 ## map with bushes, half the time the middle of a bush on its side.
 func _pick_spot() -> Vector3:
 	var y := global_position.y
+	var via := _stairs_route()
+	if via != Vector3.INF:
+		return via
 	if not world.hide_volumes.is_empty() and _rng.randf() < 0.5:
 		var mine := world.hide_volumes.filter(func(h: Dictionary) -> bool:
 			var c: Vector3 = h.center
@@ -231,6 +239,38 @@ func _pick_spot() -> Vector3:
 			best_score = sc
 			best = at
 	return best if best != Vector3.INF else global_position
+
+
+## G51c, the rooftop's top storey: no pathfinding, so a stairwell is a
+## two-point route (meta.stairs: its top on the roof, its bottom inside).
+## When you're on the other level (or now and then, to roam), and the
+## stairwell on its side is a straight walk away, it goes that way: the
+## first point is returned, the second waits in _route.
+func _stairs_route() -> Vector3:
+	var stairs: Array = world.map.meta.get("stairs", [])
+	if stairs.is_empty() or not _route.is_empty():
+		return Vector3.INF
+	var floor_y := float(world.map.meta.get("floor_height", -100.0))
+	var inside := global_position.y < floor_y + 1.0
+	var want := _rng.randf() < 0.15
+	if target != null and target.alive:
+		var tp: Vector3 = target.global_position
+		var t_inside: bool = tp.y < floor_y + 1.0 and tp.y > floor_y - 1.0
+		var t_mine := roof.any(func(r: Rect2) -> bool: return r.has_point(Vector2(tp.x, tp.z)))
+		want = want or (t_mine and t_inside != inside)
+	if not want:
+		return Vector3.INF
+	for st: Dictionary in stairs:
+		var top: Vector3 = st.top
+		var bottom: Vector3 = st.bottom
+		if not roof.any(func(r: Rect2) -> bool: return r.grow(1.0).has_point(Vector2(top.x, top.z))):
+			continue
+		var first := bottom if inside else top
+		var second := top if inside else bottom
+		if world.walk_clear(global_position, first):
+			_route = [second]
+			return first
+	return Vector3.INF
 
 
 func eye() -> Vector3:
@@ -317,5 +357,6 @@ func respawn(at: Transform3D) -> void:
 	_body.disabled = false
 	_head.disabled = false
 	ch.pose("idle")
+	_route.clear()
 	_goal = _pick_spot()
 	_set_state("move")

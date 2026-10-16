@@ -53,7 +53,7 @@ var _recover := 0.5                         # the last shot's punch recovery (ra
 
 func _ready() -> void:
 	collision_layer = 4                     # the player's body (bots aim at it)
-	collision_mask = 1
+	collision_mask = 1 | GKAsset.BARRIER_LAYER   # the level and its invisible walls (G51c)
 	_shape = CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = RADIUS
@@ -212,7 +212,7 @@ func _process(delta: float) -> void:
 	_punch = move_toward(_punch, 0.0, delta * _recover)
 	cam.position.y = _eye
 	# G51 sideways sway: a slow drift of the aim itself, doubled in a scope
-	var sd := vm.side_drift() * (2.0 if scoped else (0.35 + 0.35 * vm.ads))
+	var sd := vm.side_drift() * float(spec().get("sway", 1.0)) * (2.0 if scoped else (0.35 + 0.35 * vm.ads))
 	cam.rotation.x = _pitch + _punch + sd.y
 	cam.rotation.y = sd.x
 	var sp := spec()

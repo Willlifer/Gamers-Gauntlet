@@ -254,6 +254,88 @@ func _g51_world(w: FpsWorld) -> void:
 	_ok(float(FpsWeapons.SPECS.pistol.get("ads_dist", 0.0)) >= 0.3, "pistols: aimed in about a foot from the eye")
 
 
+## G51c, the rooftop: a bullet crosses the court from roof to roof (the
+## parapet fences stop bodies, not bullets) and the bot sees across; you can
+## walk the bridge from one roof to the other; the stairwell takes you down
+## to the top floor and back up; the two roofs are mirror images.
+func _roofs(w: FpsWorld) -> void:
+	var m := w.map
+	var p := w.player
+	var b := w.bot
+	b.set_physics_process(false)
+	var H: float = m.meta.roof_height
+	var a0 := m.marker("spawn_a0").origin
+	var b0 := m.marker("spawn_b0").origin
+	_ok(a0.is_equal_approx(Vector3(-b0.x, b0.y, b0.z)), "rooftop: the spawns mirror each other (%s / %s)" % [a0, b0])
+	# across the court: you on roof A's court edge, the bot on roof B's
+	p.global_position = Vector3(-9.0 * 1.25 - 3.0, H + 0.05, -12.0)
+	b.global_position = Vector3(9.0 * 1.25 + 3.0, H + 0.05, -12.0)
+	b.velocity = Vector3.ZERO
+	await _frames(4)
+	var eye := p.cam.global_position
+	var head := b.eye()                            # over both parapets: the chest is behind its own
+	var hp0 := b.hp
+	w.fire_bullet(eye, (head - eye).normalized(), p, 30.0, 2.0, 600.0, Color.WHITE, eye)
+	await _frames(12)
+	_ok(b.hp < hp0, "rooftop: a bullet from roof A hits the bot on roof B (hp %.0f -> %.0f)" % [hp0, b.hp])
+	p.shielded = false
+	var php := p.hp
+	var from := b.eye()
+	w.fire_bullet(from, (p.cam.global_position - from).normalized(), b, 20.0, 1.0, 300.0, Color.WHITE, from)
+	await _frames(12)
+	_ok(p.hp < php, "rooftop: and the bot's bullet crosses back (hp %.0f -> %.0f)" % [php, p.hp])
+	_ok(b._can_see(), "rooftop: the bot can see you across the court")
+	p.hp = 100.0
+	# the bridge: walk from roof B over to roof A
+	var start := Vector3(9.0 * 1.25 + 6.0, H + 0.1, 1.25)
+	p.global_position = start
+	p.velocity = Vector3.ZERO
+	p.rotation.y = atan2(1.0, 0.0)                 # facing -x (toward roof A)
+	p.debug_move = Vector2(0, 1)
+	for i in 600:
+		await physics_frame
+		if p.global_position.x < -9.0 * 1.25 - 4.0:
+			break
+	p.debug_move = Vector2.ZERO
+	_ok(p.global_position.x < -9.0 * 1.25 - 3.0 and absf(p.global_position.y - H) < 0.6, "rooftop: you can walk the bridge from roof B to roof A (x %.1f, y %.2f over roof %.2f)" % [p.global_position.x, p.global_position.y, H])
+	# the stairwell on roof B: down to the top floor, and back up
+	var st: Dictionary = (m.meta.stairs as Array).filter(func(x: Dictionary) -> bool: return x.side == "b")[0]
+	var floor_y: float = m.meta.floor_height
+	for leg in [[st.top, st.bottom, floor_y, "down to the top floor"], [st.bottom, st.top, H, "back up to the roof"]]:
+		var a: Vector3 = leg[0]
+		var z: Vector3 = leg[1]
+		p.global_position = a + Vector3(0, 0.1, 0)
+		p.velocity = Vector3.ZERO
+		var d := z - a
+		p.rotation.y = atan2(-d.x, -d.z)
+		p.debug_move = Vector2(0, 1)
+		for i in 300:
+			await physics_frame
+			if Vector2(p.global_position.x - z.x, p.global_position.z - z.z).length() < 0.8:
+				break
+		p.debug_move = Vector2.ZERO
+		await _frames(10)
+		_ok(absf(p.global_position.y - float(leg[2])) < 0.5, "rooftop: the stairwell takes you %s (y %.2f, want %.2f)" % [leg[3], p.global_position.y, leg[2]])
+	# the bot takes the stairs to follow you down
+	b.set_physics_process(true)
+	b.global_position = st.top + Vector3(4.0, 0.1, 0)
+	b.respawn(Transform3D(Basis.IDENTITY, st.top + Vector3(4.0, 0.1, 0)))
+	p.global_position = m.marker("floor_b").origin + Vector3(0, 0.1, 0)
+	p.shielded = true
+	var down := false
+	for i in 60 * 20:
+		await physics_frame
+		if b.global_position.y < H - 1.5:
+			down = true
+			break
+	_ok(down, "rooftop: the bot takes the stairwell down after you (y %.2f; it stops to shoot once it sees you)" % b.global_position.y)
+	b.set_physics_process(false)
+	p.shielded = false
+	p.respawn(m.marker("spawn_a0"))
+	b.respawn(m.marker("spawn_b0"))
+	await _frames(3)
+
+
 ## Campus paintball: inside a bush, past 3 m, the bot can't see you; out of it, it can.
 func _bushes(w: FpsWorld) -> void:
 	_ok(not w.hide_volumes.is_empty(), "campus: the map has bushes (%d)" % w.hide_volumes.size())
@@ -274,6 +356,8 @@ func _map(map_id: String) -> void:
 	await _frames(3)
 	if map_id == "dust_mid":
 		await _dust(w)
+	if map_id == "rooftop":
+		await _roofs(w)
 	_ok(not w.bot.roof.is_empty(), "%s: the bot has a walk area" % map_id)
 	var p := w.player
 	var b := w.bot
@@ -299,11 +383,11 @@ func _map(map_id: String) -> void:
 	_ok(is_equal_approx(b.hp, 100.0), "%s: the bullet is in flight after one tick (not hitscan)" % map_id)
 	await _frames(6)
 	_ok(b.hp < 100.0 and b.hp > 50.0, "%s: your bullet hit the bot (hp %.0f)" % [map_id, b.hp])
-	# the bot's bullet into your chest
+	# the bot's bullet into your chest (back along the line you saw it by)
 	var hp0 := p.hp
-	var from := b.global_position + Vector3(0, 1.6, 0)
-	var at := p.global_position + Vector3(0, 1.2, 0)
-	w.fire_bullet(from, (at - from).normalized(), b, 34.0, 100.0 / 34.0, 300.0, Color.WHITE, from)
+	var from := b.global_position + Vector3(0, 1.1, 0)
+	var at := p.cam.global_position
+	w.fire_bullet(from, (at - from).normalized(), b, 34.0, 1.0, 300.0, Color.WHITE, from)
 	await _frames(8)
 	_ok(is_equal_approx(p.hp, hp0 - 34.0), "%s: the bot's bullet hit you for 34 (hp %.0f)" % [map_id, p.hp])
 	# a shot at the floor hurts nobody

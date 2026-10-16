@@ -33,7 +33,7 @@ static func block(g: GKMesh, a: GKAsset, role: String, lo: Vector3, hi: Vector3,
 ## An invisible wall (collision only): the map's edges, placed by `xf`
 ## (the map's own placement, so it mirrors and scales with the geometry).
 static func barrier(a: GKAsset, lo: Vector3, hi: Vector3, xf := Transform3D.IDENTITY) -> void:
-	a.add_box_xf(xf * Transform3D(Basis.IDENTITY, (lo + hi) * 0.5), (hi - lo).abs())
+	a.add_box_xf(xf * Transform3D(Basis.IDENTITY, (lo + hi) * 0.5), (hi - lo).abs(), true)
 
 
 ## A window on a face: dark recess, frame, sill, optional shutters/bars.
