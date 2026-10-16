@@ -26,3 +26,9 @@ design/ref/
 game/art/source/
 # - the author's untrimmed Chris takes (tools/audio/trim_chris.py makes the shipped loops)
 game/audio/source/
+# - Black | White's layered music (never played in the tournament: TourneyMusic silences BWMusic's
+#   layers; stings are sfx). New music goes in game/audio/music/<set>/ and is tracked.
+game/audio/music/layers/*
+!game/audio/music/layers/layers.json
+game/audio/music/blackwhite_loop.wav*
+game/audio/music/drum_beat.wav*
