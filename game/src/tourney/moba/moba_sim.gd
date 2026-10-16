@@ -184,7 +184,10 @@ func step(orders: Dictionary) -> Array:
 		return _events
 	time += TICK
 	_waves()
-	for u in units.duplicate():
+	var order := units.duplicate()
+	if mode == "pit" and int(round(time / TICK)) % 2 == 0:
+		order.reverse()          # G54: neither side always acts first (a same-tick smite race went to blue)
+	for u in order:
 		_tick_unit(u, orders.get(u.id, {}))
 	_tick_projectiles()
 	_tick_areas()
