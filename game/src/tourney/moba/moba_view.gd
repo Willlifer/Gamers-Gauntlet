@@ -964,6 +964,8 @@ func _look_color(look: String, team: String) -> Color:
 		return Color("#9cff57")
 	if look.begins_with("temu"):
 		return Color("#c084ff")
+	if look == "braves_bomb":
+		return Color("#c9ccd4")                       # a grey smoke canister
 	if look.begins_with("braves"):
 		return Color("#ffb347")
 	if look.begins_with("boss"):
@@ -982,6 +984,9 @@ func _sync_shots(delta: float) -> void:
 			_shots[pid] = _shot_mesh(str(p.get("look", "")), p)
 		var n: Node3D = _shots[pid]
 		var to := Vector3(p.pos.x, 1.0, p.pos.y)
+		if p.get("lob", false):                        # Braves' smoke bomb arcs up and drops on its spot
+			var f := clampf(1.0 - float(p.left) / maxf(float(p.range), 0.01), 0.0, 1.0)
+			to.y = 1.0 + 4.0 * (1.2 + 0.12 * float(p.range)) * f * (1.0 - f)
 		var from := n.position
 		n.position = from.lerp(to, minf(1.0, delta * 30.0))
 		var d := n.position - from
@@ -1059,6 +1064,7 @@ func _shot_mesh(look: String, p: Dictionary) -> Node3D:
 		"merr_phlegm": r = 0.48
 		"braves_shell": r = 0.46
 		"braves_pellet": r = 0.15
+		"braves_bomb": r = 0.3
 		"temu_dart": r = 0.26
 	if owner and owner.kind == "minion":
 		r = 0.11

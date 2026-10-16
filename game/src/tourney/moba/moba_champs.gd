@@ -184,8 +184,13 @@ static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaU
 			return true
 		"braves:w":
 			var at := u.pos + (aim - u.pos).limit_length(rng)
-			s.area_hit(at, 2.5, u, BASE_AD, "smoke", false)
-			s.add_area({ "kind": "smoke", "pos": at, "r": 2.5, "t": 4.0, "team": u.team, "owner": u.id, "look": "braves_smoke" })
+			# the bomb is lobbed: it flies over units and rocks and bursts where it lands
+			var lob := maxf(at.distance_to(u.pos), 0.01)
+			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos, "dir": (at - u.pos) / lob if lob > 0.01 else dir, "speed": 16.0,
+				"range": lob, "lob": true, "look": "braves_bomb",
+				"on_end": func(p: Vector2) -> void:
+					s.area_hit(p, 2.5, u, BASE_AD, "smoke", false)
+					s.add_area({ "kind": "smoke", "pos": p, "r": 2.5, "t": 4.0, "team": u.team, "owner": u.id, "look": "braves_smoke" }) })
 			return true
 		"braves:e":
 			s.dash(u, dir, rng, 0.1)

@@ -716,6 +716,7 @@ func dash(u: MobaUnit, dir: Vector2, dist: float, dur: float) -> void:
 
 
 ## A skillshot or homing spell. p: { pos, dir|target, speed, range, width, on_hit: Callable(MobaUnit, pos), on_end: Callable(pos), owner, look }
+## lob: true flies over units and rocks and ends (on_end) only at its range.
 func shoot(p: Dictionary) -> void:
 	p["id"] = _next
 	_next += 1
@@ -751,7 +752,7 @@ func _tick_projectiles() -> void:
 			var stepv: Vector2 = p.dir * float(p.speed) * TICK
 			p.pos += stepv
 			p.left -= stepv.length()
-			for o in units:
+			for o in ([] if p.get("lob", false) else units):        # a lobbed shot flies over everyone
 				if o.team == p.team or not o.alive or p.get("hit", {}).has(o.id):
 					continue
 				if o.pos.distance_to(p.pos) <= o.radius + float(p.get("width", 0.4)):
@@ -764,7 +765,7 @@ func _tick_projectiles() -> void:
 					else:
 						done = true
 						break
-			if not done and (p.left <= 0.0 or _in_rock(p.pos) or (mode == "pit" and p.pos.length() > PIT_R + 1.0)
+			if not done and (p.left <= 0.0 or (_in_rock(p.pos) and not p.get("lob", false)) or (mode == "pit" and p.pos.length() > PIT_R + 1.0)
 					or (mode != "pit" and (absf(p.pos.x) > HALF_LEN + 1.0 or absf(p.pos.y) > HALF_W + 1.0))):
 				if p.has("on_end"):
 					(p.on_end as Callable).call(p.pos)
