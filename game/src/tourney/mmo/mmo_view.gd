@@ -1434,6 +1434,8 @@ func _add_area(a: Dictionary) -> void:
 			pm.size = Vector2.ONE * float(a.r) * 2.0
 			q.mesh = pm
 			var c := Color(1.0, 0.25, 0.08, 1.0)
+			if str(a.get("look", "")) == "smoke_mark":
+				c = Color(0.85, 0.85, 0.78, 1.0)                  # G46: where the smoke grenade lands
 			if str(a.kind) == "bomb":
 				c = Color(1.0, 0.12, 0.05, 0.6)
 			elif str(a.kind) == "ground":
@@ -1549,7 +1551,15 @@ func _sync_areas(_delta: float) -> void:
 		for c in root.get_children():
 			if c is MeshInstance3D and (c as MeshInstance3D).material_override is ShaderMaterial:
 				((c as MeshInstance3D).material_override as ShaderMaterial).set_shader_parameter("fill", fill)
-		if root.has_meta("rock"):
+		if root.has_meta("arc_from"):
+			# G46: lobbed from the tank's gun in an arc (the smoke grenade)
+			var rock: Node3D = root.get_meta("rock")
+			var from: Vector3 = (root.get_meta("arc_from") as Vector3) - root.position
+			var p3 := from.lerp(Vector3(0, 0.3, 0), fill)
+			p3.y += sin(fill * PI) * maxf(6.0, from.length() * 0.45)
+			rock.position = p3
+			rock.rotation.x = fill * 9.0
+		elif root.has_meta("rock"):
 			var rock: Node3D = root.get_meta("rock")
 			rock.position = Vector3(-6.0, 34.0, -4.0).lerp(Vector3(0, 0.6, 0), fill * fill)
 		if root.has_meta("count"):

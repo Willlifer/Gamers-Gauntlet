@@ -15,8 +15,8 @@ extends RefCounted
 ##   barrage    the turret climbs; rounds land at random (every third on
 ##              someone); each leaves a burning crater until 1 s after the
 ##              next special is announced
-##   smoke      a smokescreen fired ahead of the tank spreads over the whole
-##              map: thick at its front, thin behind it; it poisons, slows
+##   smoke      a smoke grenade lobbed at a random raider's spot spreads over
+##              the whole map: thick at its front, thin behind it; it poisons, slows
 ##              and cuts damage. Keep away, then rush through the front.
 ##              Spreads at smoke_speed, then thins out as slowly.
 ##   treadburn  (from 75%) one tread or both rev red to bright red; dust
@@ -34,7 +34,7 @@ extends RefCounted
 
 const SPELL_CAST := { "barrage": 1.6, "smoke": 1.4, "treadburn": 4.0, "loose": 3.0, "ram": 1.2 }
 ## The HUD's names: vague, like the warnings.
-const NAMES := { "barrage": "The turret climbs", "smoke": "The barrel hisses", "treadburn": "The treads scream",
+const NAMES := { "barrage": "The turret climbs", "smoke": "A canister flies", "treadburn": "The treads scream",
 	"loose": "It strains", "ram": "It rocks", "cannon": "Main gun" }
 const BAG_1 := ["barrage", "smoke"]
 const BAG_2 := ["barrage", "smoke", "treadburn", "treadburn"]
@@ -233,7 +233,12 @@ func _begin(id: String) -> void:
 		"barrage":
 			_warn("The turret climbs skyward…", "#ff8a2a")
 		"smoke":
-			_warn("The barrel hisses. Something pale spills out…", "#c8c8b0")
+			# a smoke grenade: lobbed at the ground under a random raider (the spot is marked while it flies)
+			var ppl := s.living()
+			var at: Vector2 = (ppl[s.rng.randi() % ppl.size()] as MmoUnit).pos if not ppl.is_empty() else b.pos + b.forward() * 8.0
+			s.spell["at"] = at
+			s._add_area({ "kind": "circle", "pos": at, "r": 2.5, "t": total, "dur": total, "look": "smoke_mark", "owner": "boss" })
+			_warn("The barrel coughs. A canister tumbles through the air…", "#c8c8b0")
 		"treadburn":
 			var r := s.rng.randf()
 			var sides: Array = [-1, 1] if r < MmoTune.value("tread_both") else ([-1] if r < 0.5 + MmoTune.value("tread_both") * 0.5 else [1])
@@ -317,7 +322,7 @@ func _smoke_cast() -> void:
 	var b := s.boss
 	if float(s.spell.t) < float(s.spell.total):
 		return
-	var c := (b.pos + b.forward() * (b.radius + 4.0)).limit_length(MmoSim.ARENA_R - 2.0)
+	var c: Vector2 = s.spell.get("at", b.pos)
 	smoke = { "c": c, "r": 1.0, "max_r": c.length() + MmoSim.ARENA_R + MmoTune.value("smoke_band"), "fade": 1.0, "stage": "grow", "faced": {} }
 	b.strike_serial += 1
 	s._emit({ "type": "boss_spell", "spell": "smoke", "stage": "fire", "at": c })

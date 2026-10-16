@@ -82,7 +82,7 @@ func _go() -> void:
 	await _wait(0.3)
 	await _shot("cannon")
 	await _top("cannon")
-	var want := ["barrage", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds"]
+	var want := ["smoke_throw", "barrage", "smoke", "loose_wobble", "loose_fire", "treadburn", "ram_rock", "ram_arc", "adds"]
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 60000:
 		guard += 1
@@ -90,7 +90,9 @@ func _go() -> void:
 		var st := str(s.spell.get("stage", ""))
 		var t := float(s.spell.get("t", 0.0))
 		var name := ""
-		if id == "barrage" and st == "fire" and int(s.spell.get("fired", 0)) >= 6:
+		if id == "smoke" and t > 0.15 and "smoke_throw" in want:
+			name = "smoke_throw"
+		elif id == "barrage" and st == "fire" and int(s.spell.get("fired", 0)) >= 6:
 			name = "barrage"
 		elif "smoke" in want and not s.tank.smoke.is_empty() and float(s.tank.smoke.r) > 14.0:
 			name = "smoke"

@@ -127,6 +127,7 @@ func _smoke() -> void:
 	_run(s, 8.0)
 	var sm: Dictionary = s.tank.smoke
 	var c: Vector2 = sm.c
+	_ok(s.players().any(func(p: MmoUnit) -> bool: return p.pos.distance_to(c) < 0.01), "smoke: a grenade on a raider's spot (G47)")
 	var r := float(sm.r)
 	var front := s.tank.smoke_at(c + Vector2(r - 1.0, 0))
 	var core := s.tank.smoke_at(c)

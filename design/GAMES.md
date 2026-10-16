@@ -152,7 +152,9 @@ skyward…").
   - *Barrage:* the gun climbs; 10 rounds land at random (every third on
     someone), each leaving a burning crater until 1 s after the next special
     is announced.
-  - *Smokescreen:* fired ahead of the tank, it spreads (`smoke_speed`) over
+  - *Smokescreen:* a smoke grenade, ground-targeted: the gun lobs a canister
+    at the spot under a random raider (marked grey while it flies), and from
+    there it spreads (`smoke_speed`) over
     the whole map, thick at its front (`smoke_band`), thin behind it
     (`smoke_core`); it poisons, slows and cuts damage; then thins out as
     slowly. Keep away, then rush through the front.

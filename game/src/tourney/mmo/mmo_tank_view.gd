@@ -275,6 +275,44 @@ func _muzzle(v: Dictionary, s: float) -> void:
 ## Dressing for an area MmoView has just laid down.
 func decorate(a: Dictionary, root: Node3D) -> void:
 	match str(a.get("look", "")):
+		"smoke_mark":
+			var can := MeshInstance3D.new()
+			var cy := CylinderMesh.new()
+			cy.top_radius = 0.18
+			cy.bottom_radius = 0.18
+			cy.height = 0.6
+			var cm := StandardMaterial3D.new()
+			cm.albedo_color = Color("#4a5a3a")
+			cm.metallic = 0.4
+			cy.material = cm
+			can.mesh = cy
+			var trail := CPUParticles3D.new()
+			trail.amount = 30
+			trail.lifetime = 0.6
+			trail.local_coords = false
+			trail.gravity = Vector3(0, 0.4, 0)
+			trail.scale_amount_min = 0.3
+			trail.scale_amount_max = 0.7
+			var pm := SphereMesh.new()
+			pm.radius = 0.5
+			pm.height = 1.0
+			pm.radial_segments = 6
+			pm.rings = 3
+			var pmat := StandardMaterial3D.new()
+			pmat.albedo_color = Color(0.85, 0.85, 0.8, 0.5)
+			pmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			pm.material = pmat
+			trail.mesh = pm
+			can.add_child(trail)
+			root.add_child(can)
+			root.set_meta("rock", can)
+			var bv: Dictionary = view._views.get("boss", {})
+			var mz: Variant = bv.get("muzzle")
+			var from := view._v3(sim.boss.pos, 3.0)
+			if mz != null and is_instance_valid(mz):
+				from = (mz as Node3D).global_position
+			root.set_meta("arc_from", from)
 		"shell":
 			var shell := MeshInstance3D.new()
 			var cm := CapsuleMesh.new()
