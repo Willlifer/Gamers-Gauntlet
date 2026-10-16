@@ -113,6 +113,7 @@ const ENTRIES := {
 	"add_zone_deg": ["Light tanks: their zone's arc (deg)", 70.0, 20.0, 160.0, 5.0, "Planet of Tanks"],
 	"tank_rush_at": ["Enrage: below this HP everything runs faster", 0.15, 0.0, 0.5, 0.01, "Planet of Tanks"],
 	"tank_rush_rate": ["Enrage: everything this much faster (x)", 1.5, 1.0, 4.0, 0.05, "Planet of Tanks"],
+	"intro_always": ["Show the first-time card every raid (0 / 1)", 0.0, 0.0, 1.0, 1.0, "First-time card"],
 	"bot_react": ["Bot reaction to mechanics (s)", 0.7, 0.0, 3.0, 0.05, "Bots"],
 	"bot_slip": ["Bot chance to fumble a mechanic (0-1)", 0.12, 0.0, 1.0, 0.01, "Bots"],
 	"bot_run_off": ["Bots run the brand off below this HP (0-1)", 0.6, 0.0, 1.0, 0.05, "Bots"],

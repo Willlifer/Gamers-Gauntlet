@@ -305,3 +305,12 @@ func _start() -> void:
 		finished.emit({ "winner": _human.id if MmoGrade.beats(ga, gb) else _other.id,
 			"summary": _summary(s, _human, ua, ga, _other, ub, gb), "stats": {} }))
 	add_child(_view)
+	# G52b: the first-time card, after the pick and before the pull
+	var game := str(info_id())
+	if not autopilot and not _human.get("bot", false) and MmoIntro.wanted(game):
+		MmoIntro.open(_view, str(_picks[_human.id]), encounter(), game)
+
+
+## This raid's id for the first-time card's flag (mmo_raid / mmo_tanks).
+func info_id() -> String:
+	return "mmo_tanks" if encounter() == "tank" else "mmo_raid"

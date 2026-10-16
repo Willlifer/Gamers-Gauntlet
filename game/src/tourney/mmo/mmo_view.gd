@@ -58,6 +58,7 @@ var _stop_req := false
 var _mouse_restore := Vector2.ZERO
 var input_on := true
 var cam_hold := false                      ## tools: the camera is placed by hand
+var hold_sim := false                      ## G52b: the raid waits (the first-time card is up)
 var audio: MmoAudio
 var tank_view: MmoTankView                 ## Planet of Tanks (G46): the tank's own drawing
 
@@ -522,6 +523,8 @@ func _process(delta: float) -> void:
 	if sim == null:
 		return
 	_acc += minf(delta, 0.25)
+	if hold_sim:
+		_acc = 0.0
 	while _acc >= MmoSim.TICK:
 		_acc -= MmoSim.TICK
 		_tick()
