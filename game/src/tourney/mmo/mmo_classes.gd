@@ -614,7 +614,7 @@ static func ability(cls_id: String, ab_id: String) -> Dictionary:
 	for a: Dictionary in CLASSES[cls_id].get("shelf", []):        # an old id still named somewhere
 		if str(a.id) == ab_id:
 			return a
-	return {}
+	return MmoItems.item(ab_id)                                     # G52: the consumables bar
 
 
 static func color(id: String) -> Color:
@@ -622,4 +622,4 @@ static func color(id: String) -> Color:
 
 
 static func key_label(slot: int) -> String:
-	return ("%d" % (slot + 1)) if slot < 8 else ("s%d" % (slot - 7))
+	return ("%d" % (slot + 1)) if slot < 8 else ("S%d" % (slot - 7))

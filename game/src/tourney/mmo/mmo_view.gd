@@ -510,6 +510,8 @@ func _my_order() -> Dictionary:
 		var abs: Array = MmoClasses.abilities(me.cls)
 		if _queued_slot < abs.size():
 			o["cast"] = str(abs[_queued_slot].id)
+		elif not MmoItems.at_slot(_queued_slot).is_empty():
+			o["cast"] = str(MmoItems.at_slot(_queued_slot).id)      # G52: Shift+1-8, the consumables
 		_queued_slot = -1
 	return o
 

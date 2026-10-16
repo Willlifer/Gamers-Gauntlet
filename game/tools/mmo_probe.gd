@@ -267,6 +267,33 @@ func _mechanics() -> void:
 	if outs != 1:
 		_fail("ring: %d fails, expected 1 (the one outside)" % outs)
 	print("ring: %d outside" % outs)
+	_items()
+
+
+## G52: the consumables: every one goes off from Shift+1-8's ids, off the
+## GCD, onto its cooldown; potions heal without counting as healing done.
+func _items() -> void:
+	var s := _raid(9)
+	s._pull()
+	var w: MmoUnit = s.players()[0]
+	w.pos = Vector2(0, 10)
+	w.yaw = PI
+	w.target = "boss"
+	var went := 0
+	for it: Dictionary in MmoItems.ITEMS:
+		w.hp = w.max_hp * 0.3
+		w.res = 0.0
+		w.gcd = 1.0
+		var hd := w.heal_done
+		s.step({ w.id: { "cast": str(it.id) } })
+		if float(w.cd.get(str(it.id), 0.0)) > 0.0:
+			went += 1
+		else:
+			_fail("item %s didn't go off" % it.id)
+		if str(it.id) == "item_heal" and (absf(w.hp - w.max_hp * 0.65) > 2.0 or w.heal_done != hd):
+			_fail("Major Healing Potion: hp %.0f of %.0f, healing done +%.0f" % [w.hp, w.max_hp, w.heal_done - hd])
+	s.step({ w.id: { "cast": "item_heal" } })
+	print("items: %d / %d went off; busy credit %.1f s" % [went, MmoItems.ITEMS.size(), float(w.flags.get("item_busy", 0.0)) - s.time])
 
 
 # ------------------------------------------------------------ Cinderbrand

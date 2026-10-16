@@ -315,6 +315,18 @@ static func paint(ci: CanvasItem, g: String, r: Rect2, ink: Color, shade: Color)
 		"bandage":
 			poly.call([Vector2(0.12, 0.66), Vector2(0.66, 0.12), Vector2(0.88, 0.34), Vector2(0.34, 0.88)], ink)
 			poly.call([Vector2(0.38, 0.4), Vector2(0.6, 0.4), Vector2(0.6, 0.6), Vector2(0.38, 0.6)], ink.darkened(0.3))
+		"potion":
+			# G52: a round flask, a neck and a cork; the liquid is the tile's colour
+			circ.call(0.5, 0.64, 0.27, ink)
+			circ.call(0.5, 0.67, 0.21, Color(shade, 0.35))
+			poly.call([Vector2(0.42, 0.18), Vector2(0.58, 0.18), Vector2(0.58, 0.42), Vector2(0.42, 0.42)], ink)
+			poly.call([Vector2(0.39, 0.08), Vector2(0.61, 0.08), Vector2(0.61, 0.19), Vector2(0.39, 0.19)], Color("#a07a4a"))
+			circ.call(0.41, 0.56, 0.06, Color(1, 1, 1, 0.55))
+		"gem":
+			poly.call([Vector2(0.5, 0.1), Vector2(0.86, 0.4), Vector2(0.5, 0.9), Vector2(0.14, 0.4)], ink)
+			poly.call([Vector2(0.5, 0.1), Vector2(0.86, 0.4), Vector2(0.5, 0.48)], Color(1, 1, 1, 0.35))
+			line.call([Vector2(0.14, 0.4), Vector2(0.5, 0.48), Vector2(0.86, 0.4)], sh, 0.03)
+			line.call([Vector2(0.5, 0.48), Vector2(0.5, 0.9)], sh, 0.03)
 		"dice":
 			poly.call([Vector2(0.18, 0.18), Vector2(0.82, 0.18), Vector2(0.82, 0.82), Vector2(0.18, 0.82)], ink)
 			for v: Vector2 in [Vector2(0.32, 0.32), Vector2(0.68, 0.68), Vector2(0.5, 0.5), Vector2(0.68, 0.32), Vector2(0.32, 0.68)]:

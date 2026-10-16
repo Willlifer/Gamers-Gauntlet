@@ -9,8 +9,8 @@ extends CanvasLayer
 ##   top right     the round minimap with the zone name and a clock; your
 ##                 buffs to its left; the objective tracker and the boss
 ##                 timer bars below
-##   bottom        two bars of eight (1-8, Shift+1-8) between gryphon end
-##                 caps, the XP bar, the micro menu and bags; your cast bar
+##   bottom        the spells (1-8) and above them the consumables (Shift+1-8,
+##                 G52) between gryphon end caps, the XP bar, the micro menu and bags; your cast bar
 ##                 above; chat / combat log bottom left; the damage meter and
 ##                 the threat meter bottom right
 ##   middle        raid warnings (orange), errors (red), "You have died"
@@ -185,7 +185,7 @@ func _build() -> void:
 	bar.position = Vector2(W * 0.5 - 520, H - 108)
 	bar.size = Vector2(1040, 108)
 	_root.add_child(bar)
-	for i in MmoClasses.SLOTS:
+	for i in MmoClasses.SLOTS + MmoItems.ITEMS.size():
 		var b := MmoIcon.new()
 		b.size = Vector2(42, 42)
 		var row := 1 if i < 8 else 0
@@ -284,9 +284,10 @@ func _show_tip(slot: int, b: Control) -> void:
 	if me == null:
 		return
 	var abs: Array = MmoClasses.abilities(me.cls)
-	if slot >= abs.size():
+	var ab: Dictionary = abs[slot] if slot < abs.size() else MmoItems.at_slot(slot)
+	if ab.is_empty():
 		return
-	tooltip.show_for(abs[slot], me)
+	tooltip.show_for(ab, me)
 	tooltip.position = Vector2(clampf(b.position.x - 80, 4, W - 320), b.position.y - tooltip.size.y - 8)
 	tooltip.visible = true
 
@@ -352,10 +353,10 @@ func _bar_update(me: MmoUnit) -> void:
 	var tgt := sim.unit(me.target) if me.target != "" else null
 	for i in _buttons.size():
 		var b: MmoIcon = _buttons[i]
-		if i >= abs.size():
+		var ab: Dictionary = abs[i] if i < abs.size() else MmoItems.at_slot(i)
+		if ab.is_empty():
 			b.visible = false
 			continue
-		var ab: Dictionary = abs[i]
 		b.glyph = str(ab.glyph)
 		b.col = Color(str(ab.col))
 		var cdl := float(me.cd.get(str(ab.id), 0.0))
@@ -363,7 +364,7 @@ func _bar_update(me: MmoUnit) -> void:
 		var gcd_full := MmoTune.value("gcd")
 		if cdl > 0.0 and cdt > 0.0:
 			b.cd = clampf(cdl / cdt, 0.0, 1.0)
-			b.cd_text = ("%d" % ceili(cdl)) if cdl >= 1.5 else ""
+			b.cd_text = (("%d" % ceili(cdl)) if cdl < 60.0 else ("%dm" % ceili(cdl / 60.0))) if cdl >= 1.5 else ""
 		elif bool(ab.get("gcd", true)) and me.gcd > 0.0:
 			b.cd = clampf(me.gcd / gcd_full, 0.0, 1.0)
 			b.cd_text = ""
@@ -849,6 +850,13 @@ class MainBar extends Control:
 		# empty button wells
 		for i in MmoClasses.SLOTS:
 			draw_rect(Rect2(X0 + i * 46, 60, 46, 46), Color(0, 0, 0, 0.6))
+		# G52: the consumables bar above the spells, on its own darker stone strip
+		var top := Rect2(X0 - 6, 6, 8 * 46 + 12, 50)
+		draw_rect(top, Color(0.06, 0.055, 0.05, 0.9))
+		draw_rect(Rect2(top.position, Vector2(top.size.x, 2)), MmoHud.STONE_HI)
+		draw_rect(top, MmoHud.STONE, false, 2.0)
+		for i in MmoItems.ITEMS.size():
+			draw_rect(Rect2(X0 + i * 46, 8, 46, 46), Color(0, 0, 0, 0.6))
 		# micro menu and bags on the right of the lower row
 		var mx := X0 + 8 * 46 + 20
 		var micro := ["Character", "Spellbook", "Talents", "Quests", "Social", "Map", "Menu", "Help"]
@@ -922,12 +930,15 @@ class Tooltip extends PanelContainer:
 
 	func show_for(ab: Dictionary, me: MmoUnit) -> void:
 		var t := "[font_size=16][color=#ffffff]%s[/color][/font_size]\n" % str(ab.name)
+		if ab.get("item", false):
+			t += "[color=#1eff00]Consumable[/color]    [color=#a0a0a0]off the global cooldown[/color]\n"
 		var bits: Array = []
 		if float(ab.get("cost", 0.0)) > 0.0:
 			bits.append("%d %s" % [int(ab.cost), me.res_kind.capitalize()])
 		if float(ab.get("range", 0.0)) > 0.0:
 			bits.append("%d m range" % int(ab.range))
-		t += "[color=#ffffff]%s[/color]\n" % "    ".join(bits)
+		if not bits.is_empty():
+			t += "[color=#ffffff]%s[/color]\n" % "    ".join(bits)
 		var ct := "Instant"
 		if float(ab.get("cast", 0.0)) > 0.0:
 			ct = "%.1f sec cast" % float(ab.cast)
@@ -935,7 +946,9 @@ class Tooltip extends PanelContainer:
 			ct = "Channeled"
 		t += "[color=#ffffff]%s[/color]" % ct
 		if float(ab.get("cd", 0.0)) > 0.0:
-			t += "[color=#ffffff]    %s cooldown[/color]" % (("%d sec" % int(ab.cd)) if float(ab.cd) < 60.0 else ("%d min" % int(float(ab.cd) / 60.0)))
+			var mins := float(ab.cd) / 60.0
+			var cd_s := ("%d min" % int(mins)) if is_equal_approx(mins, roundf(mins)) else ("%.1f min" % mins)
+			t += "[color=#ffffff]    %s cooldown[/color]" % (("%d sec" % int(ab.cd)) if float(ab.cd) < 60.0 else cd_s)
 		t += "\n[color=#ffd100]%s[/color]" % str(ab.get("desc", ""))
 		_l.text = t
 		reset_size()

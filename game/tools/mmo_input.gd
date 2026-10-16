@@ -135,12 +135,24 @@ func _go() -> void:
 	_key(KEY_8, false)
 	await _frames(3)
 	_ok(float(me.cd.get("blink", 0.0)) > cd0, "8 uses Blink")
-	var casts0 := me.cast_serial
-	me.gcd = 0.0
+	# G52: Shift+1-8 is the consumables bar, off the global cooldown
+	me.hp = me.max_hp * 0.5
+	me.gcd = 1.0
 	_key(KEY_1, true, true)
 	_key(KEY_1, false, true)
 	await _frames(3)
-	_ok(me.cast_serial == casts0, "Shift+1 does nothing (one bar of eight)")
+	_ok(float(me.cd.get("item_heal", 0.0)) > 0.0 and me.hp > me.max_hp * 0.8, "Shift+1 drinks a Major Healing Potion, even on the GCD (hp %.0f%%)" % (me.hp / me.max_hp * 100.0))
+	_key(KEY_3, true, true)
+	_key(KEY_3, false, true)
+	await _frames(3)
+	_ok(me.has_aura("item_power"), "Shift+3 drinks the Elixir of Giants' Might")
+	me.pos = Vector2(0, 14)
+	me.yaw = PI
+	await _frames(2)
+	_key(KEY_8, true, true)
+	_key(KEY_8, false, true)
+	await _frames(3)
+	_ok(float(me.cd.get("item_dynamite", 0.0)) > 0.0, "Shift+8 throws Dense Dynamite at the target")
 	var d0 := v.cam_dist
 	_btn(MOUSE_BUTTON_WHEEL_UP, true)
 	_btn(MOUSE_BUTTON_WHEEL_UP, false)

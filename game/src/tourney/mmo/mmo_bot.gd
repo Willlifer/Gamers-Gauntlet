@@ -55,6 +55,10 @@ func think(s: MmoSim, u: MmoUnit) -> Dictionary:
 	if u.casting():
 		return o
 	_moving_to = dest if need_move else Vector2.INF
+	var item := _item(s, u)
+	if item != "":
+		o["cast"] = item                          # G52: a consumable, off the GCD; the spells wait a tick
+		return o
 	var pick := _choose(s, u, need_move)
 	if not pick.is_empty():
 		o["cast"] = str(pick.ab)
@@ -244,6 +248,32 @@ func _react(s: MmoSim, key: String) -> bool:
 
 
 # --------------------------------------------------------------- abilities
+
+## G52: the consumables, by simple rules: potions and the healthstone when
+## low, mana when dry, the elixir and the dynamite whenever they're up, the
+## restorative under a hurting Cinderbrand, swiftness with a bomb on, the
+## stoneshield on the tank being hit while low.
+func _item(s: MmoSim, u: MmoUnit) -> String:
+	if not s.pulled or s.time - s.pull_time < 2.0:
+		return ""
+	var b := _foe(s, u)
+	for it: Dictionary in MmoItems.ITEMS:
+		if float(u.cd.get(str(it.id), 0.0)) > 0.0:
+			continue
+		var go := false
+		match str(it.ai):
+			"potion_heal": go = u.hp_pct() < 0.4
+			"stone": go = u.hp_pct() < 0.3
+			"potion_mana": go = u.res_kind == "mana" and u.res < u.res_max * 0.3
+			"potion_power": go = b.alive and s.dist(u, b) <= MmoClasses.RANGED
+			"potion_cleanse": go = u.has_aura(MmoSim.BRAND) and u.hp_pct() < 0.6
+			"potion_speed": go = u.has_aura("bomb")
+			"potion_shield": go = u.hp_pct() < 0.5 and s.boss.target == u.id
+			"dynamite": go = b.alive and _moving_to == Vector2.INF and s.dist(u, b) <= float(it.range) and s.facing(u, b)
+		if go:
+			return str(it.id)
+	return ""
+
 
 func _choose(s: MmoSim, u: MmoUnit, moving: bool) -> Dictionary:
 	var c: Dictionary = MmoClasses.CLASSES[u.cls]

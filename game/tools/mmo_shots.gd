@@ -80,6 +80,13 @@ func _go() -> void:
 			break
 	await _wait(1.5)
 	await _shot("fight")
+	# G52: the consumables bar, a tooltip up
+	var hud: MmoHud = v._hud
+	var ib: Control = hud._buttons[MmoItems.SLOT0 + 2]
+	hud._show_tip(MmoItems.SLOT0 + 2, ib)
+	await _wait(0.3)
+	await _shot("items_tip")
+	hud.tooltip.visible = false
 	# SCORCH=1: Scorched Earth (G37) frames, warning, burning, turning, then quit
 	if OS.get_environment("SCORCH") != "":
 		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [100.0, "scorch_spin"], [128.0, "scorch_rest"]]:

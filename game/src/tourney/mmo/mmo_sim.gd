@@ -236,7 +236,7 @@ func _record(u: MmoUnit) -> void:
 	u.fight_t += TICK
 	if u.alive:
 		u.alive_t += TICK
-		if u.gcd > 0.0 or u.casting() or u.auto_on:
+		if u.gcd > 0.0 or u.casting() or u.auto_on or time < float(u.flags.get("item_busy", 0.0)):
 			u.busy_t += TICK
 
 
@@ -401,6 +401,8 @@ func try_cast(u: MmoUnit, ab_id: String) -> bool:
 		_emit({ "type": "cast_start", "id": u.id, "ab": ab_id, "total": chan, "channel": true })
 		return true
 	u.cd[ab_id] = float(ab.get("cd", 0.0))
+	if ab.get("item", false):
+		u.flags["item_busy"] = time + MmoItems.ITEM_BUSY            # G52: a consumable counts toward activity
 	_apply(u, ab, tgt)
 	return true
 
@@ -512,6 +514,12 @@ func _effect(u: MmoUnit, ab: Dictionary, f: Dictionary, tgt: MmoUnit, school: St
 	if f.has("heal") and not f.has("or_dmg"):
 		var who := u if f.get("self", false) or tgt == null else tgt
 		heal(u, who, float(f.heal), name_)
+		return
+	if f.has("restore"):
+		# G52: a potion or healthstone: health back, not healing done (the meter and the grade skip it)
+		var eff := roundf(minf(u.max_hp * float(f.restore), u.max_hp - u.hp))
+		u.hp += eff
+		_emit({ "type": "heal", "src": u.id, "tgt": u.id, "n": eff, "eff": eff, "crit": false, "what": name_, "kind": "item" })
 		return
 	if f.has("heal_pct"):
 		heal(u, u, u.max_hp * float(f.heal_pct), name_)
