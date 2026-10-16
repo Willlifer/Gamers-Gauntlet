@@ -5,6 +5,9 @@ extends AramModule
 ## closest and telegraphs slams and novas. Fight the other team, keep the
 ## boss's attention off you, and land the kill: smite does 600 true damage.
 ## Whoever's team lands the last hit wins (about 1.5 minutes).
+## G54: the Giant sits off centre among rocks; each player's champion has
+## 2x health and damage and is the only one with smite; V / C ping your bot
+## allies to go in or hold (MobaSim.pings, MobaBot._answer_ping).
 
 const ALLIES := 2
 
@@ -23,6 +26,7 @@ static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	for team in ["blue", "red"]:
 		for k in ALLIES + 1:
 			var c := s.add_champ(MobaChamps.ORDER[rng.randi() % 3], team, "%s%d" % [team, k])
+			s.seat_pit(c, k == 0)            # G54: the players hit 2x, have 2x health, and alone carry smite
 			bots[c.id] = MobaBot.new(0.6, int(m.seed) * 13 + k * 5 + (0 if team == "blue" else 1))
 			if k == 0:
 				lead[team] = c
@@ -48,6 +52,8 @@ func _start() -> void:
 	s.add_boss()
 	var me := s.add_champ(_picks[_human.id], "blue", str(_human.name))
 	var them := s.add_champ(_picks[_bot_p.id], "red", str(_bot_p.name))
+	s.seat_pit(me, true)                 # G54: the two players: 2x health and damage, smite
+	s.seat_pit(them, true)
 	var bots := { them.id: MobaBot.new(0.55, seed * 7) }
 	if autopilot:
 		bots[me.id] = MobaBot.new(0.6, seed * 3)
@@ -59,6 +65,7 @@ func _start() -> void:
 			var champ: String = rest[k % rest.size()]
 			var label := "%s (ally)" % MobaChamps.CHAMPS[champ].name if team == "blue" else "%s (%s)" % [MobaChamps.CHAMPS[champ].name, _bot_p.name]
 			var a := s.add_champ(champ, team, label)
+			s.seat_pit(a, false)             # bot allies: no smite, base stats
 			bots[a.id] = MobaBot.new(0.5, seed * 17 + k * 3 + (0 if team == "blue" else 1))
 	_view = MobaView.new()
 	_view.setup(s, me.id, bots, match_cfg.get("binds", TourneyState.load_binds()),

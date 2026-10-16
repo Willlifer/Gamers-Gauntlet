@@ -8,7 +8,8 @@ extends RefCounted
 ##
 ## Orders per champion per tick (all optional):
 ##   { move: Vector2, attack: unit id, stop: true,
-##     cast: { slot: "q"|"w"|"e"|"r"|"flash"|"ignite", aim: Vector2, target: unit id } }
+##     cast: { slot: "q"|"w"|"e"|"r"|"flash"|"ignite"|"smite", aim: Vector2, target: unit id },
+##     ping: { kind: "go"|"hold", at: Vector2 } }       (the pit: your bot allies answer it)
 
 const TICK := 1.0 / 30.0
 const KILLS_TO_WIN := 3
@@ -21,9 +22,9 @@ const FIRST_WAVE := 3.0
 const AGGRO := 7.0              # minions look this far for something to hit
 const ACQUIRE := 1.5            # an idle champion auto-acquires within range + this
 const SMOKE_SIGHT := 2.5
-const FLASH_RANGE := 4.0
+const FLASH_RANGE := 5.25       # author 10-16: 525 League units
 const FLASH_CD := 60.0          # League 300 s; scaled for a 3-kill duel
-const IGNITE_RANGE := 6.0
+const IGNITE_RANGE := 7.5       # 600 x1.25 (G54: every range +25%)
 const IGNITE_CD := 60.0
 const IGNITE_DMG := 120.0       # true damage over 5 s
 ## "Objective take": the boss pit (author 10-13: champions on 2 teams dance
@@ -32,13 +33,21 @@ const PIT_R := 10.5             # the pit's walkable radius
 const BOSS_R := 1.8
 const BOSS_HP := 27000.0
 const BOSS_LEASH := 7.0         # come this close and it turns on you
-const BOSS_AD := 130.0
+const BOSS_AD := 32.5           # author 10-16: the Giant's damage down 75% (was 130 / 220 / 160)
 const SLAM_EVERY := 8.0
-const SLAM_DMG := 220.0
+const SLAM_DMG := 55.0
 const NOVA_EVERY := 12.0
-const NOVA_DMG := 160.0
+const NOVA_DMG := 40.0
 const SMITE_DMG := 600.0        # true damage, the boss only
-const SMITE_RANGE := 5.0
+const SMITE_RANGE := 6.25       # 500 x1.25
+## G54: the Giant sits off centre, in the east half toward the wall (as far
+## from both entrances), and rocks stand in the pit: nobody walks through
+## them, skillshots break on them, and nobody sees (or auto-acquires) past them.
+const BOSS_POS := Vector2(5.5, 0.0)
+const PIT_ROCKS := [Vector3(-4.5, 0.0, 1.3), Vector3(0.0, 4.6, 0.9), Vector3(0.0, -4.6, 0.9),
+	Vector3(-6.0, 4.6, 1.0), Vector3(-6.0, -4.6, 1.0), Vector3(6.2, 5.4, 0.8), Vector3(6.2, -5.4, 0.8)]
+const PLAYER_POWER := 2.0       # the players' champions in the pit: 2x health and damage
+const PING_TIME := 12.0         # a ping holds the bots this long
 const SMITE_CD := 15.0
 const RESPAWN_PIT := 8.0
 
@@ -50,6 +59,7 @@ var projectiles: Array = []     # Dictionary
 var areas: Array = []           # Dictionary: delayed blasts, smoke, mines
 var score := { "blue": 0, "red": 0 }
 var winner := ""
+var pings := {}                 # team -> { kind: "go"|"hold", pos, time, by }
 var _events: Array = []
 var _next := 1
 var _wave_t := FIRST_WAVE
@@ -110,7 +120,7 @@ func add_boss() -> MobaUnit:
 	u.team = "neutral"
 	u.kind = "boss"
 	u.name = "The Giant"
-	u.pos = Vector2.ZERO
+	u.pos = BOSS_POS
 	u.radius = BOSS_R
 	u.max_hp = BOSS_HP
 	u.hp = BOSS_HP
@@ -129,6 +139,18 @@ func add_boss() -> MobaUnit:
 
 func boss() -> MobaUnit:
 	return unit("boss")
+
+
+## The pit's seats (G54): a player's champion gets 2x health and damage and
+## smite; a bot ally or a bot enemy gets neither.
+func seat_pit(u: MobaUnit, is_player: bool) -> void:
+	u.player = is_player
+	if is_player:
+		u.power = PLAYER_POWER
+		u.max_hp *= PLAYER_POWER
+		u.hp = u.max_hp
+	else:
+		u.cd.erase("smite")
 
 
 func unit(id: String) -> MobaUnit:
@@ -201,7 +223,7 @@ func _waves() -> void:
 				m.max_hp = 220.0
 				m.ad = 20.0
 				m.period = 1.6
-				m.range = 5.0
+				m.range = 6.25          # x1.25 with everything else
 				m.proj_speed = 14.0
 				m.windup = 0.35
 			m.ms = 3.25
@@ -211,6 +233,11 @@ func _waves() -> void:
 
 
 func _tick_unit(u: MobaUnit, ord: Dictionary) -> void:
+	if ord.has("ping") and u.kind == "champ" and mode == "pit":
+		var pg: Dictionary = ord.ping
+		var kind := "hold" if str(pg.get("kind", "")) == "hold" else "go"
+		pings[u.team] = { "kind": kind, "pos": _clamp(pg.get("at", u.pos)), "time": time, "by": u.id }
+		_emit({ "type": "ping", "team": u.team, "kind": kind, "unit": u.id })
 	for k in u.cd:
 		u.cd[k] = maxf(0.0, float(u.cd[k]) - TICK)
 	u.atk_cd = maxf(0.0, u.atk_cd - TICK)
@@ -251,6 +278,13 @@ func _tick_unit(u: MobaUnit, ord: Dictionary) -> void:
 			u.order = { "kind": "attack", "target": t.id }
 	if ord.has("cast"):
 		_cast(u, ord.cast)
+	# the cast stop: rooted until the spell goes off, then the order resumes
+	if u.cast_slot != "":
+		if time >= u.cast_until - 0.0001:
+			_release(u)
+		if u.cast_slot != "" or u.dash_t <= 0.0:
+			_moved(u, false)
+			return
 	# a dash carries them
 	if u.dash_t > 0.0:
 		u.pos = _clamp(u.pos + u.dash_v * TICK)
@@ -324,18 +358,68 @@ func _walk(u: MobaUnit, to: Vector2) -> bool:
 		return false
 	var step := minf(d.length(), u.ms_now() * TICK)
 	u.facing = d.normalized()
-	u.pos = _clamp(u.pos + d.normalized() * step)
+	var np := _clamp(u.pos + d.normalized() * step)
+	if mode == "pit" and np.distance_to(u.pos) < step * 0.4:
+		# walked into a rock or the Giant's dais: slide round it the short way
+		for c in _blockers():
+			var cc := Vector2(c.x, c.y)
+			if u.pos.distance_to(cc) <= c.z + 0.75:
+				var tan := (u.pos - cc).orthogonal().normalized()
+				if tan.dot(d) < 0.0 or (is_zero_approx(tan.dot(d)) and u.team == "red"):
+					tan = -tan
+				np = _clamp(u.pos + tan * step)
+				break
+	u.pos = np
 	return true
+
+
+## The pit's solid things: the rocks and the Giant's dais, as (x, y, radius + a body).
+func _blockers() -> Array:
+	var out: Array = []
+	for r in PIT_ROCKS:
+		out.append(Vector3(r.x, r.y, r.z + 0.6))
+	out.append(Vector3(BOSS_POS.x, BOSS_POS.y, BOSS_R + 0.5))
+	return out
 
 
 func _clamp(p: Vector2) -> Vector2:
 	if mode == "pit":
 		if p.length() > PIT_R:
 			p = p.normalized() * PIT_R
-		if p.length() < BOSS_R + 0.5:
-			p = (p.normalized() if p.length() > 0.01 else Vector2.DOWN) * (BOSS_R + 0.5)
+		for c in _blockers():
+			var cc := Vector2(c.x, c.y)
+			var d := p - cc
+			if d.length() < c.z:
+				p = cc + (d.normalized() if d.length() > 0.01 else Vector2.DOWN) * c.z
 		return p
 	return Vector2(clampf(p.x, -HALF_LEN, HALF_LEN), clampf(p.y, -HALF_W, HALF_W))
+
+
+## True when no pit rock stands between `a` and `b` (always outside the pit).
+func los(a: Vector2, b: Vector2) -> bool:
+	if mode != "pit":
+		return true
+	for r in PIT_ROCKS:
+		var c := Vector2(r.x, r.y)
+		var ab := b - a
+		var t := clampf((c - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
+		if (a + ab * t).distance_to(c) < r.z * 0.85:
+			return false
+	return true
+
+
+## Whether `u` (or its team) can see `o`: not hidden, not past a rock for
+## every one of u's team, and not lost in Braves' smoke.
+func team_sees(team: String, o: MobaUnit) -> bool:
+	if not o.targetable():
+		return false
+	if o.team == team:
+		return true
+	for a in units:
+		if a.team == team and a.alive and a.kind != "boss" and (a.blind_t <= 0.0 or a.pos.distance_to(o.pos) <= SMOKE_SIGHT):
+			if a.pos.distance_to(o.pos) <= 2.0 or los(a.pos, o.pos):
+				return true
+	return false
 
 
 ## The boss: turns on the nearest champion inside its leash; every few
@@ -397,6 +481,8 @@ func _nearest_enemy(u: MobaUnit, r: float, kinds: Array = ["champ", "minion", "d
 			continue
 		if u.blind_t > 0.0 and o.pos.distance_to(u.pos) > SMOKE_SIGHT:
 			continue
+		if not los(u.pos, o.pos):
+			continue
 		var d: float = o.pos.distance_to(u.pos)
 		if d <= r and d < bd:
 			best = o
@@ -444,6 +530,8 @@ func _auto_hit(u: MobaUnit, t: MobaUnit) -> void:
 func damage(t: MobaUnit, amount: float, src: MobaUnit, kind: String) -> void:
 	if t == null or not t.alive or amount <= 0.0:
 		return
+	if src and kind != "smite":
+		amount *= src.power
 	t.hp -= amount
 	t.hit_serial += 1
 	t.set_meta("hurt_at", time)
@@ -459,6 +547,8 @@ func damage(t: MobaUnit, amount: float, src: MobaUnit, kind: String) -> void:
 func dot(t: MobaUnit, kind: String, total: float, dur: float, src: MobaUnit) -> void:
 	if t == null or not t.alive:
 		return
+	if src:
+		total *= src.power
 	for d in t.dots:
 		if d.kind == kind and d.src == (src.id if src else ""):
 			d.per_s = total / dur
@@ -491,6 +581,7 @@ func _die(t: MobaUnit, src: MobaUnit) -> void:
 	t.dots = []
 	t.dash_t = 0.0
 	t.atk_wind = -1.0
+	t.cast_slot = ""
 	_emit({ "type": "death", "unit": t.id, "by": src.id if src else "" })
 	for o in units:
 		if o.order.get("target", "") == t.id:
@@ -541,10 +632,46 @@ func area_hit(at: Vector2, r: float, src: MobaUnit, amount: float, kind: String,
 
 func _cast(u: MobaUnit, c: Dictionary) -> void:
 	var slot := str(c.get("slot", ""))
-	if not u.cd.has(slot) or float(u.cd[slot]) > 0.0 or u.dash_t > 0.0:
+	if not u.cd.has(slot) or float(u.cd[slot]) > 0.0 or u.dash_t > 0.0 or u.cast_slot != "":
 		return
 	var aim: Vector2 = c.get("aim", u.pos + u.facing)
 	var tgt := unit(str(c.get("target", "")))
+	if slot in ["q", "w", "e", "r"] and u.champ != "":
+		# the cast stop (author 10-16): stand still CAST_TIME, then it goes off.
+		# A targeted spell with nobody in reach never starts.
+		var sp := MobaChamps.shape(u.champ, slot)
+		if str(sp.get("shape", "")) == "none":
+			return
+		if str(sp.shape) == "target":
+			tgt = MobaChamps.pick_target(self, u, aim, tgt, float(sp.range))
+			if tgt == null:
+				return
+		u.cast_slot = slot
+		u.cast_aim = aim
+		u.cast_target = tgt.id if tgt else ""
+		u.cast_start = time
+		u.cast_until = time + MobaChamps.CAST_TIME
+		u.cast_serial += 1
+		u.last_cast = slot
+		u.atk_wind = -1.0
+		if aim.distance_to(u.pos) > 0.05:
+			u.facing = (aim - u.pos).normalized()
+		_emit({ "type": "cast_start", "unit": u.id, "slot": slot, "aim": aim, "until": u.cast_until })
+		return
+	_go_off(u, slot, aim, tgt)
+
+
+## The end of the cast stop: the spell goes off now (its target may have died or hidden).
+func _release(u: MobaUnit) -> void:
+	var slot := u.cast_slot
+	u.cast_slot = ""
+	var tgt := unit(u.cast_target)
+	if tgt and not tgt.targetable():
+		tgt = null
+	_go_off(u, slot, u.cast_aim, tgt, false)
+
+
+func _go_off(u: MobaUnit, slot: String, aim: Vector2, tgt: MobaUnit, bump: bool = true) -> void:
 	var ok := false
 	match slot:
 		"flash":
@@ -571,8 +698,9 @@ func _cast(u: MobaUnit, c: Dictionary) -> void:
 			if ok:
 				u.cd[slot] = float(MobaChamps.CHAMPS[u.champ].cd[slot])
 	if ok:
-		u.cast_serial += 1
-		u.last_cast = slot
+		if bump:
+			u.cast_serial += 1
+			u.last_cast = slot
 		u.atk_wind = -1.0
 		_emit({ "type": "cast", "unit": u.id, "slot": slot, "aim": aim })
 
@@ -633,7 +761,8 @@ func _tick_projectiles() -> void:
 					else:
 						done = true
 						break
-			if not done and (p.left <= 0.0 or absf(p.pos.x) > HALF_LEN + 1.0 or absf(p.pos.y) > HALF_W + 1.0):
+			if not done and (p.left <= 0.0 or _in_rock(p.pos) or (mode == "pit" and p.pos.length() > PIT_R + 1.0)
+					or (mode != "pit" and (absf(p.pos.x) > HALF_LEN + 1.0 or absf(p.pos.y) > HALF_W + 1.0))):
 				if p.has("on_end"):
 					(p.on_end as Callable).call(p.pos)
 				done = true
@@ -642,6 +771,15 @@ func _tick_projectiles() -> void:
 		else:
 			keep.append(p)
 	projectiles = keep
+
+
+func _in_rock(p: Vector2) -> bool:
+	if mode != "pit":
+		return false
+	for r in PIT_ROCKS:
+		if p.distance_to(Vector2(r.x, r.y)) < r.z:
+			return true
+	return false
 
 
 ## A ground effect. a: { kind, pos, r, t (life), delay, team, owner, on_fire: Callable, ... }

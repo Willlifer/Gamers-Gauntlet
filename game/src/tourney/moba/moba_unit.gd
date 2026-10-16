@@ -38,12 +38,28 @@ var still_t := 0.0             # Temu: seconds without moving
 var stealth := false
 var blind_t := 0.0             # Braves' smoke: sight cut to SMOKE_SIGHT
 var moving := false
-var cast_serial := 0           # bumps on every cast (the view poses it)
+var cast_serial := 0           # bumps when a cast starts (the view poses it)
 var last_cast := ""
+## The cast stop (G54): Q W E R root the caster for MobaChamps.CAST_TIME,
+## then go off. While cast_slot != "" the unit stands still; cast_until is
+## the sim time it releases (the view's cast pose can run cast_start..cast_until).
+var cast_slot := ""
+var cast_start := -1.0
+var cast_until := -1.0
+var cast_aim := Vector2.ZERO
+var cast_target := ""
+## The pit (G54): the players' champions hit twice as hard and have twice
+## the health (power 2); only they carry smite.
+var player := false
+var power := 1.0
 var atk_serial := 0            # bumps on every auto fired
 var hit_serial := 0            # bumps on every hit taken
 var dmg_done := 0.0
 var lane_dir := 1.0            # minions: +1 walks toward red, −1 toward blue
+
+
+func casting() -> bool:
+	return cast_slot != ""
 
 
 func targetable() -> bool:

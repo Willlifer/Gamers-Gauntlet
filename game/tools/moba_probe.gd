@@ -90,6 +90,7 @@ func _pit(seed: int) -> MobaSim:
 	for team in ["blue", "red"]:
 		for k in 3:
 			var c := s.add_champ(MobaChamps.ORDER[rng.randi() % 3], team, "%s%d" % [team, k])
+			s.seat_pit(c, k == 0)               # G54: the leads are the players
 			bots[c.id] = MobaBot.new(0.6, seed * 11 + k * 3 + (0 if team == "blue" else 1))
 	s.set_meta("bots", bots)
 	return s

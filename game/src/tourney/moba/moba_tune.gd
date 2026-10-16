@@ -13,6 +13,9 @@ extends RefCounted
 ## use_defaults() so a tuned file never changes their results.
 
 const PATH := "user://moba_tune.cfg"
+## G54 moved the flash default (4.0 -> 5.25) and every range: a file saved
+## before then would pin the old flash, so its flash is dropped on load.
+const VERSION := 2
 
 ## key -> [label, min, max, step]; champion keys are "<champ>.<stat>".
 const STATS := {
@@ -88,9 +91,12 @@ static func _ensure() -> void:
 	var cf := ConfigFile.new()
 	if cf.load(PATH) != OK:
 		return
+	var old := int(cf.get_value("meta", "version", 1)) < VERSION
 	for k: String in _values:
 		var sec := "global" if k.find(".") < 0 else k.get_slice(".", 0)
 		var key := k if k.find(".") < 0 else k.get_slice(".", 1)
+		if old and k == "flash_range":
+			continue
 		if cf.has_section_key(sec, key):
 			var sp := spec(k)
 			_values[k] = clampf(float(cf.get_value(sec, key)), float(sp[1]), float(sp[2]))
@@ -100,6 +106,7 @@ static func save() -> void:
 	if _defaults_only:
 		return
 	var cf := ConfigFile.new()
+	cf.set_value("meta", "version", VERSION)
 	for k: String in _values:
 		var sec := "global" if k.find(".") < 0 else k.get_slice(".", 0)
 		var key := k if k.find(".") < 0 else k.get_slice(".", 1)

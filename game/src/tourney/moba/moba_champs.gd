@@ -1,6 +1,6 @@
 class_name MobaChamps
 extends RefCounted
-## The author's three ARAM champions. Base: 700 HP, 60 per auto, one auto a
+## The author's three ARAM champions. Base: 1400 HP (G54; was 700), 60 per auto, one auto a
 ## second. Ranges in world units (1 = 100 League units). Numbers the author
 ## left open are League-ish defaults, marked OPEN.
 
@@ -8,11 +8,39 @@ const BASE_AD := 60.0
 const TEMU_STILL := 1.0          # seconds still before Temu vanishes
 const TEMU_POISON := 60.0        # 1x AA over 3 s (E, and Q's poison)
 const BLAZE_PCT := 0.05          # Merr: spell contact burns 5% max HP over 5 s
+const HP := 1400.0               # author 10-16: every champion's health doubled (was 700)
+const RANGE_UP := 1.25           # author 10-16: every range +25% (autos above, spells in SHAPES)
+
+## Each spell's reach and footprint (G54): cast() reads its numbers here and
+## the aim indicator (moba_aim.gd), the tooltips and the bots read the same.
+## shape: line (a skillshot, width = half-width) | circle (lands at the cursor,
+## r = radius) | cone (deg wide) | target (the enemy nearest the cursor;
+## r = the burst round it) | dash | self | none. Ranges are the old ones x1.25.
+const SHAPES := {
+	"merr": {
+		"q": { "shape": "line", "range": 10.5 * RANGE_UP, "width": 0.5, "speed": 16.0 * 0.7 },   # Brand-like Q: 30% slower (author 10-16)
+		"w": { "shape": "circle", "range": 9.0 * RANGE_UP, "r": 2.5, "delay": 0.625 / 0.7 },    # the pillar grows 30% slower
+		"e": { "shape": "target", "range": 6.75 * RANGE_UP, "r": 3.0 },
+		"r": { "shape": "target", "range": 7.5 * RANGE_UP, "r": 0.9, "bounce": 6.0 * RANGE_UP, "speed": 14.0 * 0.5 } },  # 100% slower: half speed
+	"temu": {
+		"q": { "shape": "target", "range": 6.8 * RANGE_UP, "r": 0.9 },
+		"w": { "shape": "self", "range": 0.0 },
+		"e": { "shape": "none", "range": 0.0 },
+		"r": { "shape": "circle", "range": 4.0 * RANGE_UP, "r": 2.5 } },
+	"braves": {
+		"q": { "shape": "cone", "range": 8.0 * RANGE_UP, "deg": 60.0 },
+		"w": { "shape": "circle", "range": 9.0 * RANGE_UP, "r": 2.5 },
+		"e": { "shape": "dash", "range": 4.25 * 0.25 },           # author 10-16: 25% of the old 4.25
+		"r": { "shape": "line", "range": 10.0 * RANGE_UP, "width": 0.6 } },
+}
+## The cast stop (author 10-16): Q W E R root the caster this long, then
+## the spell goes off. Summoner spells stay instant.
+const CAST_TIME := 0.3
 
 const CHAMPS := {
 	"merr": { "name": "Merr", "title": "the Shambling Flame", "weapon": "staff", "weapon_model": "orb_scepter",
 		"hair_style": "mullet", "hair_hex": "#7ed957", "tint": "#7ed957", "gender": "m", "top": "tank_top", "bottom": "ripped_tight_pants",
-		"range": 5.5, "ms": 3.35, "ad": 60.0, "proj_speed": 18.0, "windup": 0.3, "role": "Mage · long range",
+		"range": 6.875, "ms": 3.35, "ad": 60.0, "proj_speed": 18.0, "windup": 0.3, "role": "Mage · long range",
 		"cd": { "q": 8.0, "w": 10.0, "e": 9.0, "r": 50.0 },
 		"spells": {
 			"passive": ["Blaze", "Any spell that touches someone burns 5% of their max HP over 5 s."],
@@ -23,7 +51,7 @@ const CHAMPS := {
 	"temu": { "name": "Temu", "title": "the Welder", "weapon": "bow", "weapon_model": "shortbow",
 		"kit_weapon": "slingshot", "kit_params": { "scale": 2.6 },   # the author: Temu uses the slingshot (bow clips drive the draw)
 		"hair_style": "short_mohawk", "hair_hex": "#a259ff", "tint": "#a259ff", "gender": "m", "top": "hoodie", "bottom": "tight_shorts",
-		"range": 5.0, "ms": 3.45, "ad": 60.0, "proj_speed": 16.0, "windup": 0.28, "role": "Marksman · long range",
+		"range": 6.25, "ms": 3.45, "ad": 60.0, "proj_speed": 16.0, "windup": 0.28, "role": "Marksman · long range",
 		"cd": { "q": 5.0, "w": 15.0, "e": 0.0, "r": 12.0 },
 		"spells": {
 			"passive": ["Lurk", "Stand still for 1 s: invisible and untargetable until you move."],
@@ -33,7 +61,7 @@ const CHAMPS := {
 			"r": ["Pocket Nuke", "Drop a mine. It arms in 1 s; an enemy near it sets it off: 2x auto poison over 5 s."] } },
 	"braves": { "name": "Braves", "title": "the Buckshot", "weapon": "pistols", "weapon_model": "flintlock",
 		"hair_style": "buzzed", "hair_hex": "#8b5a2b", "tint": "#a8743a", "gender": "m", "top": "sweater", "bottom": "baggy_sweatpants",
-		"range": 4.25, "ms": 3.4, "ad": 90.0, "proj_speed": 30.0, "windup": 0.25, "role": "Fighter · medium range",
+		"range": 5.3125, "ms": 3.4, "ad": 90.0, "proj_speed": 30.0, "windup": 0.25, "role": "Fighter · medium range",
 		"cd": { "q": 7.0, "w": 12.0, "e": 9.0, "r": 50.0 },
 		"spells": {
 			"passive": ["Heavy Shells", "Autos deal 1.5x auto damage."],
@@ -50,7 +78,7 @@ static func make(id: String) -> MobaUnit:
 	var u := MobaUnit.new()
 	u.kind = "champ"
 	u.champ = id
-	u.max_hp = 700.0
+	u.max_hp = HP
 	u.hp = u.max_hp
 	u.ad = float(c.ad)
 	u.range = float(c.range)
@@ -84,22 +112,24 @@ static func pick_target(s: MobaSim, u: MobaUnit, aim: Vector2, tgt: MobaUnit, ma
 static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaUnit) -> bool:
 	var dir: Vector2 = (aim - u.pos).normalized() if aim.distance_to(u.pos) > 0.05 else u.facing
 	u.facing = dir
+	var sp: Dictionary = shape(u.champ, slot)
+	var rng := float(sp.get("range", 0.0))
 	match u.champ + ":" + slot:
 		# ---------------------------------------------------------------- Merr
 		"merr:q":
-			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + dir * 0.6, "dir": dir, "speed": 16.0,
-				"range": 10.5, "width": 0.5, "look": "merr_spit",
+			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + dir * 0.6, "dir": dir, "speed": float(sp.speed),
+				"range": rng, "width": float(sp.width), "look": "merr_spit",
 				"on_hit": func(o: MobaUnit, _p: Vector2) -> void:
 					s.damage(o, BASE_AD * 3.0, u, "spit")
 					on_spell_hit(s, u, o) })
 			return true
 		"merr:w":
-			var at := u.pos + (aim - u.pos).limit_length(9.0)
-			s.add_area({ "kind": "blast", "pos": at, "r": 2.5, "delay": 0.625, "team": u.team, "owner": u.id, "look": "merr_pyre",
+			var at := u.pos + (aim - u.pos).limit_length(rng)
+			s.add_area({ "kind": "blast", "pos": at, "r": 2.5, "delay": float(sp.delay), "team": u.team, "owner": u.id, "look": "merr_pyre",
 				"on_fire": func() -> void: s.area_hit(at, 2.5, u, BASE_AD * 3.0, "pyre") })
 			return true
 		"merr:e":
-			var t := pick_target(s, u, aim, tgt, 6.75)
+			var t := pick_target(s, u, aim, tgt, rng)
 			if t == null:
 				return false
 			s.damage(t, BASE_AD * 1.5, u, "spread")
@@ -111,14 +141,14 @@ static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaU
 			s._emit({ "type": "burst", "look": "merr_spread", "pos": t.pos })
 			return true
 		"merr:r":
-			var t := pick_target(s, u, aim, tgt, 7.5)
+			var t := pick_target(s, u, aim, tgt, rng)
 			if t == null:
 				return false
 			_phlegm(s, u, u.pos, t, 3, "")
 			return true
 		# ---------------------------------------------------------------- Temu
 		"temu:q":
-			var t := pick_target(s, u, aim, tgt, 6.8)
+			var t := pick_target(s, u, aim, tgt, rng)
 			if t == null:
 				return false
 			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + dir * 0.5, "target": t.id, "speed": 20.0, "look": "temu_dart",
@@ -132,7 +162,7 @@ static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaU
 		"temu:e":
 			return false             # passive
 		"temu:r":
-			var at := u.pos + (aim - u.pos).limit_length(4.0)       # OPEN: throw range 400
+			var at := u.pos + (aim - u.pos).limit_length(rng)       # OPEN: throw range 400 (x1.25)
 			s.add_area({ "kind": "mine", "pos": at, "r": 2.5, "trigger": 1.6, "arm": 1.0, "t": 60.0, "team": u.team,
 				"owner": u.id, "look": "temu_nuke",
 				"on_fire": func() -> void:
@@ -146,22 +176,22 @@ static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaU
 			for a in [-0.5236, 0.0, 0.5236]:        # 60° cone, edge to edge
 				var d: Vector2 = dir.rotated(float(a) * 0.5)
 				var start := u.pos
-				s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + d * 0.5, "dir": d, "speed": 24.0, "range": 8.0,
+				s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + d * 0.5, "dir": d, "speed": 24.0, "range": rng,
 					"width": 0.35, "look": "braves_pellet",
 					"on_hit": func(o: MobaUnit, p: Vector2) -> void:
-						var f: float = clampf(start.distance_to(p) / 8.0, 0.0, 1.0)
+						var f: float = clampf(start.distance_to(p) / rng, 0.0, 1.0)
 						s.damage(o, BASE_AD * lerpf(1.0, 1.0 / 3.0, f), u, "buckshot") })
 			return true
 		"braves:w":
-			var at := u.pos + (aim - u.pos).limit_length(9.0)
+			var at := u.pos + (aim - u.pos).limit_length(rng)
 			s.area_hit(at, 2.5, u, BASE_AD, "smoke", false)
 			s.add_area({ "kind": "smoke", "pos": at, "r": 2.5, "t": 4.0, "team": u.team, "owner": u.id, "look": "braves_smoke" })
 			return true
 		"braves:e":
-			s.dash(u, dir, 4.25, 0.2)
+			s.dash(u, dir, rng, 0.1)
 			return true
 		"braves:r":
-			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + dir * 0.6, "dir": dir, "speed": 20.0, "range": 10.0,
+			s.shoot({ "owner": u.id, "team": u.team, "pos": u.pos + dir * 0.6, "dir": dir, "speed": 20.0, "range": rng,
 				"width": 0.6, "look": "braves_shell",
 				"on_hit": func(_o: MobaUnit, p: Vector2) -> void:
 					s.area_hit(p, 2.5, u, BASE_AD * 3.0, "superblast", false)
@@ -175,14 +205,14 @@ static func cast(s: MobaSim, u: MobaUnit, slot: String, aim: Vector2, tgt: MobaU
 
 ## Merr's R: hit `t`, then bounce to the nearest other enemy within 6, `left` more times.
 static func _phlegm(s: MobaSim, u: MobaUnit, from: Vector2, t: MobaUnit, left: int, prev: String) -> void:
-	s.shoot({ "owner": u.id, "team": u.team, "pos": from, "target": t.id, "speed": 14.0, "look": "merr_phlegm",
+	s.shoot({ "owner": u.id, "team": u.team, "pos": from, "target": t.id, "speed": float(SHAPES.merr.r.speed), "look": "merr_phlegm",
 		"on_hit": func(o: MobaUnit, p: Vector2) -> void:
 			s.damage(o, BASE_AD * 3.0, u, "phlegm")
 			on_spell_hit(s, u, o)
 			if left <= 0:
 				return
 			var best: MobaUnit = null
-			var bd := 6.0
+			var bd := float(SHAPES.merr.r.bounce)
 			for x in s.units:
 				if x.team != u.team and x.alive and x.id != o.id and x.targetable():
 					var d: float = x.pos.distance_to(p)
@@ -193,6 +223,19 @@ static func _phlegm(s: MobaSim, u: MobaUnit, from: Vector2, t: MobaUnit, left: i
 				_phlegm(s, u, p, best, left - 1, o.id) })
 
 
-## Cooldowns for the HUD (e has none for Temu: passive).
+## A spell's footprint and reach (SHAPES); {} for the summoner spells.
+static func shape(id: String, slot: String) -> Dictionary:
+	return SHAPES.get(id, {}).get(slot, {})
+
+
+## A spell's reach in world units (summoner spells included).
+static func spell_range(id: String, slot: String) -> float:
+	match slot:
+		"flash": return MobaTune.value("flash_range")
+		"ignite": return MobaSim.IGNITE_RANGE
+		"smite": return MobaSim.SMITE_RANGE
+	return float(shape(id, slot).get("range", 0.0))
+
+
 static func spell_name(id: String, slot: String) -> String:
 	return str(CHAMPS[id].spells[slot][0])

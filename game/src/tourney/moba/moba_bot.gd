@@ -48,8 +48,12 @@ func _foe(s: MobaSim, u: MobaUnit) -> MobaUnit:
 	return best
 
 
-func _sees(u: MobaUnit, e: MobaUnit) -> bool:
-	return e != null and e.alive and e.targetable() and (u.blind_t <= 0.0 or e.pos.distance_to(u.pos) <= MobaSim.SMOKE_SIGHT)
+func _sees(u: MobaUnit, e: MobaUnit, s: MobaSim = null) -> bool:
+	if e == null or not e.alive or not e.targetable():
+		return false
+	if s and not s.team_sees(u.team, e):
+		return false
+	return u.blind_t <= 0.0 or e.pos.distance_to(u.pos) <= MobaSim.SMOKE_SIGHT
 
 
 ## Step out of an enemy telegraph that will land on us.
@@ -80,7 +84,7 @@ func _dodge(s: MobaSim, u: MobaUnit) -> Dictionary:
 
 func _decide(s: MobaSim, u: MobaUnit) -> Dictionary:
 	var e := _foe(s, u)
-	var sees := _sees(u, e)
+	var sees := _sees(u, e, s)
 	if sees:
 		_last_seen[e.id] = e.pos
 	var hp := u.hp / u.max_hp
@@ -150,34 +154,35 @@ func _trade(s: MobaSim, u: MobaUnit, e: MobaUnit, dist: float, hp: float, ehp: f
 
 
 func _spell(u: MobaUnit, e: MobaUnit, aim: Vector2, dist: float) -> Dictionary:
-	if rng.randf() > lerpf(0.5, 0.95, skill):
+	if u.casting() or rng.randf() > lerpf(0.5, 0.95, skill):
 		return {}
 	var ready := func(k: String) -> bool: return float(u.cd.get(k, 99.0)) <= 0.0
+	var reach := func(k: String) -> float: return MobaChamps.spell_range(u.champ, k)
 	match u.champ:
 		"merr":
-			if ready.call("r") and dist <= 7.5:
+			if ready.call("r") and dist <= reach.call("r"):
 				return { "slot": "r", "aim": e.pos, "target": e.id }
-			if ready.call("e") and dist <= 6.75:
+			if ready.call("e") and dist <= reach.call("e"):
 				return { "slot": "e", "aim": e.pos, "target": e.id }
-			if ready.call("q") and dist <= 10.0:
+			if ready.call("q") and dist <= reach.call("q") - 0.5:
 				return { "slot": "q", "aim": aim }
-			if ready.call("w") and dist <= 9.0:
+			if ready.call("w") and dist <= reach.call("w"):
 				return { "slot": "w", "aim": aim }
 		"temu":
-			if ready.call("q") and dist <= 6.8:
+			if ready.call("q") and dist <= reach.call("q"):
 				return { "slot": "q", "aim": e.pos, "target": e.id }
-			if ready.call("r") and dist <= 6.0:
-				return { "slot": "r", "aim": u.pos + (e.pos - u.pos).limit_length(3.5) }
+			if ready.call("r") and dist <= reach.call("r") + 1.5:
+				return { "slot": "r", "aim": u.pos + (e.pos - u.pos).limit_length(reach.call("r") * 0.9) }
 			if ready.call("w") and dist > u.range + 1.0:
 				return { "slot": "w", "aim": e.pos }
 		"braves":
-			if ready.call("q") and dist <= 5.0:
+			if ready.call("q") and dist <= reach.call("q") * 0.6:
 				return { "slot": "q", "aim": e.pos }
-			if ready.call("r") and dist <= 9.5:
+			if ready.call("r") and dist <= reach.call("r") - 0.5:
 				return { "slot": "r", "aim": aim }
-			if ready.call("w") and dist <= 8.5:
+			if ready.call("w") and dist <= reach.call("w") - 0.5:
 				return { "slot": "w", "aim": aim }
-			if ready.call("e") and dist > u.range and dist < 8.0:
+			if ready.call("e") and dist > u.range and dist < u.range + 2.0:
 				return { "slot": "e", "aim": e.pos }
 	return {}
 
@@ -208,6 +213,12 @@ func _decide_pit(s: MobaSim, u: MobaUnit) -> Dictionary:
 	var home := s.spawn_of(u.team, int(u.get_meta("slot", 0)))
 	var boss_low := b != null and b.hp < MobaSim.SMITE_DMG * 3.0
 	var boss_on_me := b != null and str(b.order.get("target", "")) == u.id
+	# a ping from the team's player (G54): V go in, C hold here
+	var pg: Dictionary = s.pings.get(u.team, {})
+	if not u.player and not pg.is_empty() and s.time - float(pg.time) < MobaSim.PING_TIME:
+		var o := _answer_ping(s, u, e, b, pg, dist, hp)
+		if not o.is_empty():
+			return o
 	# low: back off to the wall (the boss and the enemy both hurt)
 	if hp < 0.25 and (boss_on_me or (e and dist < 6.0)):
 		return _flee(u, home, dist, hp)
@@ -216,13 +227,13 @@ func _decide_pit(s: MobaSim, u: MobaUnit) -> Dictionary:
 		var to_b := b.pos.distance_to(u.pos)
 		if to_b > MobaSim.SMITE_RANGE + b.radius - 0.4:
 			return { "move": b.pos + (u.pos - b.pos).normalized() * (MobaSim.SMITE_RANGE + b.radius - 1.0) }
-		if _sees(u, e) and dist <= u.range + 1.0:
+		if _sees(u, e, s) and dist <= u.range + 1.0:
 			return _trade(s, u, e, dist, hp, e.hp / e.max_hp)
 		return { "attack": b.id }
 	# contest: an enemy close by gets fought first; each team's first seat
 	# is its hunter and goes looking for the other side
 	var hunter := int(u.get_meta("slot", 0)) == 0
-	if _sees(u, e) and dist <= u.range + (9.0 if hunter and hp > 0.45 else 2.5):
+	if _sees(u, e, s) and dist <= u.range + (9.0 if hunter and hp > 0.45 else 2.5):
 		return _trade(s, u, e, dist, hp, e.hp / e.max_hp)
 	if b == null or not b.alive:
 		return {}
@@ -237,3 +248,38 @@ func _decide_pit(s: MobaSim, u: MobaUnit) -> Dictionary:
 		var ang := (u.pos - b.pos).angle() + rng.randf_range(-0.25, 0.25)
 		return { "move": b.pos + Vector2.from_angle(ang) * stand }
 	return { "attack": b.id }
+
+
+## A bot ally answering its player's ping. "go": run to the spot and fight
+## whatever is there, chasing, low health or not; at the Giant, hit it.
+## "hold": stand at the spot (spread round it), hit only what walks into
+## range, back off when hurt. {} = carry on as usual.
+func _answer_ping(s: MobaSim, u: MobaUnit, e: MobaUnit, b: MobaUnit, pg: Dictionary, dist: float, hp: float) -> Dictionary:
+	var at: Vector2 = pg.pos
+	var slot := int(u.get_meta("slot", 0))
+	var spot := at + Vector2.from_angle(slot * 2.1 + (0.0 if u.team == "blue" else PI)) * 1.6
+	var seen := _sees(u, e, s)
+	if str(pg.kind) == "go":
+		if hp < 0.12:
+			return {}
+		if seen and (e.pos.distance_to(at) < 7.0 or dist <= u.range + 1.0):
+			var o := _trade(s, u, e, dist, hp, e.hp / e.max_hp)
+			o.erase("move")
+			o["attack"] = e.id
+			return o
+		if b and b.alive and b.pos.distance_to(at) < 6.0 and u.pos.distance_to(at) < 4.0:
+			return { "attack": b.id }
+		if u.pos.distance_to(spot) > 1.0:
+			return { "move": spot }
+		return { "attack": b.id } if b and b.alive and b.pos.distance_to(u.pos) <= u.range + b.radius else {}
+	# hold
+	if hp < 0.35 and seen and dist < 5.0:
+		return { "move": u.pos + (u.pos - e.pos).normalized() * 3.0 }
+	if seen and dist <= u.range + 0.3:
+		var o := _trade(s, u, e, dist, hp, e.hp / e.max_hp)
+		o.erase("move")
+		o["attack"] = e.id
+		return o
+	if u.pos.distance_to(spot) > 0.8:
+		return { "move": spot }
+	return { "hold": true }          # nothing to do: stay put (an unknown key, the sim ignores it)
