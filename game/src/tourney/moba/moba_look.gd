@@ -22,6 +22,7 @@ static func champ_unit(id: String, team: String) -> BWUnit:
 	u.weapon_model = str(c.weapon_model)
 	u.cosmetics = { "hair_style": str(c.hair_style), "hair_hex": str(c.hair_hex), "gender": str(c.gender),
 		"top": str(c.top), "bottom": str(c.bottom), "clothing_shade": "light" }
+	u.equipment = MobaDress.equipment(id)            # G55: mage / ranger / tank pieces
 	for s in BWUnit.STATS:
 		u.stats[s] = 5
 	u.hp = u.max_hp()
@@ -107,4 +108,5 @@ static func stage(parent: Control, id: String, size: Vector2) -> Dictionary:
 	var view: BWUnitView = st.view
 	if view.character:
 		tint(view.character, Color(str(MobaChamps.CHAMPS[id].tint)), Color(str(MobaChamps.CHAMPS[id].hair_hex)))
+		MobaDress.dress(view.character, id)
 	return st

@@ -520,6 +520,7 @@ func _add_unit(u: MobaUnit) -> void:
 			# a Gauntlet kit item in place of the Black | White weapon (held on the
 			# same socket; the weapon's clips keep driving the body)
 			GKBWHold.swap_weapon(ch, GKRegistry.build(str(c.kit_weapon), c.get("kit_params", {})))
+		MobaDress.dress(ch, u.champ)             # G55: equipment, gait, cast gestures
 	elif u.kind == "minion":
 		MobaLook.tint(ch, MobaLook.team_color(u.team))
 		root.scale = Vector3.ONE * 0.72
@@ -1158,12 +1159,12 @@ func _draw(alpha: float, delta: float) -> void:
 		var blind := me != null and me.blind_t > 0.0 and u.team != me.team and u.pos.distance_to(me.pos) > MobaSim.SMOKE_SIGHT
 		root.visible = u.alive and not hidden and not blind or (u.kind == "champ" and not u.alive and v.pose == "fall" and float(v.anim_t) < 1.6)
 		if u.stealth and not hidden:
-			MobaLook._walk(ch, Color(0.45, 0.4, 0.6))
+			if not v.get("stealth_drawn", false):
+				MobaDress.ghost(ch, true)            # G55: hidden Temu, as his side sees him: 75% transparent
 			v["stealth_drawn"] = true
 		elif v.get("stealth_drawn", false):
 			v["stealth_drawn"] = false
-			var c: Dictionary = MobaChamps.CHAMPS.get(u.champ, {})
-			MobaLook.tint(ch, Color(str(c.get("tint", "#ffffff"))))
+			MobaDress.ghost(ch, false)
 		v.anim_t = float(v.anim_t) + delta
 		_pose(u, v)
 		var bar: MobaHud.Bar = v.bar
@@ -1200,7 +1201,15 @@ func _pose(u: MobaUnit, v: Dictionary) -> void:
 		v.pose = "cast"
 		v.anim_t = 0.0
 		ch.anim_speed = ATK_ANIM
-		ch.pose("cast" if ch.has_clip("cast") else "strike")
+		if u.kind == "champ":
+			# G55: the champion's own gesture, its release (f6) on the cast stop's end
+			var cu: Variant = u.get("cast_until")       # the cast stop (G54), read defensively
+			var cs: Variant = u.get("cast_start")
+			var stop := float(cu) - float(cs) if cu != null and cs != null and str(u.get("cast_slot")) != "" else 0.0
+			ch.anim_speed = (6.0 / 24.0) / stop if stop > 0.05 else 2.0
+			ch.pose(MobaDress.cast_pose(ch, u.champ, u.last_cast))
+		else:
+			ch.pose("cast" if ch.has_clip("cast") else "strike")
 		return
 	if u.atk_wind >= 0.0 and v.pose != "windup" and v.pose != "strike":
 		v.pose = "windup"
