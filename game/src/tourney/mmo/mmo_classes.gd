@@ -50,8 +50,9 @@ const HEAL_R := 40.0
 const ORDER := ["warrior", "paladin", "priest", "mage", "hunter", "rogue"]
 ## A bot's meter score per second of the fight, per class (tools/mmo_probe.gd
 ## prints it as "par"): the tournament rates a player against their class's.
-## Re-measured 2026-10-15 over 20 bot raids of eight with the 8-spell kits (G39).
-const PAR := { "warrior": 333.0, "paladin": 335.0, "priest": 524.0, "mage": 512.0, "hunter": 517.0, "rogue": 431.0, "tank": 517.0 }
+## Re-measured 2026-10-16 over 20 bot raids of eight with the 8-spell kits and
+## the consumables bar (G52: the bots drink and throw too).
+const PAR := { "warrior": 390.0, "paladin": 361.0, "priest": 588.0, "mage": 549.0, "hunter": 548.0, "rogue": 447.0, "tank": 548.0 }
 
 ## Every class: the six of ORDER, plus the hidden ones (HIDDEN).
 static var CLASSES: Dictionary = _with_hidden()
