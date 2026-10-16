@@ -68,7 +68,7 @@ func _start() -> void:
 			s.seat_pit(a, false)             # bot allies: no smite, base stats
 			bots[a.id] = MobaBot.new(0.5, seed * 17 + k * 3 + (0 if team == "blue" else 1))
 	_view = MobaView.new()
-	_view.setup(s, me.id, bots, match_cfg.get("binds", TourneyState.load_binds()),
+	_view.setup(s, me.id, bots, _binds(),
 		{ "blue": str(_human.name), "red": str(_bot_p.name), me.id: str(_human.name), them.id: str(_bot_p.name) })
 	_view.match_over.connect(func(team: String):
 		var w: Dictionary = _human if team == "blue" else _bot_p

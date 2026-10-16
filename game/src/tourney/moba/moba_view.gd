@@ -1,13 +1,17 @@
 class_name MobaView
 extends Node3D
 ## Draws a MobaSim and drives it: League's locked camera on your champion,
-## right- or left-click to move and attack, QWER at the cursor, D flash,
-## F ignite (binds from the testing range), S stop. Bots play the rest.
+## left-click moves (only), right-click attacks what is under or near the
+## cursor (else moves), QWER in the chosen cast mode (moba_aim.gd), D flash,
+## F ignite / smite, S stop, in the pit V / C ping your bots (binds and cast
+## mode from the champion select's options, G54). Bots play the rest.
 ## Works full screen or inside a SubViewport (the range).
 
 signal match_over(winner_team: String)
 
-const CAM_PITCH := 56.0
+const CAM_PITCH := 47.6          # author 10-16: 15% lower to the ground (was 56)
+const RING_FOR := 30.0           # author 10-16: the auto-attack ring shows the first 30 s only
+const MobaAim := preload("res://src/tourney/moba/moba_aim.gd")
 const CAM_DIST := 21.5
 const CAM_FOV := 40.0
 const ATK_ANIM := 2.2           # clip playback rate for autos and casts
@@ -27,8 +31,10 @@ var _cam: Camera3D
 var _hud: MobaHud
 var _bars: Control
 var _order := {}                # the local player's pending order
-var _rmb := false
+var _rmb := 0                  # the mouse button held (repeats its order), 0 = none
 var _rmb_t := 0.0
+var _aim                        # MobaAim: the cast modes and the aim indicator
+var _pings := {}                # team -> Node3D marker
 var _smoke: ColorRect
 var _over := false
 var _hover_ring: MeshInstance3D
@@ -112,6 +118,9 @@ func _build_world() -> void:
 	_cam.fov = CAM_FOV
 	add_child(_cam)
 	_cam.make_current()
+	_aim = MobaAim.new()
+	_aim.view = self
+	add_child(_aim)
 
 
 ## The objective pit: a round paved floor laid in rings, a broken wall of
@@ -141,13 +150,19 @@ func _build_pit() -> void:
 		for sx in [-1.0, 1.0]:
 			_pillar(Vector3(sx * 3.4, 0, z * 1.08), col)
 	_foliage(func(p: Vector2) -> bool: return p.length() > R + 4.5, 70, 34.0)
-	# the dais and its glow
-	_cyl(Vector3(0, 0.12, 0), MobaSim.BOSS_R + 0.9, 0.24, Color("#4a463f"))
-	_cyl(Vector3(0, 0.26, 0), MobaSim.BOSS_R + 0.6, 0.06, Color("#5e594f"))
+	# the dais and its glow, where the Giant stands (G54: off centre)
+	var bp := Vector3(MobaSim.BOSS_POS.x, 0, MobaSim.BOSS_POS.y)
+	_cyl(bp + Vector3(0, 0.12, 0), MobaSim.BOSS_R + 0.9, 0.24, Color("#4a463f"))
+	_cyl(bp + Vector3(0, 0.26, 0), MobaSim.BOSS_R + 0.6, 0.06, Color("#5e594f"))
 	var rune := _ring(MobaSim.BOSS_R + 0.3, Color(0.62, 0.42, 1.0, 0.9), 0.08)   # the Giant's mark, a violet rune ring
-	rune.position.y = 0.31
+	rune.position = bp + Vector3(0, 0.31, 0)
 	var leash := _ring(MobaSim.BOSS_LEASH + MobaSim.BOSS_R, Color(0.75, 0.5, 1.0, 0.35))
-	leash.position.y = 0.03
+	leash.position = bp + Vector3(0, 0.03, 0)
+	for r in MobaSim.PIT_ROCKS:              # the rocks: solid, and nobody sees past them
+		_rock(Vector3(r.x, 0, r.y), r.z * 2.25, r.z * 2.0 + 0.8)
+		for k in 2:
+			var a := _scatter_rng.randf() * TAU
+			_rock(Vector3(r.x, 0, r.y) + Vector3(cos(a), 0, sin(a)) * r.z * 0.8, r.z * 0.9, r.z * 0.9)
 
 
 ## The lane: worn flagstones with moss at the edges, banks of mossy rock
@@ -664,7 +679,7 @@ func _hovered() -> MobaUnit:
 	var best: MobaUnit = null
 	var bd := 42.0
 	for u in sim.units:
-		if u.team == me.team or not u.targetable() or not _views.has(u.id):
+		if u.team == me.team or not u.targetable() or not _views.has(u.id) or not (_views[u.id].root as Node3D).visible:
 			continue
 		var root: Node3D = _views[u.id].root
 		var sp := _cam.unproject_position(root.global_position + Vector3(0, 0.9, 0))
@@ -683,21 +698,43 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if local_id == "" or _over:
 		return
 	if ev is InputEventMouseButton and ev.button_index in [MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_LEFT]:
-		_rmb = ev.pressed
-		if ev.pressed:
-			_click()
+		var left: bool = ev.button_index == MOUSE_BUTTON_LEFT
+		if ev.pressed and _aim.click(left):    # slow cast: a left click casts, a right click cancels
 			get_viewport().set_input_as_handled()
+			return
+		if ev.pressed:
+			_rmb = ev.button_index
+			_rmb_t = 0.12
+			_click(left)
+			get_viewport().set_input_as_handled()
+		elif _rmb == ev.button_index:
+			_rmb = 0
 		return
-	if ev is InputEventKey and ev.pressed and not ev.echo:
+	if ev is InputEventKey and not ev.echo:
 		var slot := ""
-		for k in ["q", "w", "e", "r", "flash"]:
+		for k in ["q", "w", "e", "r"]:
 			if int(binds.get(k, -1)) == ev.keycode:
 				slot = k
-		if int(binds.get("spell2", -1)) == ev.keycode:
+		if slot != "":                          # Q W E R: the cast mode decides (moba_aim.gd)
+			if _aim.key(slot, ev.pressed):
+				get_viewport().set_input_as_handled()
+			return
+		if not ev.pressed:
+			return
+		if int(binds.get("flash", -1)) == ev.keycode:
+			slot = "flash"
+		elif int(binds.get("spell2", -1)) == ev.keycode:
 			slot = "smite" if sim.mode == "pit" else "ignite"
-		if slot != "":
+		if slot != "":                          # summoner spells: always at once
 			var h := _hovered()
 			_order["cast"] = { "slot": slot, "aim": _mouse_world(), "target": h.id if h else "" }
+			get_viewport().set_input_as_handled()
+		elif sim.mode == "pit" and ev.keycode in [int(binds.get("ping_go", KEY_V)), int(binds.get("ping_hold", KEY_C))]:
+			var go: bool = ev.keycode == int(binds.get("ping_go", KEY_V))
+			_order["ping"] = { "kind": "go" if go else "hold", "at": _mouse_world() }
+			get_viewport().set_input_as_handled()
+		elif ev.keycode == KEY_ESCAPE and _aim.armed != "":
+			_aim.cancel()
 			get_viewport().set_input_as_handled()
 		elif int(binds.get("stop", -1)) == ev.keycode:
 			_order["stop"] = true
@@ -718,15 +755,39 @@ func _toggle_tune() -> void:
 	add_child(_tune_panel)
 
 
-func _click() -> void:
-	var h := _hovered()
-	if h:
-		_order["attack"] = h.id
+## Left click: move there, nothing else (kite with it). Right click: attack
+## the enemy under the cursor or, failing that, the one nearest it within
+## 2.5 units; with nobody there it moves too (author 10-16, G54).
+func _click(left: bool, quiet: bool = false) -> void:
+	var t: MobaUnit = null if left else _attack_target()
+	if t:
+		_order["attack"] = t.id
 		_order.erase("move")
 	else:
 		_order["move"] = _mouse_world()
 		_order.erase("attack")
-		_click_fx(_mouse_world())
+		if not quiet:
+			_click_fx(_mouse_world())
+
+
+func _attack_target() -> MobaUnit:
+	var h := _hovered()
+	if h:
+		return h
+	var me := sim.unit(local_id)
+	if me == null:
+		return null
+	var mw := _mouse_world()
+	var best: MobaUnit = null
+	var bd := 2.5
+	for u in sim.units:
+		if u.team == me.team or not u.targetable() or not _views.has(u.id) or not (_views[u.id].root as Node3D).visible:
+			continue
+		var d: float = u.pos.distance_to(mw) - u.radius
+		if d < bd:
+			best = u
+			bd = d
+	return best
 
 
 func _click_fx(at: Vector2) -> void:
@@ -740,12 +801,12 @@ func _click_fx(at: Vector2) -> void:
 # ------------------------------------------------------------------- loop
 
 func _process(delta: float) -> void:
-	if _rmb and local_id != "":
+	if _rmb != 0 and local_id != "":           # a held button keeps steering
 		_rmb_t -= delta
 		if _rmb_t <= 0.0:
 			_rmb_t = 0.12
 			if not _order.has("attack"):
-				_order["move"] = _mouse_world()
+				_click(_rmb == MOUSE_BUTTON_LEFT, true)
 	if not _over:
 		_acc += delta
 		var guard := 0
@@ -825,6 +886,8 @@ func _on_event(e: Dictionary) -> void:
 				var u := sim.unit(str(e.unit))
 				if u:
 					_feed_line("%s smites (%d)" % [u.name, int(MobaSim.SMITE_DMG)], MobaLook.team_color(u.team))
+		"ping":
+			_ping_fx(str(e.team))
 		"win":
 			_over = true
 			var t := str(e.team)
@@ -841,6 +904,47 @@ func _on_event(e: Dictionary) -> void:
 				if u and u.kind == "champ" and u.team == t and u.alive:
 					(_views[id].char as BWCharacter).pose("cheer")
 			TourneyUI.after(self, 3.0, func(): match_over.emit(t))
+
+
+## A ping in the pit (G54): a beam and a ring where it points, for the
+## pinging side only (the other side never sees it), and a feed line.
+func _ping_fx(team: String) -> void:
+	var me := sim.unit(local_id)
+	if me == null or me.team != team or not sim.pings.has(team):
+		return
+	var pg: Dictionary = sim.pings[team]
+	var go := str(pg.kind) == "go"
+	var col := Color("#ff6a3d") if go else Color("#4fb0ff")
+	if _pings.has(team) and is_instance_valid(_pings[team]):
+		(_pings[team] as Node3D).queue_free()
+	var root := Node3D.new()
+	add_child(root)
+	root.position = Vector3(pg.pos.x, 0.0, pg.pos.y)
+	var ring := _ring(1.2, Color(col, 0.95), 0.12)
+	ring.reparent(root, false)
+	ring.position = Vector3(0, 0.06, 0)
+	var beam := _cyl(Vector3(0, 1.6, 0), 0.08, 3.2, Color(col, 0.7), true)
+	beam.reparent(root, false)
+	beam.position = Vector3(0, 1.6, 0)
+	var l := Label3D.new()
+	l.text = "GO IN" if go else "HOLD"
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.font_size = 64
+	l.outline_size = 12
+	l.modulate = col.lightened(0.3)
+	l.position = Vector3(0, 3.6, 0)
+	root.add_child(l)
+	_layer(root, 2)
+	_pings[team] = root
+	var tw := create_tween()
+	tw.tween_property(ring, "scale", Vector3(1.5, 0.05, 1.5), 0.25)
+	tw.tween_property(ring, "scale", Vector3(1.0, 0.05, 1.0), 0.25)
+	tw.tween_interval(MobaSim.PING_TIME - 1.5)
+	tw.tween_property(root, "scale", Vector3(0.01, 0.01, 0.01), 1.0)
+	tw.tween_callback(root.queue_free)
+	var by := sim.unit(str(pg.by))
+	_feed_line("%s: %s" % [_who(by) if by else "You", "go in!" if go else "hold here!"], col)
 
 
 ## A champion's display name: the player's name in the duel, its own label in the pit.
@@ -1156,6 +1260,8 @@ func _draw(alpha: float, delta: float) -> void:
 		root.position = Vector3(p.x, 0.0, p.y)
 		root.rotation.y = lerp_angle(root.rotation.y, atan2(u.facing.x, u.facing.y), minf(1.0, delta * MobaTune.value("turn_rate")))
 		var hidden := u.stealth and (me == null or u.team != me.team)
+		if sim.mode == "pit" and me and u.team != me.team and u.kind == "champ" and not sim.team_sees(me.team, u):
+			hidden = true                        # G54: behind a rock from every one of your side
 		var blind := me != null and me.blind_t > 0.0 and u.team != me.team and u.pos.distance_to(me.pos) > MobaSim.SMOKE_SIGHT
 		root.visible = u.alive and not hidden and not blind or (u.kind == "champ" and not u.alive and v.pose == "fall" and float(v.anim_t) < 1.6)
 		if u.stealth and not hidden:
@@ -1178,7 +1284,7 @@ func _draw(alpha: float, delta: float) -> void:
 	if _range_ring and me:
 		var mp: Vector3 = (_views[me.id].root as Node3D).position if _views.has(me.id) else Vector3(me.pos.x, 0, me.pos.y)
 		_range_ring.position = Vector3(mp.x, 0.04, mp.z)
-		_range_ring.visible = me.alive
+		_range_ring.visible = me.alive and sim.time < RING_FOR
 	var h := _hovered() if local_id != "" else null
 	_hover_ring.visible = h != null
 	if h:
@@ -1242,7 +1348,7 @@ func _place_camera(snap: bool, delta: float = 0.0) -> void:
 		var p: Vector2 = (_prev.get(me.id, me.pos) as Vector2).lerp(me.pos, clampf(_acc / MobaSim.TICK, 0.0, 1.0))
 		focus = Vector3(p.x, 0, p.y)
 		if sim.mode == "pit":                    # keep the Giant in frame: lean the view toward it
-			focus = focus.lerp(Vector3.ZERO, 0.6)
+			focus = focus.lerp(Vector3(MobaSim.BOSS_POS.x, 0, MobaSim.BOSS_POS.y), 0.6)
 	var pitch := deg_to_rad(CAM_PITCH)
 	var fwd := view_forward()
 	var back := Vector3(-fwd.x, 0, -fwd.y)

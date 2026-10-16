@@ -19,6 +19,13 @@ const HP_ALLY := Color("#2e7fd8")
 const HP_FOE := Color("#c83a32")
 const PANEL_W := 428.0
 const PANEL_X := -PANEL_W / 2.0 + 50.0      # the champion panel's left edge from the screen centre
+## The summoner spells' colours (G54: smite cold teal, flash bright yellow, never alike).
+const SUMMONER_COL := { "flash": Color("#ffe14a"), "ignite": Color("#ff7a2e"), "smite": Color("#36d1c4") }
+const SUMMONER_TIP := {
+	"flash": ["Flash", "Blink a short way toward the cursor, over anything in between."],
+	"ignite": ["Ignite", "Set an enemy champion near the cursor burning: 120 true damage over 5 s."],
+	"smite": ["Smite", "600 true damage to the Giant. Only you carry it: land the last hit and your team takes the fight."],
+}
 
 ## What each spell's icon shows (a drawn glyph; MobaHud.Icon).
 const GLYPHS := {
@@ -47,6 +54,7 @@ var _boss_l: Label
 var _portrait: TextureRect
 var _dead_veil: ColorRect
 var _map: Minimap
+var _tip: Tip                       # the spell tooltip (G54: hover an icon, like Raid night's)
 var cs := 0                         # minions the local champion finished
 
 
@@ -101,6 +109,9 @@ void fragment() {
 	if me:
 		_build_panel(me)
 		_build_stats(me)
+	_tip = Tip.new()
+	_tip.visible = false
+	root.add_child(_tip)
 
 
 # ------------------------------------------------------------------ build
@@ -260,6 +271,7 @@ void fragment() {
 	pas.position = Vector2(x, 20)
 	pan.add_child(pas)
 	_icons["passive"] = pas
+	_hoverable(pas, me, "passive")
 	x += 40.0
 	for slot in ["q", "w", "e", "r"]:
 		var ic := Icon.new()
@@ -267,16 +279,22 @@ void fragment() {
 		ic.position = Vector2(x, 10)
 		pan.add_child(ic)
 		_icons[slot] = ic
+		_hoverable(ic, me, slot)
 		x += 57.0
 	x += 8.0
 	for slot in ["flash", spell2]:
 		var gl: String = { "flash": "flash", "ignite": "ignite", "smite": "smite" }[slot]
-		var col: Color = { "flash": Color("#ffd84a"), "ignite": Color("#ff7a2e"), "smite": Color("#e8c25a") }[slot]
+		var col: Color = SUMMONER_COL[slot]
 		var ic := Icon.new()
 		ic.setup(gl, col, view.key_label(slot), 40.0)
-		ic.position = Vector2(x, 16)
+		ic.position = Vector2(x, 8)
 		pan.add_child(ic)
 		_icons[slot] = ic
+		_hoverable(ic, me, slot)
+		var nl := _label(pan, slot.to_upper(), 10, col.lightened(0.2))     # G54: flash and smite told apart by name too
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.position = Vector2(x - 4, 50)
+		nl.size = Vector2(48, 14)
 		x += 45.0
 	# HP, nearly full width right under the icons
 	_hp_w = W - 54.0 - 10.0
@@ -329,7 +347,7 @@ func _build_stats(me: MobaUnit) -> void:
 		var v := _label(p, "", 15, TEXT)
 		v.position = Vector2(42 + col * 92, 6 + row * 30)
 		_stats[rows[i][0]] = v
-	_stats.ad.text = "%d" % int(me.ad)
+	_stats.ad.text = "%d" % int(me.ad * me.power)          # the pit's players hit 2x (G54)
 	_stats.range.text = "%d" % int(me.range * 100.0)
 
 
@@ -387,7 +405,8 @@ func update(me: MobaUnit, delta: float) -> void:
 	else:
 		_score_l.text = "%s   %d  ⚔  %d   %s" % [nm.call(mine), sim.score[mine], sim.score[theirs], nm.call(theirs)]
 		_score_l.add_theme_color_override("font_color", TEXT)
-		_sub_l.text = "first to %d kills" % MobaSim.KILLS_TO_WIN if sim.mode == "duel" else "last hit on the Giant wins"
+		_sub_l.text = "first to %d kills" % MobaSim.KILLS_TO_WIN if sim.mode == "duel" else "last hit wins  ·  %s go in  ·  %s hold" % [
+			TourneyUI.key_name(int(view.binds.get("ping_go", KEY_V))), TourneyUI.key_name(int(view.binds.get("ping_hold", KEY_C)))]
 	var boss := sim.boss()
 	if boss and _boss_fill:
 		_boss_fill.size.x = 352.0 * clampf(boss.hp / boss.max_hp, 0.0, 1.0)
@@ -438,6 +457,79 @@ func update(me: MobaUnit, delta: float) -> void:
 		_stats.ms.text = "%d" % int(me.ms_now() * 100.0)
 		_stats.kd.text = "%d / %d" % [me.kills, deaths]
 		_stats.dmg.text = "%d" % int(me.dmg_done)
+
+
+## Hovering a spell icon shows its tooltip (G54, after Raid night's).
+func _hoverable(ic: Icon, me: MobaUnit, slot: String) -> void:
+	ic.mouse_filter = Control.MOUSE_FILTER_PASS
+	ic.mouse_entered.connect(func() -> void:
+		_tip.show_for(view, me, slot)
+		var r := ic.get_global_rect()
+		var vs := root.get_viewport_rect().size
+		_tip.global_position = Vector2(clampf(r.position.x - 120.0, 4.0, vs.x - _tip.size.x - 4.0), r.position.y - _tip.size.y - 10.0)
+		_tip.visible = true)
+	ic.mouse_exited.connect(func() -> void: _tip.visible = false)
+
+
+## The text of a slot's tooltip: name, key, range in League units, cooldown, cast time, what it does.
+static func tip_text(v: MobaView, me: MobaUnit, slot: String) -> String:
+	var c: Dictionary = MobaChamps.CHAMPS[me.champ]
+	var nm := ""
+	var desc := ""
+	if SUMMONER_TIP.has(slot):
+		nm = str(SUMMONER_TIP[slot][0])
+		desc = str(SUMMONER_TIP[slot][1])
+	else:
+		nm = str(c.spells[slot][0])
+		desc = str(c.spells[slot][1])
+	var bits: Array = []
+	if slot == "passive":
+		bits.append("Passive")
+	else:
+		bits.append("[%s]" % v.key_label(slot))
+		var rg := MobaChamps.spell_range(me.champ, slot)
+		if rg > 0.0:
+			bits.append("%d range" % int(round(rg * 100.0)))
+		var sp := MobaChamps.shape(me.champ, slot)
+		if str(sp.get("shape", "")) == "none":
+			bits.append("No active")
+		else:
+			var cdv := v.cd_full(me, slot)
+			if cdv > 0.0:
+				bits.append("%s cooldown" % ("%d s" % int(cdv) if cdv < 60.0 else "%d min" % int(cdv / 60.0)))
+			bits.append("%.1f s cast" % MobaChamps.CAST_TIME if slot in ["q", "w", "e", "r"] else "Instant")
+	var t := "[font_size=17][color=#ffffff]%s[/color][/font_size]\n" % nm
+	t += "[color=#c8d0dc]%s[/color]\n" % "    ".join(bits)
+	t += "[color=#ffd100]%s[/color]" % desc
+	return t
+
+
+## The tooltip box: Raid night's (MmoHud.Tooltip) look, in the MOBA's navy.
+class Tip:
+	extends PanelContainer
+	var _l: RichTextLabel
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.02, 0.03, 0.08, 0.94)
+		sb.border_color = MobaHud.GOLD
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(4)
+		sb.set_content_margin_all(8)
+		add_theme_stylebox_override("panel", sb)
+		_l = RichTextLabel.new()
+		_l.bbcode_enabled = true
+		_l.fit_content = true
+		_l.scroll_active = false
+		_l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_l.custom_minimum_size = Vector2(320, 0)
+		_l.add_theme_font_size_override("normal_font_size", 14)
+		add_child(_l)
+
+	func show_for(v: MobaView, me: MobaUnit, slot: String) -> void:
+		_l.text = MobaHud.tip_text(v, me, slot)
+		reset_size()
 
 
 # ------------------------------------------------------------------ widgets
@@ -576,17 +668,20 @@ static func draw_glyph(ci: CanvasItem, g: String, r: Rect2, c: Color) -> void:
 				var l := 0.48 if i % 2 == 0 else 0.34
 				ci.draw_line(P.call(0.5, 0.5), P.call(0.5, 0.5) + Vector2(cos(a), sin(a)) * r.size.x * l, c, w)
 			ci.draw_circle(P.call(0.5, 0.5), r.size.x * 0.22, c.lightened(0.5))
-		"flash":
+		"flash":                 # a four-point star with a dash trail
+			for k in 3:
+				ci.draw_line(P.call(0.0, 0.62 + k * 0.12), P.call(0.28 - k * 0.06, 0.62 + k * 0.12), Color(c, 0.55), w * 0.7)
 			ci.draw_colored_polygon(PackedVector2Array([P.call(0.5, 0.0), P.call(0.6, 0.4), P.call(1.0, 0.5), P.call(0.6, 0.6),
 				P.call(0.5, 1.0), P.call(0.4, 0.6), P.call(0.0, 0.5), P.call(0.4, 0.4)]), c)
 			ci.draw_circle(P.call(0.5, 0.5), r.size.x * 0.1, Color.WHITE)
-		"smite":
-			var pts := PackedVector2Array()
-			for i in 10:
-				var a := -PI / 2.0 + i * TAU / 10.0
-				var l := 0.5 if i % 2 == 0 else 0.22
-				pts.append(P.call(0.5 + cos(a) * l, 0.52 + sin(a) * l))
-			ci.draw_colored_polygon(pts, c)
+		"smite":                 # a blade driven down into a burst (G54: unlike flash's star)
+			for i in 7:
+				var a := PI + i * PI / 6.0
+				ci.draw_line(P.call(0.5, 0.86), P.call(0.5, 0.86) + Vector2(cos(a), sin(a)) * r.size.x * 0.34, Color(c, 0.75), w * 0.8)
+			ci.draw_colored_polygon(PackedVector2Array([P.call(0.42, 0.18), P.call(0.58, 0.18), P.call(0.58, 0.72),
+				P.call(0.5, 0.9), P.call(0.42, 0.72)]), c)
+			ci.draw_rect(Rect2(P.call(0.24, 0.12), r.size * Vector2(0.52, 0.08)), c.lightened(0.3))
+			ci.draw_rect(Rect2(P.call(0.45, 0.0), r.size * Vector2(0.1, 0.13)), c.darkened(0.3))
 		_:
 			ci.draw_circle(P.call(0.5, 0.5), r.size.x * 0.3, c)
 
@@ -659,6 +754,13 @@ class Minimap:
 					draw_circle(p, 8.5, col)
 				_:
 					draw_circle(p, 2.6, col.lightened(0.15))
+		var pg: Dictionary = sim.pings.get(me.team if me else "", {})
+		if not pg.is_empty() and sim.time - float(pg.time) < MobaSim.PING_TIME:      # your side's ping (G54)
+			var pc := Color("#ff6a3d") if str(pg.kind) == "go" else Color("#4fb0ff")
+			var pp := to_map(pg.pos)
+			var pulse := 7.0 + 3.0 * absf(sin(sim.time * 5.0))
+			draw_arc(pp, pulse, 0, TAU, 24, pc, 2.5, true)
+			draw_circle(pp, 3.5, pc)
 		# the camera's view on the ground
 		var cam := view.camera()
 		if cam:

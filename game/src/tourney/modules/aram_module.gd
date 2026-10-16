@@ -5,6 +5,7 @@ extends TourneyModule
 ## One human on this machine plays; a bot takes the other seat.
 
 const PICK_TIME := 20.0
+const MobaOptions := preload("res://src/tourney/moba/moba_options.gd")
 
 var _pick_root: Control
 var _picks := {}               # player id -> champ id
@@ -14,6 +15,8 @@ var _human: Dictionary
 var _bot_p: Dictionary
 var _view: MobaView
 var _rng := RandomNumberGenerator.new()
+var _opts: Control             # the options panel (G54: the MOBA range's options live here now)
+var _opts_b: Button
 
 ## Tools: auto-pick for the human and let a bot drive their champion too.
 static var autopilot := false
@@ -92,12 +95,43 @@ func _build_pick() -> void:
 		var b := TourneyUI.button(v, "Lock in %s" % c.name, func(): _lock(_human.id, id))
 		b.add_theme_font_size_override("font_size", BWStyle.F_SUB)
 		x += 500.0
+	# options (G54): keybinds and the cast mode, saved to user://tourney.cfg
+	_opts_b = TourneyUI.button(_pick_root, "", _toggle_opts)
+	_opts_b.position = Vector2(1330, 20)
+	_opts_b.size = Vector2(250, 44)
+	_opts_label()
+	TourneyUI.para(_pick_root, "Left-click moves, right-click attacks. Q W E R cast; D flash, F ignite or smite.", 16).position = Vector2(60, 878)
 	# the bot picks after a moment
 	TourneyUI.after(self, _rng.randf_range(2.0, 6.0), func():
 		if not _picks.has(_bot_p.id):
 			_lock(_bot_p.id, MobaChamps.ORDER[_rng.randi() % MobaChamps.ORDER.size()]))
 	if autopilot:
 		TourneyUI.after(self, 1.0, func(): _lock(_human.id, MobaChamps.ORDER[_rng.randi() % 3]))
+
+
+func _opts_label() -> void:
+	_opts_b.text = "Options  ·  %s" % MobaOptions.CAST_NAMES[MobaOptions.load_cast_mode()]
+
+
+func _toggle_opts() -> void:
+	if _opts:
+		_opts.queue_free()
+		_opts = null
+		_opts_label()
+		return
+	_opts = MobaOptions.new()
+	_opts.position = Vector2(500, 90)
+	_opts.custom_minimum_size = Vector2(600, 0)
+	_opts.closed.connect(_toggle_opts)
+	_pick_root.add_child(_opts)
+
+
+## The binds the match plays with: the store's (they may have just changed
+## here) unless a tool passed its own, plus the MOBA-only ones.
+func _binds() -> Dictionary:
+	if match_cfg.has("binds") and autopilot:
+		return MobaOptions.with_extras(match_cfg.binds)
+	return MobaOptions.load_binds()
 
 
 func _lock(pid: String, champ: String) -> void:
@@ -110,6 +144,8 @@ func _lock(pid: String, champ: String) -> void:
 
 func _process(delta: float) -> void:
 	if _view or _timer_l == null:
+		return
+	if _opts:                  # the clock waits while the options are open
 		return
 	_pick_t -= delta
 	_timer_l.text = "%d s  ·  %s" % [ceili(maxf(_pick_t, 0.0)), "you picked " + MobaChamps.CHAMPS[_picks[_human.id]].name if _picks.has(_human.id) else "pick one"]
@@ -135,8 +171,7 @@ func _start() -> void:
 	if autopilot:
 		bots[me.id] = MobaBot.new(0.6, int(match_cfg.seed) * 3)
 	_view = MobaView.new()
-	_view.setup(s, me.id, bots, match_cfg.get("binds", TourneyState.load_binds()),
-		{ mine: str(_human.name), theirs: str(_bot_p.name) })
+	_view.setup(s, me.id, bots, _binds(), { mine: str(_human.name), theirs: str(_bot_p.name) })
 	_view.match_over.connect(func(team: String):
 		var w: Dictionary = _human if team == mine else _bot_p
 		finished.emit({ "winner": w.id, "summary": "%s (%s) %d – %d %s (%s), %d s." % [_human.name, MobaChamps.CHAMPS[me.champ].name,
