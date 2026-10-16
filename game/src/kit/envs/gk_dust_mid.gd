@@ -10,6 +10,14 @@ extends GKDef
 ## the far end at the tower.
 ## Laid out in real metres (x across, left negative; z down the lane), then
 ## scaled by `scale` so doors fit the 2.2 m Black | White body.
+## G51 (the author's 10-16 notes): for play, not the photo. Each end has a
+## crate-and-wall "T" screen with a spawn pocket on either side of its stem,
+## out of sight of the whole lane; a life starts in one of the two (seeded),
+## and each pocket leaves by its own gap, so the other side can't know the
+## approach. Crate stacks down the hallway break the long sight lines and
+## split it into lanes (left wall, centre, the walkway, which a crate step
+## by the tower now joins to the lane at both ends). `cover` turns it all off
+## for the reference photo's empty hallway.
 
 func id() -> String:
 	return "dust_mid"
@@ -24,7 +32,7 @@ func kind() -> String:
 
 
 func version() -> int:
-	return 1
+	return 2
 
 
 func schema() -> Array[Dictionary]:
@@ -33,6 +41,7 @@ func schema() -> Array[Dictionary]:
 		pf("length", "Lane length (m)", "Layout", 52.0, 36.0, 70.0, 0.5),
 		pf("width", "Lane width (m)", "Layout", 10.5, 8.0, 14.0, 0.1),
 		pb("catwalk", "Raised walkway", "Layout", true),
+		pb("cover", "Crate cover + spawn screens (G51)", "Layout", true),
 		pf("cat_h", "Walkway height (m)", "Layout", 0.9, 0.5, 1.4, 0.05),
 		pb("pole", "Utility pole + cables", "Dressing", true),
 		pb("sign", "Hotel sign", "Dressing", true),
@@ -47,6 +56,7 @@ func presets() -> Dictionary:
 		"Reference": {},
 		"Short and wide": { "length": 40.0, "width": 12.5 },
 		"No walkway": { "catwalk": false },
+		"Photo (no cover)": { "cover": false },
 		"Late sun": { "sun_yaw": -100.0, "sun_height": 20.0 },
 	}
 
@@ -80,6 +90,8 @@ func _build(p: Dictionary) -> GKAsset:
 	if p.pole:
 		_pole(g, a, xl, xr)
 	_skyline(g, xl, xr, z0, z1)
+	if p.cover:
+		_cover(g, a, xl, xr, z0, z1, p)
 	g.pop()
 	a.add_part("world", g.commit())
 	# ---- edges: invisible walls along the lane, a lid at roof height
@@ -96,11 +108,20 @@ func _build(p: Dictionary) -> GKAsset:
 		"eye_a": look.call(Vector3(xr - 1.2, float(p.cat_h) + 1.72 if p.catwalk else 1.72, 30.0), Vector3(-1.5, 1.6, 2.0)),
 		"eye_b": look.call(Vector3(-1.5, 1.72, z1 - 3.0), Vector3(1.0, 2.6, 0.0)),
 	}
-	for k in 3:
-		a.markers["spawn_a%d" % k] = Transform3D(Basis.IDENTITY, M * Vector3(-2.0 + k * 2.0, 0.0, z0 + 2.5))
-		a.markers["spawn_b%d" % k] = Transform3D(Basis(Vector3.UP, PI), M * Vector3(-2.0 + k * 2.0, 0.0, z1 - 2.5))
+	if p.cover:
+		# G51: two tucked pockets per end, one each side of the screen's stem
+		for k in 2:
+			var ax: float = [-1.3, 1.6][k]
+			var bx: float = [-2.1, 0.9][k]
+			a.markers["spawn_a%d" % k] = Transform3D(Basis.IDENTITY, M * Vector3(ax, 0.0, z0 + 2.6))
+			a.markers["spawn_b%d" % k] = Transform3D(Basis(Vector3.UP, PI), M * Vector3(bx, 0.0, z1 - 3.0))
+	else:
+		for k in 3:
+			a.markers["spawn_a%d" % k] = Transform3D(Basis.IDENTITY, M * Vector3(-2.0 + k * 2.0, 0.0, z0 + 2.5))
+			a.markers["spawn_b%d" % k] = Transform3D(Basis(Vector3.UP, PI), M * Vector3(-2.0 + k * 2.0, 0.0, z1 - 2.5))
 	a.meta = { "ref_cam_fov": 66.0, "eye_a_fov": 70.0, "eye_b_fov": 70.0, "play_area": [xl * s, -z1 * s, xr * s, -z0 * s],
-		"notes": "Closed lane: T end (spawn_a*) to the tower (spawn_b*). Raised walkway on the right." }
+		"notes": "Closed lane: T end (spawn_a*) to the tower (spawn_b*). Raised walkway on the right. G51: spawn pockets behind T screens, crate stacks in the lane.",
+		"bot_hunt": bool(p.cover) }
 	var yaw := deg_to_rad(float(p.sun_yaw))
 	var el := deg_to_rad(float(p.sun_height))
 	var to_sun := Vector3(sin(yaw) * cos(el), sin(el), -cos(yaw) * cos(el))
@@ -112,6 +133,64 @@ func _build(p: Dictionary) -> GKAsset:
 
 
 const TOWER_Z := 30.0            ## the sandstone tower's face: where the walkway ends
+
+
+## G51 cover, in plan metres (x across, z down the lane; the T end at z0).
+## (The layout is checked by tools/fps_probe.gd: no pocket seen from the far
+## 60% of the lane, no open line from the T exits to the tower passage.)
+## Screens: a 2.8 m crate wall across each end with a wall stem behind it
+## to the end wall, a spawn pocket either side of the stem. Hallway: stacks
+## of crates, tall (2.6 m) where they must cut a sight line, low (1.1 m) to
+## crouch behind; a crate step against the walkway's low wall by the tower.
+func _cover(g: GKMesh, a: GKAsset, xl: float, xr: float, z0: float, z1: float, p: Dictionary) -> void:
+	# the T end: stem and crossbar (gaps: annex face..-2.0 and 2.2..right wall)
+	GKArch.block(g, a, "plaster_ochre", Vector3(-0.3, 0, z0), Vector3(0.3, 2.8, -2.6), 0.03)
+	g.box("sandstone_trim", Vector3(0, 2.86, (z0 - 2.6) * 0.5), Vector3(0.7, 0.12, -2.6 - z0 + 0.1), 0.02)
+	for x in [-2.2, -0.73, 0.73]:
+		_crate(g, a, Vector3(x + 0.735, 0, -2.0), Vector3(1.47, 1.4, 1.2))
+		_crate(g, a, Vector3(x + 0.735, 1.4, -2.0), Vector3(1.43, 1.4, 1.16), 0.04 * (1.0 if x < 0.0 else -1.0))
+	# the tower end: crossbar z1-7.6..z1-6.4 across -3.2..2.0, stem to the end
+	var zb := z1 - 7.0
+	for x in [-3.2, -1.5, 0.2]:
+		var w := 1.7 if x < 0.0 else 1.8
+		_crate(g, a, Vector3(x + w * 0.5, 0, zb), Vector3(w, 1.4, 1.2))
+		_crate(g, a, Vector3(x + w * 0.5, 1.4, zb), Vector3(w - 0.04, 1.4, 1.16), 0.03)
+	GKArch.block(g, a, "plaster_white", Vector3(-0.9, 0, zb + 0.6), Vector3(-0.3, 2.8, z1), 0.03)
+	g.box("sandstone_trim", Vector3(-0.6, 2.86, (zb + 0.6 + z1) * 0.5), Vector3(0.7, 0.12, z1 - zb - 0.5), 0.02)
+	# the hallway
+	_stack(g, a, Vector3(-1.6, 0, 13.25), Vector2(2.0, 1.5), 2)       # centre-left, by the pole
+	_crate(g, a, Vector3(-0.1, 0, 13.3), Vector3(1.0, 1.1, 1.0), 0.12)  # a low one beside it
+	_stack(g, a, Vector3(-4.95, 0, 19.6), Vector2(1.6, 1.2), 2)        # against the left wall
+	_stack(g, a, Vector3(0.5, 0, 23.25), Vector2(1.8, 1.5), 2)         # mid, splits centre from the walkway foot
+	_crate(g, a, Vector3(1.5, 0, 16.5), Vector3(1.1, 1.1, 1.1), -0.1)   # low cover in the open
+	_stack(g, a, Vector3(-1.9, 0, 28.5), Vector2(2.4, 1.4), 2)         # centre, short of the tower: cuts the diagonals
+	_stack(g, a, Vector3(-3.8, 0, 33.2), Vector2(2.0, 1.4), 2)         # the tower passage
+	if p.catwalk:
+		_crate(g, a, Vector3(2.35, 0, 27.6), Vector3(0.7, 0.55, 1.0))   # the step up to the walkway
+
+
+## A wooden crate: planked box, darker edge boards, centred on `base` (its
+## floor point); `yaw` turns it a touch.
+func _crate(g: GKMesh, a: GKAsset, base: Vector3, size: Vector3, yaw := 0.0) -> void:
+	var b := Basis(Vector3.UP, yaw)
+	var c := base + Vector3(0, size.y * 0.5, 0)
+	g.box("wood_old", c, size, 0.02, b)
+	var e := 0.07
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			g.box("wood_door", c + b * Vector3(sx * (size.x * 0.5 - e * 0.4), 0, sz * (size.z * 0.5 - e * 0.4)), Vector3(e, size.y + 0.01, e), 0.005, b)
+	for sy in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			g.box("wood_door", c + b * Vector3(0, sy * (size.y * 0.5 - e * 0.4), sz * (size.z * 0.5 - e * 0.4)), Vector3(size.x + 0.01, e, e), 0.005, b)
+	g.box("wood_door", c + b * Vector3(0, 0, size.z * 0.5 + 0.004), Vector3(size.x * 0.9, e * 0.8, 0.012), 0.0, b * Basis(Vector3.BACK, atan2(size.y, size.x)))
+	a.add_box_xf(g.xf * Transform3D(b, c), size)
+
+
+## Crates stacked `n` high (1.3 m each), the upper ones nudged.
+func _stack(g: GKMesh, a: GKAsset, base: Vector3, foot: Vector2, n: int) -> void:
+	for k in n:
+		var sh := 1.0 - 0.03 * k
+		_crate(g, a, base + Vector3(0, 1.3 * k, 0), Vector3(foot.x * sh, 1.3, foot.y * sh), 0.05 * k * (1.0 if int(base.z) % 2 == 0 else -1.0))
 
 
 ## Two rusty manhole covers just ahead of the eye, as in the photo's foreground.
