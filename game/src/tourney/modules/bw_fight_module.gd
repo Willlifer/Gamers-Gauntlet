@@ -92,6 +92,7 @@ func _play(p: Dictionary) -> void:
 	_screen.configure("res://maps/%s.json" % BWRun.TWINS_MAP, players, enemies, [], seed_value)
 	_screen.trust_fn = trun.trust_stage
 	add_child(_screen)
+	GGAnim.float_twins_under(_screen)        # G55: Noon and Dusk glide with godly floating
 	TourneyMusic.play("boss")
 	var result: Array = await _screen.finished
 	var battle: BWBattle = result[1]
