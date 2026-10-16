@@ -2,7 +2,8 @@ extends SceneTree
 ## Headless: the OSRS raid (G34).
 ##   godot --headless --path . --script res://tools/osrs_probe.gd
 ## Squares: paths are 8-way without corner cutting, a run moves two squares a
-## tick, walking one. Prayer blocks the matching projectile. Lightning,
+## tick, walking one. Prayer blocks the matching projectile. A projectile flies
+## 3 s from any square, is judged on impact, and keeps coming through a slam. Lightning,
 ## boulders, slams and the tear-out hit only the squares they mark. The Sun
 ## Sigil empowers. Bot runs end, kill sometimes, die sometimes, and replay
 ## the same. Exit 0 when every check passes.
@@ -20,6 +21,7 @@ func _initialize() -> void:
 	OsrsTune.use_defaults()
 	_squares()
 	_prayer()
+	_flight()
 	_hazards()
 	_sigil()
 	_runs()
@@ -78,6 +80,80 @@ func _prayer() -> void:
 	s.me.hp = 40.0
 	s.step({ "eat": true })
 	_ok(is_equal_approx(float(s.me.hp), 40.0 + float(s.me.max_hp) * 0.25), "food restores 25%")
+
+
+## G45: every prayable projectile takes flight_s (3 s) from launch to impact,
+## near or far; the prayer is judged on impact; the twin lands a tick behind;
+## projectiles keep launching and landing through a slam.
+func _flight() -> void:
+	_ok(is_equal_approx(OsrsSim.flight_ticks() * OsrsSim.TICK, 3.0), "a projectile flies %d ticks = %.1f s" % [OsrsSim.flight_ticks(), OsrsSim.flight_ticks() * OsrsSim.TICK])
+	for at: Vector2i in [Vector2i(7, 1), Vector2i(0, 11)]:
+		var s := OsrsSim.new(8)
+		_quiet(s)
+		s.me.tile = at
+		s.boss.auto_cd = 1
+		s.step({})
+		var p: Dictionary = s.projs[0] if not s.projs.is_empty() else {}
+		var secs := (int(p.land) - int(p.launch)) * OsrsSim.TICK if not p.is_empty() else -1.0
+		_ok(str(p.get("style", "")) in OsrsSim.STYLES and is_equal_approx(secs, 3.0), "from %d squares away it lands 3 s after launch (%.1f s)" % [OsrsSim.boss_dist(at), secs])
+	# judged on impact: up the whole flight but dropped on the last tick lets it
+	# through; switched on only on the landing tick still blocks it
+	var s := OsrsSim.new(9)
+	_quiet(s)
+	s._launch("magic", OsrsSim.flight_ticks(), 20.0)
+	s.step({ "pray": "magic" })
+	for i in OsrsSim.flight_ticks() - 2:
+		s.step({})
+	s.step({ "pray": "off" })
+	_ok(is_equal_approx(float(s.me.hp), float(s.me.max_hp) - 20.0), "a prayer dropped before impact doesn't block (judged on impact)")
+	s._launch("ranged", OsrsSim.flight_ticks(), 20.0)
+	for i in OsrsSim.flight_ticks() - 1:
+		s.step({})
+	_ok(s.projs.size() == 1, "nothing lands before its 3 s are up")
+	s.step({ "pray": "ranged" })
+	_ok(s.projs.is_empty() and int(s.me.blocked) == 1, "Protect from Missiles switched on the landing tick blocks it")
+	# phase 3's twin: the other style, a tick behind, also 3 s
+	var t := OsrsSim.new(10)
+	_quiet(t)
+	t.boss.hp = float(t.boss.max_hp) * 0.3
+	t.me.tile = Vector2i(7, 9)
+	OsrsTune._values["twin_chance"] = 1.0
+	t.boss.auto_cd = 1
+	t.step({})
+	t.step({})
+	OsrsTune._values.erase("twin_chance")
+	var ok: bool = t.projs.size() == 2 and t.projs[0].style != t.projs[1].style and int(t.projs[1].land) == int(t.projs[0].land) + 1 		and int(t.projs[1].land) - int(t.projs[1].launch) == OsrsSim.flight_ticks()
+	_ok(ok, "phase 3's twin: the other style, landing a tick behind, also a 3 s flight")
+	# through the slam: projectiles launch and land while the floor glows
+	var u := OsrsSim.new(11)
+	_quiet(u)
+	u.me.tile = Vector2i(7, 9)
+	u.boss.hp = float(u.boss.max_hp) * 0.5
+	u.boss.auto_cd = 2
+	u._slam()
+	var launched := 0
+	var landed := 0
+	while not u.slams.is_empty():
+		for e: Dictionary in u.step({}):
+			if str(e.type) == "proj":
+				launched += 1
+			elif str(e.type) == "hurt" or str(e.type) == "blocked":
+				if str(e.get("what", e.get("style", ""))) in OsrsSim.STYLES and str(e.type) == "hurt":
+					landed += 1
+		u.boss.auto_cd = mini(int(u.boss.auto_cd), int(OsrsTune.value("auto_every")))
+	_ok(launched >= 2 and landed >= 1, "the Warden keeps firing through a slam (%d launched, %d landed)" % [launched, landed])
+	# and in a real fight, every slam has a projectile in the air
+	var v := OsrsSim.new(12)
+	var b := OsrsBot.new(12)
+	var slams := 0
+	var covered := 0
+	while v.over == "":
+		for e: Dictionary in v.step(b.think(v)):
+			if str(e.type) == "slam_land":
+				slams += 1
+				if not v.projs.is_empty():
+					covered += 1
+	_ok(slams >= 1 and covered == slams, "in a bot fight every slam lands with a projectile in the air (%d / %d)" % [covered, slams])
 
 
 func _hazards() -> void:

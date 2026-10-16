@@ -12,10 +12,13 @@ extends RefCounted
 ##
 ## The Warden:
 ##   projectiles  magic (blue orb) or ranged (arrow), shown over its head as
-##                it looses; they land `flight` ticks later and do nothing
-##                if the matching protect prayer is up when they land. In
-##                phase 3 a twin volley sends the other style a tick behind
-##                (a flick). Stand next to it and it smacks you (melee).
+##                it looses; each lands `flight_s` (3 s, five ticks) after
+##                launch wherever you stand, so a near one crawls and a far
+##                one streaks (G45), and does nothing if the matching protect
+##                prayer is up when it lands (checked on impact). They keep
+##                coming during every special. In phase 3 a twin volley
+##                sends the other style a tick behind (a flick). Stand next
+##                to it and it smacks you (melee, one tick).
 ##   lightning    shadows grow on squares; a bolt strikes each when it's full.
 ##                A struck square can't be picked again for a few ticks.
 ##   boulders     shadows under falling rocks (one on you); a rock that lands
@@ -65,7 +68,7 @@ func _init(seed: int = 1) -> void:
 		"dmg_done": 0.0, "dmg_taken": 0.0, "blocked": 0, "unblocked": 0, "dodged": 0, "struck": 0, "sigils": 0, "attacks": 0 }
 	var bh := OsrsTune.value("boss_hp")
 	boss = { "hp": bh, "max_hp": bh, "auto_cd": 8, "special_cd": 14, "rip_cd": int(OsrsTune.value("rip_every")),
-		"sigil_cd": 15, "last_style": "", "anim": "", "anim_tick": -99, "phase": 1 }
+		"sigil_cd": 15, "last_style": "", "twin": "", "anim": "", "anim_tick": -99, "phase": 1 }
 
 
 # ------------------------------------------------------------------ squares
@@ -272,6 +275,11 @@ func _boss_turn() -> void:
 		boss.phase = ph
 		_ev({ "type": "phase", "phase": ph })
 	# projectiles (and the melee smack)
+	# They never pause for a special: they keep coming through the slams and the
+	# tear-out (G45), so you pray and dodge at once.
+	if str(boss.twin) != "":                     # phase 3's twin, a tick behind
+		_launch(str(boss.twin), flight_ticks(), -1.0)
+		boss.twin = ""
 	boss.auto_cd = int(boss.auto_cd) - 1
 	if int(boss.auto_cd) <= 0:
 		boss.auto_cd = int(OsrsTune.value("auto_every_p3" if ph == 3 else "auto_every"))
@@ -279,9 +287,9 @@ func _boss_turn() -> void:
 			_launch("melee", 1, OsrsTune.value("melee_hit"))
 		else:
 			var style: String = STYLES[rng.randi() % 2]
-			_launch(style, int(OsrsTune.value("flight")), -1.0)
+			_launch(style, flight_ticks(), -1.0)
 			if ph == 3 and rng.randf() < OsrsTune.value("twin_chance"):
-				_launch("ranged" if style == "magic" else "magic", int(OsrsTune.value("flight")) + 1, -1.0)
+				boss.twin = "ranged" if style == "magic" else "magic"
 	# specials
 	boss.special_cd = int(boss.special_cd) - 1
 	if int(boss.special_cd) <= 0:
@@ -318,6 +326,12 @@ func _anim(id: String) -> void:
 	boss.anim = id
 	boss.anim_tick = tick
 	_ev({ "type": "boss_anim", "anim": id })
+
+
+## A prayable projectile's flight in ticks: OsrsTune.flight_s (3 s), the same
+## from any square.
+static func flight_ticks() -> int:
+	return maxi(1, roundi(OsrsTune.value("flight_s") / TICK))
 
 
 func _launch(style: String, flight: int, dmg: float) -> void:

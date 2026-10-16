@@ -139,7 +139,10 @@ After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
 - **Weapons:** bow 10-45 every 4 ticks, staff 15-55 every 5; 85% to land;
   range 10 squares. Pick one first; the other sits in the inventory to swap.
 - **The Warden (1,200 HP):** projectiles every 5 ticks (4 in phase 3), magic
-  or ranged, landing 3 ticks later; a melee smack next to it. Specials every
+  or ranged, landing 3 s (5 ticks) after launch from any distance, so a near
+  one is visibly slow; the prayer is judged on impact. They never pause for a
+  special: they keep coming through the slams and the tear-out (G45). A melee
+  smack next to it. Specials every
   11 ticks: lightning (phase 1); boulders, slam, lightning (phase 2); and in
   phase 3 lightning, boulders, slam, twin volleys, and the far row torn out
   every 18 ticks down to 5 rows.

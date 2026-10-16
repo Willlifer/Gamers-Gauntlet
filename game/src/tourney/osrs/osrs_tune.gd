@@ -29,7 +29,7 @@ const ENTRIES := {
 	"auto_every_p3": ["Projectile every (ticks), phase 3", 4.0, 2.0, 12.0, 1.0, "Warden"],
 	"auto_lo": ["Projectile: min hit unprayed", 18.0, 0.0, 99.0, 1.0, "Warden"],
 	"auto_hi": ["Projectile: max hit unprayed", 28.0, 1.0, 99.0, 1.0, "Warden"],
-	"flight": ["Projectile flight (ticks)", 3.0, 1.0, 6.0, 1.0, "Warden"],
+	"flight_s": ["Projectile flight, any distance (s)", 3.0, 0.6, 6.0, 0.6, "Warden"],
 	"twin_chance": ["Phase 3: chance of a twin volley (flick)", 0.35, 0.0, 1.0, 0.05, "Warden"],
 	"melee_hit": ["Melee smack if you stand next to it", 40.0, 0.0, 99.0, 1.0, "Warden"],
 	"special_every": ["A special every (ticks)", 11.0, 4.0, 30.0, 1.0, "Specials"],

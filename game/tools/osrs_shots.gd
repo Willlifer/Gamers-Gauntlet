@@ -49,6 +49,9 @@ func _go() -> void:
 			await _shot("boulders")
 		if s.slams.any(func(x: Dictionary) -> bool: return int(x.t) <= 2 and int(x.t) >= 1):
 			await _shot("slam")
+		# G45: an orb mid-flight (3 s from any distance) while the floor glows
+		if not s.slams.is_empty() and s.projs.any(func(p: Dictionary) -> bool: return str(p.style) != "melee" and s.tick - int(p.launch) == 2):
+			await _shot("slam_orb")
 		if s.sigils.any(func(x: Dictionary) -> bool: return int(x.t) <= 3):
 			await _shot("sigil")
 		if not s.rip.is_empty():

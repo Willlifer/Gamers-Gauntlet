@@ -810,7 +810,8 @@ func _animate(delta: float) -> void:
 	elif _pose_t <= 0.0 and _boss.pose_name() != "idle" and sim.over != "win":
 		_boss.anim_speed = 1.0
 		_boss.pose("idle")
-	# projectiles fly from the hand to you, landing on their tick
+	# projectiles fly from the hand to you, landing on their tick: launch to land
+	# is the sim's flight (3 s) from any distance, so a near one crawls (G45)
 	var now := float(sim.tick) + f
 	for id in _projs.keys():
 		var p: Dictionary = _projs[id].proj
