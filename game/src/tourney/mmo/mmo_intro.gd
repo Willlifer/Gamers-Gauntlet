@@ -33,6 +33,12 @@ const FIGHT := {
 		["flame", "#ff6a20", "Half the courtyard burns; chevrons on its edge", "Stay on the safe side. The chevrons point the way the fire is about to turn."],
 		["flame", "#ffb030", "You're on fire (Cinderbrand)", "Run (every step burns it off), get cleansed, drink a Restorative, or be healed."],
 	],
+	"giant_easy": [                       # G59: easy mode, no back-to-back pairs
+		["crack", "#ff7a20", "Orange strips and circles on the ground", "Cracks and meteors: step out before they fill."],
+		["bomb", "#ff4a3a", "A bomb over your head, a red circle round you", "Spread out. A gold ring on the floor: get in it."],
+		["flame", "#ff6a20", "Half the courtyard burns; chevrons on its edge", "Stay on the safe side. The chevrons point the way the fire is about to turn."],
+		["flame", "#ffb030", "Cinderbrand: you smoulder", "Run (every step burns it off), get cleansed, drink a Restorative, or be healed."],
+	],
 	"tank": [
 		["arrow", "#ff5a1a", "An orange wedge from the gun", "Aimed at the closest warrior or paladin. Everyone else out: each extra body hits harder."],
 		["bomb", "#d02a2a", "Red circles, then red craters; a grey canister", "Out of the circles and craters. The smoke spreads from the canister: keep away, then cross its front."],
@@ -112,7 +118,7 @@ func _build(cls: String, enc: String) -> void:
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(card)
 	var c: Dictionary = MmoClasses.CLASSES[cls]
-	var title := "Planet of Tanks" if enc == "tank" else "Raid night: the Giant"
+	var title := str({ "tank": "Planet of Tanks", "giant_easy": "Raid night: the Giant (Easy)" }.get(enc, "Raid night: the Giant (Hard)"))
 	_lbl(card, title, Vector2(0, 14), 34, MmoHud.GOLD, _serif, W - 140, HORIZONTAL_ALIGNMENT_CENTER)
 	_lbl(card, "Your first raid here as a %s: what's on your bar, and what to watch for." % str(c.name), Vector2(0, 58), 16,
 		Color(0.85, 0.83, 0.78), _sans, W - 140, HORIZONTAL_ALIGNMENT_CENTER)

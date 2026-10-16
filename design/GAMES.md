@@ -145,6 +145,23 @@ likes to wait in them).
 
 ## mmo_raid: MMO Raid night
 A WoW Classic raid against the Giant in a round courtyard (G22).
+- **Two builds, two modules** (G59): `mmo_raid` "MMO: Raid night (Hard)",
+  the fight below with every G52 change, and `mmo_raid_easy` "MMO: Raid
+  night (Easy)" (`MmoRaidEasyModule`), the Giant as pushed before G52
+  (1f1a933). Both in Quick play and the bracket. The player's side is the
+  same in both: classes, the 1–8 action bar, the consumables bar, keys, HUD,
+  first-time card, grade and PAR. Only the Giant differs (`MmoSim.easy`,
+  `MmoSim.EASY`, `MmoSim.tune()` / `spin_warn()`):
+  | | Easy | Hard |
+  |---|---|---|
+  | Floor first turns | 1:30 | 1:10 |
+  | Rest between bursts | 30 s | 12 s |
+  | Chevrons flash before a turn | 10 s before the first, 2 s before each burst | 1 s (`scorch_spin_warn`) |
+  | Ring + bombs back to back below 75% | never | yes (`combo_at`, `combo_fuse`) |
+  | Cinderbrand look | smoulders (licks of fire) | the player on fire |
+  Kept in easy though newer than 1f1a933: the consumables bar, the lone-arrow
+  chevrons, the 25%/enrage edge pulse and glowing Giant (G52b), the
+  first-time card. F1 changes to the easy-only numbers above don't reach easy.
 - **Hidden class: the Tank** (G44). A small, faint tank in the pick screen's
   bottom-right corner ("???"); click it to drive. Plays exactly like the
   hunter (same numbers, eight slots and PAR, renamed: Coax Burst, HEAT Round,
@@ -199,7 +216,7 @@ A WoW Classic raid against the Giant in a round courtyard (G22).
   (cleanses, Cinderbrand too), Swiftness, Stoneshield, Dense Dynamite; each
   on its own cooldown, off the GCD. A use counts toward activity; potion
   heals aren't healing done. Bots use them. PAR re-measured.
-- **G52 changes:** the floor turns from 70 s, resting 12 s, with 1 s of
+- **G52 changes (hard only for the floor, the pairs and the flames; G59):** the floor turns from 70 s, resting 12 s, with 1 s of
   warning (`scorch_spin_warn`); chevrons are lone arrows (no backward W).
   After 75%, Earthshatter and the bombs come back to back (4 s,
   `combo_fuse`). Cinderbrand sets the player visibly on fire. The 25%

@@ -517,8 +517,8 @@ func _timers_update() -> void:
 		var sc_at := MmoTune.value("scorch_at") if sim.tank == null else INF
 		if el < sc_at and el >= sc_at - MmoTune.value("scorch_warn") - 6.0:
 			rows.append(["Scorched Earth", sc_at - el, MmoTune.value("scorch_warn") + 6.0, Color("#d04010")])
-		elif sim.tank == null and el < MmoTune.value("scorch_spin_at") and el >= MmoTune.value("scorch_spin_at") - MmoTune.value("scorch_spin_warn"):
-			rows.append(["The fire turns", MmoTune.value("scorch_spin_at") - el, maxf(0.1, MmoTune.value("scorch_spin_warn")), Color("#d04010")])   # G52: was 10 s
+		elif sim.tank == null and el < sim.tune("scorch_spin_at") and el >= sim.tune("scorch_spin_at") - sim.spin_warn(true):
+			rows.append(["The fire turns", sim.tune("scorch_spin_at") - el, maxf(0.1, sim.spin_warn(true)), Color("#d04010")])   # G52: was 10 s (still 10 s in easy, G59)
 	for a: Dictionary in sim.areas:
 		if str(a.kind) == "ring":
 			rows.append(["Earthshatter: GET IN", float(a.t), float(a.dur), Color("#d0a020")])

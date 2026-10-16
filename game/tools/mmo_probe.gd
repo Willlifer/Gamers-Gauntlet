@@ -8,19 +8,27 @@ extends SceneTree
 ##   - Cinderbrand (G30): lands on all six; left alone it deals brand_pct of
 ##     max HP over brand_dur; a cleanse takes it off; running burns it down
 ##   - the same seed replays to the same state
-##   [RUNS=n] godot --headless --path . --script res://tools/mmo_probe.gd
+##   - G59: easy mode (mmo_raid_easy) keeps the pre-G52 rules: 90 s / 30 s
+##     floor turns, 10 s / 2 s chevrons, no back-to-back ring and bombs
+##   [RUNS=n] [MODE=easy] godot --headless --path . --script res://tools/mmo_probe.gd
+##   (MODE=easy runs every check on the easy Giant; RUNS=20 for the grade spread)
 
 var fails := 0
 var _by := {}
+var _enc := "giant"           ## G59: "giant_easy" with MODE=easy
 
 
 func _initialize() -> void:
 	MmoTune.use_defaults()
+	if OS.get_environment("MODE") == "easy":
+		_enc = "giant_easy"
+	print("mode: %s" % ("easy" if _enc == "giant_easy" else "hard"))
 	_abilities()
 	_themes()
 	_hidden()
 	_mechanics()
 	_brand()
+	_easy_rules()
 	var runs := int(OS.get_environment("RUNS")) if OS.get_environment("RUNS") != "" else 6
 	_raids(runs)
 	if _replay(4242) != _replay(4242):
@@ -36,7 +44,7 @@ func _fail(t: String) -> void:
 
 ## A raid of eight bots (G39): one of each class, then a second warrior and paladin.
 func _raid(seed: int) -> MmoSim:
-	return MmoModule.build_seats(seed, [])
+	return MmoModule.build_seats(seed, [], MmoModule.RAID_SIZE, _enc)
 
 
 # ------------------------------------------------------------- abilities
@@ -275,6 +283,9 @@ func _mechanics() -> void:
 ## starts as the first resolves, with combo_fuse to get there; its partner
 ## leaves the bag.
 func _combo() -> void:
+	if _enc == "giant_easy":
+		print("combo: none in easy mode (checked in _easy_rules)")
+		return
 	for first in ["gather", "bombs"]:
 		var c := _raid(8)
 		c._pull()
@@ -332,6 +343,50 @@ func _items() -> void:
 			_fail("Major Healing Potion: hp %.0f of %.0f, healing done +%.0f" % [w.hp, w.max_hp, w.heal_done - hd])
 	s.step({ w.id: { "cast": "item_heal" } })
 	print("items: %d / %d went off; busy credit %.1f s" % [went, MmoItems.ITEMS.size(), float(w.flags.get("item_busy", 0.0)) - s.time])
+
+
+## G59: easy mode is its own module with the Giant's pre-G52 rules: the floor
+## turns from 90 s, rests 30 s, flashes 10 s / 2 s ahead; below 75% the ring
+## and the bombs still come one at a time. Hard keeps G52's numbers.
+func _easy_rules() -> void:
+	var e := MmoModule.build_seats(8, [], MmoModule.RAID_SIZE, "giant_easy")
+	var h := MmoModule.build_seats(8, [], MmoModule.RAID_SIZE, "giant")
+	if not e.easy or h.easy:
+		_fail("easy flag: easy %s, hard %s" % [e.easy, h.easy])
+	var got := [e.tune("scorch_spin_at"), e.tune("scorch_spin_off"), e.spin_warn(true), e.spin_warn(false)]
+	if got != [90.0, 30.0, 10.0, 2.0]:
+		_fail("easy floor numbers %s, not [90, 30, 10, 2]" % [got])
+	var hard := [h.tune("scorch_spin_at"), h.tune("scorch_spin_off"), h.spin_warn(true), h.spin_warn(false)]
+	if hard != [MmoTune.value("scorch_spin_at"), MmoTune.value("scorch_spin_off"), MmoTune.value("scorch_spin_warn"), MmoTune.value("scorch_spin_warn")]:
+		_fail("hard floor numbers %s aren't MmoTune's" % [hard])
+	if TourneyModules.script_for("mmo_raid_easy") != MmoRaidEasyModule or TourneyModules.script_for("mmo_raid") != MmoModule:
+		_fail("mmo_raid_easy / mmo_raid not both in TourneyModules.POOL")
+	# no back to back at 70%
+	e._pull()
+	e.boss.hp = e.boss.max_hp * 0.7
+	var ps := e.players()
+	for i in ps.size():
+		(ps[i] as MmoUnit).pos = Vector2(sin(TAU * i / ps.size()), cos(TAU * i / ps.size())) * 17.0
+	e._bag = ["gather", "upheaval", "bombs"]
+	e.next_spell_at = 0.0
+	var chained := false
+	var order: Array = []
+	for i in 1500:
+		for ev: Dictionary in e.step({}):
+			if ev.type == "boss_spell" and (str(ev.stage) == "chain" or ev.stage == "cast"):
+				order.append(str(ev.spell))
+				chained = chained or str(ev.stage) == "chain"
+		if e.spell.has("then"):
+			chained = true
+	print("easy: floor %s; at 70%% the Giant cast %s" % [got, order])
+	if chained or order.slice(0, 2) != ["gather", "upheaval"]:
+		_fail("easy: the ring and the bombs came back to back")
+	# the module's own raid runs to an end
+	var m := { "seed": 31, "players": [{ "id": "a", "name": "A" }, { "id": "b", "name": "B" }] }
+	var r: Dictionary = MmoRaidEasyModule.simulate(m, RandomNumberGenerator.new())
+	print("easy module: %s" % r.summary)
+	if not str(r.get("winner", "")) in ["a", "b"]:
+		_fail("easy module's simulate had no winner")
 
 
 # ------------------------------------------------------------ Cinderbrand
@@ -512,10 +567,10 @@ func _raids(runs: int) -> void:
 				ang_live = float(sc.scorch.ang)
 			if e.type == "dmg" and str(e.what) == "Scorched Earth" and before.has(str(e.tgt)) and not before[str(e.tgt)][1] and not sc.in_scorch(sc.unit(str(e.tgt)).pos):
 				hurt_safe = true
-		if not spun and not sc.scorch.is_empty() and sc.scorch.spinning and sc.time - sc.pull_time > MmoTune.value("scorch_spin_at") + 5.0:
+		if not spun and not sc.scorch.is_empty() and sc.scorch.spinning and sc.time - sc.pull_time > sc.tune("scorch_spin_at") + 5.0:
 			spun = true
 			var turned := angle_difference(ang_live, float(sc.scorch.ang))
-			print("  G37: turned %.0f deg in the first %.0f s of spin (negative = counter-clockwise from above)" % [rad_to_deg(turned), sc.time - sc.pull_time - MmoTune.value("scorch_spin_at")])
+			print("  G37: turned %.0f deg in the first %.0f s of spin (negative = counter-clockwise from above)" % [rad_to_deg(turned), sc.time - sc.pull_time - sc.tune("scorch_spin_at")])
 			if turned >= 0.0:
 				_fail("Scorched Earth turned the wrong way")
 	var burnt := 0.0
@@ -529,9 +584,9 @@ func _raids(runs: int) -> void:
 	var at := {}
 	var pools := 0
 	var bombs := 0
-	var on := MmoTune.value("scorch_spin_at")
-	var son := MmoTune.value("scorch_spin_on")
-	var marks := [on + 2.0, on + 12.0, on + son + 1.0, on + son + MmoTune.value("scorch_spin_off") - 1.0]
+	var on := gr.tune("scorch_spin_at")
+	var son := gr.tune("scorch_spin_on")
+	var marks := [on + 2.0, on + 12.0, on + son + 1.0, on + son + gr.tune("scorch_spin_off") - 1.0]
 	while gr.winner == "" and gr.time < 900.0:
 		var orders := {}
 		for id: String in gb:
@@ -559,7 +614,7 @@ func _raids(runs: int) -> void:
 		_fail("Scorched Earth never warned")
 	if hurt_safe:
 		_fail("Scorched Earth hurt someone outside it")
-	if sc.time - sc.pull_time > MmoTune.value("scorch_spin_at") + 5.0 and not spun:
+	if sc.time - sc.pull_time > sc.tune("scorch_spin_at") + 5.0 and not spun:
 		_fail("Scorched Earth never turned")
 	# G35: one "You're on your own now." per raid at half health, no warnings after it; the rotation doubles at a quarter
 	if on_own != runs:

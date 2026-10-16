@@ -12,7 +12,8 @@ extends SceneTree
 ##   brand      Cinderbrand: the raid on fire (G52)
 ##   combo      below 75%, the ring and the bombs back to back (G52)
 ## Everyone is a bot, you included (CLASS picks your seat; default mage).
-##   [TAG=r1] [CLASS=priest] godot --path . --script res://tools/mmo_shots.gd
+## MODE=easy shoots easy mode (G59: mmo_raid_easy; no combo frame there).
+##   [TAG=r1] [CLASS=priest] [MODE=easy] godot --path . --script res://tools/mmo_shots.gd
 
 var out := ""
 var tag := "r0"
@@ -46,7 +47,8 @@ func _wait(s: float) -> void:
 
 func _go() -> void:
 	# the pick screen
-	var mod := MmoModule.new()
+	var easy := OS.get_environment("MODE") == "easy"
+	var mod: MmoModule = MmoRaidEasyModule.new() if easy else MmoModule.new()
 	root.add_child(mod)
 	mod.setup({ "id": "shots", "seed": 7, "players": [{ "id": "you", "name": "You", "bot": false }, { "id": "rival", "name": "Rival", "bot": true }] })
 	await _wait(1.2)
@@ -56,7 +58,7 @@ func _go() -> void:
 	# the raid, everyone a bot
 	var cls := OS.get_environment("CLASS") if OS.get_environment("CLASS") != "" else "mage"
 	var other := "priest" if cls != "priest" else "mage"
-	var s := MmoModule.build_raid(77, cls, "Edangbang", other, "Kawika")
+	var s := MmoModule.build_raid(77, cls, "Edangbang", other, "Kawika", "giant_easy" if easy else "giant")
 	var bots := {}
 	var k := 0
 	for p: MmoUnit in s.players():
@@ -92,7 +94,7 @@ func _go() -> void:
 	hud.tooltip.visible = false
 	# SCORCH=1: Scorched Earth (G37) frames, warning, burning, turning, then quit
 	if OS.get_environment("SCORCH") != "":
-		var son := MmoTune.value("scorch_spin_at")
+		var son := s.tune("scorch_spin_at")
 		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [son + 5.0, "scorch_spin"],
 				[son + MmoTune.value("scorch_spin_on") + 4.0, "scorch_rest"]]:
 			while s.winner == "" and s.time - s.pull_time < float(mark[0]):
@@ -109,7 +111,7 @@ func _go() -> void:
 		print("mmo_shots: %d frames to %s" % [shots.size(), out])
 		quit(0)
 		return
-	var want := ["upheaval", "meteors", "bombs", "gather", "brand", "combo"]
+	var want := ["upheaval", "meteors", "bombs", "gather", "brand"] if easy else ["upheaval", "meteors", "bombs", "gather", "brand", "combo"]
 	var guard := 0
 	while not want.is_empty() and s.winner == "" and guard < 40000:
 		guard += 1

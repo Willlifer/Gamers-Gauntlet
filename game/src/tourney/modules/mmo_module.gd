@@ -26,15 +26,15 @@ static var autopilot := false
 
 
 static func info() -> Dictionary:
-	return { "id": "mmo_raid", "name": "MMO: Raid night", "players": 2,
-		"blurb": "WoW Classic raid on the Giant. Pick a class; the better grade wins." }
+	return { "id": "mmo_raid", "name": "MMO: Raid night (Hard)", "players": 2,
+		"blurb": "WoW Classic raid on the Giant, hard mode: the floor turns often, ring and bombs back to back. Pick a class; the better grade wins." }
 
 
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	return run(m, rng, "giant")
 
 
-## The whole raid with bots in every seat; `enc` the boss ("giant", or "tank": Planet of Tanks, G46).
+## The whole raid with bots in every seat; `enc` the boss ("giant", "giant_easy": easy mode, G59, or "tank": Planet of Tanks, G46).
 static func run(m: Dictionary, rng: RandomNumberGenerator, enc: String) -> Dictionary:
 	rng.seed = int(m.seed)
 	var a := str(MmoClasses.ORDER[rng.randi() % MmoClasses.ORDER.size()])
@@ -75,6 +75,7 @@ static func build_seats(seed: int, seats: Array, size := RAID_SIZE, enc := "gian
 		s.add_tank()
 	else:
 		s.add_boss()
+		s.easy = enc == "giant_easy"            # G59: the Giant's pre-G52 rules
 	for seat: Array in seats.slice(0, size):
 		s.add_player(str(seat[0]), str(seat[1]))
 	var k := 0
@@ -116,7 +117,7 @@ func _dress_pick(_root: Control) -> void:
 	pass
 
 
-## Which boss: the Giant here; Planet of Tanks (MmoTanksModule) says "tank".
+## Which boss: the Giant here; easy mode (MmoRaidEasyModule) says "giant_easy", Planet of Tanks (MmoTanksModule) "tank".
 func encounter() -> String:
 	return "giant"
 
@@ -325,6 +326,6 @@ func _start() -> void:
 		MmoIntro.open(_view, str(_picks[_human.id]), encounter(), game)
 
 
-## This raid's id for the first-time card's flag (mmo_raid / mmo_tanks).
+## This raid's id for the first-time card's flag (mmo_raid / mmo_raid_easy / mmo_tanks).
 func info_id() -> String:
-	return "mmo_tanks" if encounter() == "tank" else "mmo_raid"
+	return str({ "tank": "mmo_tanks", "giant_easy": "mmo_raid_easy" }.get(encounter(), "mmo_raid"))

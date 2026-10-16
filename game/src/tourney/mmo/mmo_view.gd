@@ -776,7 +776,7 @@ func _draw_units(alpha: float, delta: float) -> void:
 		# Cinderbrand (G30; G52: on fire, flames up the whole body and a flickering light)
 		var branded := u.alive and u.kind == "player" and u.has_aura(MmoSim.BRAND)
 		var bf: Variant = v.get("brand_fx")
-		if branded and bf == null:
+		if branded and bf == null and not sim.easy:      # G59: easy keeps the pre-G52 smoulder only
 			bf = _brand_flames()
 			root.add_child(bf)
 			v["brand_fx"] = bf
@@ -1516,12 +1516,12 @@ func _sync_scorch(_delta: float) -> void:
 	_scorch_mat.set_shader_parameter("live", 1.0 if sc.state == "live" else 0.0)
 	# full chevrons while it turns; dim while it holds, flashing in the scorch_spin_warn s before the
 	# next burst and before it first turns (G38, G40; G52: less warning, was 2 s and 10 s)
-	var to_spin := MmoTune.value("scorch_spin_at") - (sim.time - sim.pull_time)
+	var to_spin := sim.tune("scorch_spin_at") - (sim.time - sim.pull_time)
 	var flash := 0.35 + 0.25 * sin(Time.get_ticks_msec() / 160.0)
 	var spin_k := 0.0
 	if sc.spinning:
-		spin_k = 1.0 if sc.get("moving", false) else (flash if sim.scorch_next_turn() <= MmoTune.value("scorch_spin_warn") else 0.22)
-	elif sc.state == "live" and to_spin <= MmoTune.value("scorch_spin_warn"):
+		spin_k = 1.0 if sc.get("moving", false) else (flash if sim.scorch_next_turn() <= sim.spin_warn(false) else 0.22)
+	elif sc.state == "live" and to_spin <= sim.spin_warn(true):
 		spin_k = flash
 	_scorch_mat.set_shader_parameter("spin", spin_k)
 	_scorch_mat.set_shader_parameter("turn", float(sc.get("dir", 1.0)))

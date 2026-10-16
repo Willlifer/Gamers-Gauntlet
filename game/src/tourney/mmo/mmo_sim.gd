@@ -66,6 +66,7 @@ var _pending: Array = []        # { t, f: Callable }
 var _queued := {}               # unit id -> ability id
 var _bag_last := ""
 var tank: MmoTankFight = null   ## Planet of Tanks (G46): the boss is the kit tank; its brain is MmoTankFight
+var easy := false               ## G59: easy mode, the Giant's rules as pushed before G52 (1f1a933); see tune()
 
 
 func _init(p_seed: int = 1) -> void:
@@ -96,6 +97,27 @@ func add_player(cls_id: String, pname: String) -> MmoUnit:
 		u.cd[str(a.id)] = 0.0
 	units.append(u)
 	return u
+
+
+## G59: easy mode's numbers, the Giant as it was before G52: the floor first
+## turns at 90 s and rests 30 s between bursts. (No back-to-back pairs either:
+## see _begin_spell.) Every other number is MmoTune's, as in hard.
+const EASY := { "scorch_spin_at": 90.0, "scorch_spin_off": 30.0 }
+
+
+## A fight number: MmoTune's, or easy mode's where it differs (EASY).
+func tune(key: String) -> float:
+	if easy and EASY.has(key):
+		return float(EASY[key])
+	return MmoTune.value(key)
+
+
+## How long the chevrons flash before the fire turns: scorch_spin_warn (1 s) in
+## hard; in easy (pre-G52) 10 s before it first turns, 2 s before each burst.
+func spin_warn(first: bool) -> float:
+	if easy:
+		return 10.0 if first else 2.0
+	return MmoTune.value("scorch_spin_warn")
 
 
 ## Scale the Giant to the raid: MmoTune.boss_hp is for six (G39: raids of up to 8).
@@ -994,7 +1016,7 @@ func _begin_spell() -> void:
 	var id := str(_bag.pop_front())
 	spell = { "id": id, "t": 0.0, "total": float(SPELL_CAST[id]), "stage": "cast" }
 	# G52: below combo_at, Earthshatter and the bombs come back to back (group up, then spread, or the other way)
-	if id in ["bombs", "gather"] and boss.hp_pct() <= MmoTune.value("combo_at"):
+	if not easy and id in ["bombs", "gather"] and boss.hp_pct() <= MmoTune.value("combo_at"):
 		var partner := "gather" if id == "bombs" else "bombs"
 		_bag.erase(partner)
 		spell["then"] = partner
@@ -1119,7 +1141,7 @@ func _tick_scorch(b: MmoUnit) -> void:
 		_emit({ "type": "scorch", "stage": "live" })
 	if scorch.state != "live":
 		return
-	if el >= MmoTune.value("scorch_spin_at"):
+	if el >= tune("scorch_spin_at"):
 		if not scorch.spinning:
 			scorch.spinning = true
 			_emit({ "type": "warn", "text": "The fire begins to turn! Keep moving!", "col": "#ff3a10" })
@@ -1142,11 +1164,11 @@ func _tick_scorch(b: MmoUnit) -> void:
 
 ## Is the fire turning at `el` seconds into the fight (G40: bursts and holds)?
 func scorch_moving_at(el: float) -> bool:
-	var t := el - MmoTune.value("scorch_spin_at")
+	var t := el - tune("scorch_spin_at")
 	if t < 0.0:
 		return false
 	var on := MmoTune.value("scorch_spin_on")
-	var cycle := on + MmoTune.value("scorch_spin_off")
+	var cycle := on + tune("scorch_spin_off")
 	return cycle <= on or fmod(t, cycle) < on
 
 

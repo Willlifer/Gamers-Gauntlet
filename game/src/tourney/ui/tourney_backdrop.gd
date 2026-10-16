@@ -10,7 +10,7 @@ extends CanvasLayer
 const MAPS := ["rooftop", "dust_mid", "courtyard"]
 const SPEED := TAU / 160.0                  ## one lap in ~2.7 minutes
 ## Which backdrop each game's matchup shows (games without a kit map keep the current one).
-const FOR_GAME := { "fps_roof": "rooftop", "fps_mid": "dust_mid", "fps_campus": "campus", "mmo_raid": "courtyard", "mmo_tanks": "campus" }
+const FOR_GAME := { "fps_roof": "rooftop", "fps_mid": "dust_mid", "fps_campus": "campus", "mmo_raid": "courtyard", "mmo_raid_easy": "courtyard", "mmo_tanks": "campus" }
 
 var current := ""
 var _vp: SubViewport
