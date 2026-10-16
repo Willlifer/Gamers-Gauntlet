@@ -18,6 +18,8 @@ var _timer_l: Label
 var _view: OsrsView
 var _bot_run := {}
 var _picked := false
+var _pick_ui: Control
+var _opts: TourneySettings     # the settings on its OSRS tab (G56); null when closed
 
 static var autopilot := false
 
@@ -79,6 +81,7 @@ func _build_pick() -> void:
 	_pick = CanvasLayer.new()
 	add_child(_pick)
 	var root := TourneyUI.root(_pick)
+	_pick_ui = root
 	var bg := ColorRect.new()
 	bg.color = Color("#14110c")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -99,12 +102,25 @@ func _build_pick() -> void:
 	how.position = Vector2(250, 560)
 	how.size = Vector2(1100, 200)
 	how.set_deferred("size", Vector2(1100, 200))                 # wrap at the tiles' width
+	var gear := TourneySettings.gear_button(root, "Settings", _toggle_opts)
+	gear.position = Vector2(1400, 84)
+	gear.size = Vector2(180, 44)
 	if autopilot:
 		TourneyUI.after(self, 0.5, func(): _start("bow"))
 
 
+## The settings (G56) over the weapon pick, on the OSRS tab; the clock waits.
+func _toggle_opts() -> void:
+	if _opts:
+		_opts.queue_free()
+		_opts = null
+		return
+	_opts = TourneySettings.open(_pick_ui, "osrs")
+	_opts.closed.connect(_toggle_opts)
+
+
 func _process(delta: float) -> void:
-	if _view or _pick == null or _picked:
+	if _view or _pick == null or _picked or _opts:
 		return
 	_pick_t -= delta
 	_timer_l.text = "%d s" % ceili(maxf(_pick_t, 0.0))

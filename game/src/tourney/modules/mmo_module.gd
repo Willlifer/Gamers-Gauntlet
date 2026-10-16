@@ -20,6 +20,7 @@ var _human: Dictionary
 var _other: Dictionary
 var _view: MmoView
 var _rng := RandomNumberGenerator.new()
+var _opts: TourneySettings     # the settings on its Raid tab (G56); null when closed
 
 static var autopilot := false
 
@@ -168,6 +169,9 @@ func _build_pick() -> void:
 		i += 1
 	_hidden_tank()
 	_dress_pick(_pick_root)
+	var gear := TourneySettings.gear_button(_pick_root, "Settings", _toggle_opts)
+	gear.position = Vector2(1400, 18)
+	gear.size = Vector2(180, 44)
 	TourneyUI.after(self, _rng.randf_range(2.0, 6.0), func() -> void:
 		if not _picks.has(_other.id):
 			_lock(_other.id, _bot_pick()))
@@ -252,6 +256,16 @@ func _figure(parent: Control, cls_id: String) -> void:
 	cam.look_at(Vector3(0, 1.1, 0))
 
 
+## The settings (G56) over the class pick, on the Raid tab; the clock waits.
+func _toggle_opts() -> void:
+	if _opts:
+		_opts.queue_free()
+		_opts = null
+		return
+	_opts = TourneySettings.open(_pick_root, "raid")
+	_opts.closed.connect(_toggle_opts)
+
+
 func _bot_pick() -> String:
 	return str(MmoClasses.ORDER[_rng.randi() % MmoClasses.ORDER.size()])
 
@@ -267,7 +281,7 @@ func _lock(pid: String, cls_id: String) -> void:
 
 
 func _process(delta: float) -> void:
-	if _view or _timer_l == null:
+	if _view or _timer_l == null or _opts:
 		return
 	_pick_t -= delta
 	var mine := str(_picks.get(_human.id, ""))

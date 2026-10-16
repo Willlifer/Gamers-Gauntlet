@@ -67,6 +67,7 @@ const ENTRIES := {
 	"sigil_hits": ["Empowered attacks from a sigil", 3.0, 0.0, 10.0, 1.0, "Sun Sigil"],
 	"sigil_mult": ["Empowered damage (x)", 2.0, 1.0, 4.0, 0.1, "Sun Sigil"],
 	"time_limit": ["Time limit (s)", 240.0, 60.0, 900.0, 10.0, "Match"],
+	"card_always": ["Show the first-time card every run (0 / 1)", 0.0, 0.0, 1.0, 1.0, "First-time card"],
 	"bot_react": ["Bot: chance it prays right", 0.85, 0.0, 1.0, 0.05, "Bot"],
 	"bot_dodge": ["Bot: chance it dodges a telegraph", 0.8, 0.0, 1.0, 0.05, "Bot"],
 }

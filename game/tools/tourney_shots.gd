@@ -1,5 +1,6 @@
 extends SceneTree
-## Windowed: opens the tournament with 3 bots, walks lobby → the creator's dice → quick
+## Windowed: opens the tournament with 3 bots, walks lobby → the creator's dice → the
+## settings' tabs (G56, to <dir>/g56/) → quick
 ## play (FPS: Mid duel, back on F10's path) → bracket rolls → up next → matchup → (the game is skipped: the human's run is
 ## replaced by a roll) → result → champion, saving a frame of each to
 ## SHOTS=<dir> (default ../design/shots). Exit 0 when every screen appeared.
@@ -26,6 +27,17 @@ func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out.path_join("tourney_" + name + ".png"))
 	print("shot ", name)
+
+
+## A frame into a subfolder of the shots dir (design/shots/<sub>/<name>.png).
+func _shot_to(sub: String, name: String) -> void:
+	await process_frame
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var dir := out.path_join(sub)
+	DirAccess.make_dir_recursive_absolute(dir)
+	root.get_texture().get_image().save_png(dir.path_join(name + ".png"))
+	print("shot ", sub, "/", name)
 
 
 func _wait(s: float) -> void:
@@ -69,6 +81,19 @@ func _go() -> void:
 	await _shot("lobby_randomized")
 	lobby.state.me().merge(keep, true)
 	TourneyState.save_profile(lobby.state.me())
+	# G56: the settings, from the creator card's gear: one frame per tab, to design/shots/g56/
+	lobby.open_settings()
+	await _wait(0.4)
+	if lobby._opts == null:
+		fails += 1
+		print("FAIL: the lobby's gear opened no settings")
+	else:
+		for t: String in TourneySettings.TABS:
+			lobby._opts.select(t)
+			await _wait(0.3)
+			await _shot_to("g56", "settings_" + t)
+		lobby.open_settings()
+		await _wait(0.2)
 	# every game in the pool has a visible Quick play tile, above the players strip (G50)
 	var tiles := 0
 	for c in lobby._root.get_children():

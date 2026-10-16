@@ -15,6 +15,7 @@ func _ready() -> void:
 	BWMusic.ensure(self)
 	TourneyMusic.ensure(self)
 	BWSettings.apply_all()
+	TourneySettings.apply_audio()                                          # G56: the settings' volumes ([audio] in tourney.cfg)
 	_new()
 
 

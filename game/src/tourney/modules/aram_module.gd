@@ -15,7 +15,7 @@ var _human: Dictionary
 var _bot_p: Dictionary
 var _view: MobaView
 var _rng := RandomNumberGenerator.new()
-var _opts: Control             # the options panel (G54: the MOBA range's options live here now)
+var _opts: TourneySettings     # the settings (G56: one panel for every game, on its MOBA tab); null when closed
 var _opts_b: Button
 
 ## Tools: auto-pick for the human and let a bot drive their champion too.
@@ -95,8 +95,8 @@ func _build_pick() -> void:
 		var b := TourneyUI.button(v, "Lock in %s" % c.name, func(): _lock(_human.id, id))
 		b.add_theme_font_size_override("font_size", BWStyle.F_SUB)
 		x += 500.0
-	# options (G54): keybinds and the cast mode, saved to user://tourney.cfg
-	_opts_b = TourneyUI.button(_pick_root, "", _toggle_opts)
+	# settings (G54, G56): keybinds and the cast mode on the MOBA tab, saved to user://tourney.cfg
+	_opts_b = TourneySettings.gear_button(_pick_root, "", _toggle_opts)
 	_opts_b.position = Vector2(1330, 20)
 	_opts_b.size = Vector2(250, 44)
 	_opts_label()
@@ -110,7 +110,7 @@ func _build_pick() -> void:
 
 
 func _opts_label() -> void:
-	_opts_b.text = "Options  ·  %s" % MobaOptions.CAST_NAMES[MobaOptions.load_cast_mode()]
+	_opts_b.text = "Settings  ·  %s" % MobaOptions.CAST_NAMES[MobaOptions.load_cast_mode()]
 
 
 func _toggle_opts() -> void:
@@ -119,11 +119,8 @@ func _toggle_opts() -> void:
 		_opts = null
 		_opts_label()
 		return
-	_opts = MobaOptions.new()
-	_opts.position = Vector2(500, 90)
-	_opts.custom_minimum_size = Vector2(600, 0)
+	_opts = TourneySettings.open(_pick_root, "moba")
 	_opts.closed.connect(_toggle_opts)
-	_pick_root.add_child(_opts)
 
 
 ## The binds the match plays with: the store's (they may have just changed
@@ -145,7 +142,7 @@ func _lock(pid: String, champ: String) -> void:
 func _process(delta: float) -> void:
 	if _view or _timer_l == null:
 		return
-	if _opts:                  # the clock waits while the options are open
+	if _opts:                  # the clock waits while the settings are open
 		return
 	_pick_t -= delta
 	_timer_l.text = "%d s  ·  %s" % [ceili(maxf(_pick_t, 0.0)), "you picked " + MobaChamps.CHAMPS[_picks[_human.id]].name if _picks.has(_human.id) else "pick one"]

@@ -25,6 +25,7 @@ func _ready() -> void:
 	TourneyMusic.ensure(self)
 	BWEsc.ensure(self)
 	BWSettings.apply_all()
+	TourneySettings.apply_audio()                                          # G56: the settings' volumes ([audio] in tourney.cfg)
 	BWShaderWarm.start(self)
 	for n in [BWMusic._inst, BWSfx._inst]:
 		if n and is_instance_valid(n):

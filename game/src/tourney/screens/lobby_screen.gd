@@ -30,6 +30,7 @@ var _swatches: HBoxContainer
 var _start_tile: TourneyTile
 var _ticker: Label
 var _card: Control
+var _opts: TourneySettings     # the settings (G56), from the gear on the creator card; null when closed
 
 
 func _ready() -> void:
@@ -165,6 +166,8 @@ func _build_creator() -> void:
 	var dice := TourneyUI.button(head, "Randomize", randomize_me)
 	dice.add_theme_font_size_override("font_size", 14)
 	dice.tooltip_text = "Roll a random name, title, hair, colour and outfit"
+	var gear := TourneySettings.gear_button(head, "", open_settings)
+	gear.custom_minimum_size = Vector2(40, 0)
 	var top := TourneyUI.row(v, 10)
 	_stage_box = top
 	_stage = TourneyUI.stage(top, state.unit_for(_me), Vector2(140, 236), true, Color(0, 0, 0, 0))
@@ -197,6 +200,16 @@ func _build_creator() -> void:
 	TourneyUI.label(v, "Hair colour", 13, TourneyUI.DIM)
 	_swatches = TourneyUI.row(v, 4)
 	_refresh_swatches()
+
+
+## Open or close the settings (G56) on the General tab; every game's tab is a click away.
+func open_settings(first_tab: String = "general") -> void:
+	if _opts:
+		_opts.queue_free()
+		_opts = null
+		return
+	_opts = TourneySettings.open(_root, first_tab)
+	_opts.closed.connect(open_settings)
 
 
 func _field(parent: Control, title: String, c: Control) -> void:

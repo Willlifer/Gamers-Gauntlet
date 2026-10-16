@@ -5,7 +5,8 @@ extends CanvasLayer
 ## what's in the inventory, the prayers and the mechanics, one line each
 ## with its icon, before the fight starts. Any key or click skips it. It only
 ## explains the controls; the fight itself gives no extra help.
-##   --fresh (a user arg) or OsrsCard.force shows it again, for testing.
+##   --fresh (a user arg) or OsrsCard.force shows it again, for testing;
+##   OsrsTune card_always (G56: the settings' OSRS tab) shows it every run.
 
 signal done
 
@@ -22,7 +23,7 @@ var _closed := false
 
 ## Show it this time? (Marks it seen when it says yes.)
 static func should_show() -> bool:
-	if force or OS.get_cmdline_user_args().has("--fresh"):
+	if force or OS.get_cmdline_user_args().has("--fresh") or OsrsTune.value("card_always") > 0.5:
 		return true
 	var cf := ConfigFile.new()
 	cf.load(TourneyState.CFG)

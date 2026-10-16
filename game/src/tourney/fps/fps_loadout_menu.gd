@@ -7,9 +7,10 @@ extends CanvasLayer
 ## this life's rolled sidearm and the pick; key hints along the bottom; a pick
 ## timer. Click a wedge or press its number. Esc or the timer keeps the last
 ## pick, F3 picks at random. Emits `picked(primary)` once, then frees itself.
-## G51: O (or the Options button) opens the shooter's settings, moved here
+## G51: O (or the Settings button) opens the shooter's settings, moved here
 ## from the lobby's Shooter range: mouse and aim sensitivity, field of view,
-## and the keys (FpsBinds); the pick timer waits while it's open.
+## and the keys (FpsBinds); the pick timer waits while it's open. G56: that's
+## TourneySettings on its Shooter tab (the other games' tabs a click away).
 
 signal picked(primary: String)
 
@@ -29,7 +30,7 @@ var _inv: VBoxContainer
 var _timer_l: Label
 var _done := false
 var _icons := {}                            # id -> SubViewport texture
-var _opts: FpsOptionsPanel                  # the options panel (G51); null when closed
+var _opts: TourneySettings                  # the settings (G51, G56: its Shooter tab); null when closed
 
 
 func _ready() -> void:
@@ -89,12 +90,8 @@ func _ready() -> void:
 	root.add_child(hints)
 	for h in ["[ESC] Keep last pick", "[1-%d] Pick" % options.size(), "[F3] Random"]:
 		_label(hints, h, 18, Color(1, 1, 1, 0.75))
-	var ob := Button.new()
-	ob.text = "[O] Options: keys, sensitivity"
+	var ob := TourneySettings.gear_button(hints, "[O] Settings: keys, sensitivity", toggle_options)
 	ob.add_theme_font_size_override("font_size", 18)
-	ob.focus_mode = Control.FOCUS_NONE
-	ob.pressed.connect(toggle_options)
-	hints.add_child(ob)
 	_refresh_inv()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -301,7 +298,7 @@ func _pick(id: String) -> void:
 
 # ------------------------------------------------------------- options (G51)
 
-## Open or close the shooter's settings (FpsOptionsPanel) over the wheel.
+## Open or close the settings (TourneySettings, on the Shooter tab) over the wheel.
 func toggle_options() -> void:
 	if _opts:
 		_opts.queue_free()
@@ -309,10 +306,8 @@ func toggle_options() -> void:
 		_wheel.visible = true
 		return
 	_wheel.visible = false
-	_opts = FpsOptionsPanel.new()
-	_opts.position = Vector2(150, 170)
+	_opts = TourneySettings.open(_wheel.get_parent() as Control, "shooter")
 	_opts.closed.connect(toggle_options)
-	_wheel.get_parent().add_child(_opts)
 
 
 ## A side view of the gun, rendered once into a small transparent viewport.
