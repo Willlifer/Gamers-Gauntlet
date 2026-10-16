@@ -95,7 +95,7 @@ func _build_pick() -> void:
 	var staff := TourneyTile.make(root, Rect2(830, 220, 520, 300), "Staff", "Hits 15-55 every 5 ticks (3.0 s). Swingy.", Color("#3e2d55"), "STAFF")
 	staff.title_size = 48
 	staff.pressed.connect(func(): _start("staff"))
-	var how := TourneyUI.para(root, "The two phantoms on the flanks take turns firing at you: pray against each shot (blue orb: magic, arrow: missiles) before it lands. The Warden does the rest: step off the shadows before lightning and boulders hit; stand where the floor isn't glowing when it slams (the last hit spares only the centre column, and faster below half HP); get off the far row when it cracks. At 75%, 50% and 25% it shields itself and raises skulls: wield the lightning dagger and break them all before they burst. Sip the damage potion; stand on a Sun Sigil as it ignites. Fastest kill wins.", BWStyle.F_BODY, Color(1, 1, 1, 0.85))
+	var how := TourneyUI.para(root, "The two phantoms on the flanks take turns firing at you: pray against each shot (blue orb: magic, arrow: missiles) before it lands. The Warden does the rest: step off the shadows before lightning and boulders hit; when it slams, stand in the green column, then the next, then the next (faster below half HP); get off the far row when it cracks; when it shields itself against magic or bowfire, swap weapons. At 75%, 50% and 25% it raises skulls: wield the lightning dagger and click skull after skull, striking as you arrive, before they burst. Sip the damage potion; stand on a Sun Sigil as it ignites. Fastest kill wins.", BWStyle.F_BODY, Color(1, 1, 1, 0.85))
 	how.position = Vector2(250, 560)
 	how.size = Vector2(1100, 200)
 	how.set_deferred("size", Vector2(1100, 200))                 # wrap at the tiles' width
