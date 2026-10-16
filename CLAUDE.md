@@ -97,4 +97,4 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - Desktop first for testing; the web build later for phones.
 - The author verifies by playing and by looking at frames: show them.
 - Keep the module interface small; every new game is a plug-in.
-- Git: commit with `-c user.name=ferth -c user.email=consumerot@gmail.com`; no GitHub remote yet.
+- Git: commit with `-c user.name=ferth -c user.email=consumerot@gmail.com`; remote: https://github.com/Willlifer/Gamers-Gauntlet (main). Web build: `sh build_web.sh` -> `web/`, commit, push; Vercel serves `web/` (`vercel.json`, single-threaded, no special headers).
