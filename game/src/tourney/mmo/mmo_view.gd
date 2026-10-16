@@ -690,7 +690,7 @@ func _boss_spell(e: Dictionary) -> void:
 		return
 	var v: Dictionary = _views.get("boss", {})
 	match str(e.stage):
-		"cast":
+		"cast", "chain":
 			if not sim.silent:
 				_hud.log_line("The Giant begins to cast %s." % MmoSim.SPELL_NAMES.get(str(e.spell), ""), Color("#ff9040"))
 			if not v.is_empty():
@@ -753,8 +753,19 @@ func _draw_units(alpha: float, delta: float) -> void:
 		(v.name as Label3D).visible = id != me_id and (u.alive or u.kind == "player")
 		if u.kind == "boss":
 			(v.name as Label3D).visible = false
-		# Cinderbrand (G30): the branded smoulder, a lick of fire every so often
-		if u.alive and u.kind == "player" and u.has_aura(MmoSim.BRAND):
+		# Cinderbrand (G30; G52: on fire, flames up the whole body and a flickering light)
+		var branded := u.alive and u.kind == "player" and u.has_aura(MmoSim.BRAND)
+		var bf: Variant = v.get("brand_fx")
+		if branded and bf == null:
+			bf = _brand_flames()
+			root.add_child(bf)
+			v["brand_fx"] = bf
+		if bf != null:
+			var flames: CPUParticles3D = (bf as Node3D).get_child(0)
+			flames.emitting = branded
+			var bl: OmniLight3D = (bf as Node3D).get_child(1)
+			bl.light_energy = (2.2 + 0.8 * sin(Time.get_ticks_msec() / 45.0) + 0.5 * sin(Time.get_ticks_msec() / 17.0)) if branded else move_toward(bl.light_energy, 0.0, delta * 8.0)
+		if branded:
 			v["brand_t"] = float(v.get("brand_t", 0.0)) - delta
 			if float(v.brand_t) <= 0.0:
 				v.brand_t = 0.55
@@ -935,6 +946,57 @@ func _cast_glow(u: MmoUnit, v: Dictionary, on: bool) -> void:
 		if is_instance_valid(g):
 			(g as Node).queue_free()
 		v["glow"] = null
+
+
+## G52: Cinderbrand sets you on fire: tongues of flame licking up the body
+## (yellow at the root, red as they rise and fade), and a flickering orange light.
+func _brand_flames() -> Node3D:
+	var n := Node3D.new()
+	var p := CPUParticles3D.new()
+	p.amount = 140
+	p.lifetime = 0.8
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = Vector3(0.34, 0.7, 0.24)
+	p.position = Vector3(0, 0.9, 0)
+	p.direction = Vector3.UP
+	p.spread = 12.0
+	p.initial_velocity_min = 0.9
+	p.initial_velocity_max = 1.9
+	p.gravity = Vector3(0, 1.2, 0)
+	p.scale_amount_min = 0.55
+	p.scale_amount_max = 1.0
+	var sc := Curve.new()
+	sc.add_point(Vector2(0.0, 0.5))
+	sc.add_point(Vector2(0.25, 1.0))
+	sc.add_point(Vector2(1.0, 0.1))
+	p.scale_amount_curve = sc
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1.0, 0.82, 0.3, 0.95))
+	ramp.set_color(1, Color(0.45, 0.04, 0.0, 0.0))
+	ramp.add_point(0.3, Color(1.0, 0.45, 0.06, 0.9))
+	ramp.add_point(0.7, Color(0.85, 0.15, 0.02, 0.6))
+	p.color_ramp = ramp
+	var q := SphereMesh.new()                             # a tongue of flame: a tall, soft-edged teardrop
+	q.radius = 0.16
+	q.height = 0.62
+	q.radial_segments = 8
+	q.rings = 4
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.vertex_color_use_as_albedo = true
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	q.material = m
+	p.mesh = q
+	n.add_child(p)
+	var l := OmniLight3D.new()
+	l.light_color = Color("#ff7a20")
+	l.omni_range = 4.5
+	l.position = Vector3(0, 1.2, 0)
+	n.add_child(l)
+	return n
 
 
 func _sparkles(col: Color) -> CPUParticles3D:
@@ -1278,10 +1340,11 @@ void fragment() {
 			// Retreating: gold chevrons on the fire side, pointing into the fire, marching in.
 			t *= turn;                                             // clockwise: the edges swap roles
 			float wc = (fract(abs(t) / 2.0) - 0.5) * 2.0;          // across the chevron, repeating along the edge
-			float adv_band = step(1.5, -t) * (1.0 - smoothstep(0.0, 0.4, -s - 3.4)) * smoothstep(0.2, 0.6, -s);
+			float arms = 1.0 - smoothstep(0.55, 0.7, abs(wc));     // G52: trim where neighbours meet (the W's backward points): lone chevrons
+			float adv_band = step(1.5, -t) * (1.0 - smoothstep(0.0, 0.4, -s - 3.4)) * smoothstep(0.2, 0.6, -s) * arms;
 			float fa = fract((-s + abs(wc) * 1.4) * 0.5 - TIME * 0.9);
 			float adv = smoothstep(0.58, 0.62, fa) * (1.0 - smoothstep(0.86, 0.9, fa));
-			float ret_band = step(1.5, t) * (1.0 - smoothstep(0.0, 0.4, s - 3.4)) * smoothstep(0.2, 0.6, s);
+			float ret_band = step(1.5, t) * (1.0 - smoothstep(0.0, 0.4, s - 3.4)) * smoothstep(0.2, 0.6, s) * arms;
 			float fr = fract((s + abs(wc) * 1.4) * 0.5 - TIME * 0.9);
 			float ret = smoothstep(0.58, 0.62, fr) * (1.0 - smoothstep(0.86, 0.9, fr));
 			float k = clamp(spin, 0.0, 1.0);
@@ -1391,14 +1454,14 @@ func _sync_scorch(_delta: float) -> void:
 	var warn_len := MmoTune.value("scorch_warn")
 	_scorch_mat.set_shader_parameter("warn", clampf(float(sc.t) / maxf(0.1, warn_len), 0.0, 1.0))
 	_scorch_mat.set_shader_parameter("live", 1.0 if sc.state == "live" else 0.0)
-	# full chevrons while it turns; dim while it holds, flashing in the 2 s before the next burst;
-	# a flashing preview in the 10 s before it first turns (G38, G40)
+	# full chevrons while it turns; dim while it holds, flashing in the scorch_spin_warn s before the
+	# next burst and before it first turns (G38, G40; G52: less warning, was 2 s and 10 s)
 	var to_spin := MmoTune.value("scorch_spin_at") - (sim.time - sim.pull_time)
 	var flash := 0.35 + 0.25 * sin(Time.get_ticks_msec() / 160.0)
 	var spin_k := 0.0
 	if sc.spinning:
-		spin_k = 1.0 if sc.get("moving", false) else (flash if sim.scorch_next_turn() <= 2.0 else 0.22)
-	elif sc.state == "live" and to_spin <= 10.0:
+		spin_k = 1.0 if sc.get("moving", false) else (flash if sim.scorch_next_turn() <= MmoTune.value("scorch_spin_warn") else 0.22)
+	elif sc.state == "live" and to_spin <= MmoTune.value("scorch_spin_warn"):
 		spin_k = flash
 	_scorch_mat.set_shader_parameter("spin", spin_k)
 	_scorch_mat.set_shader_parameter("turn", float(sc.get("dir", 1.0)))

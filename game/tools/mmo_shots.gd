@@ -8,6 +8,9 @@ extends SceneTree
 ##   <spell>    each of the Giant's spells at its telling moment, from your
 ##              camera, and from the side at the Giant (the new animations):
 ##              upheaval (cracks), meteors (the rain), bombs (spread), gather (the ring)
+##   items_tip  the consumables bar (G52) with a tooltip up
+##   brand      Cinderbrand: the raid on fire (G52)
+##   combo      below 75%, the ring and the bombs back to back (G52)
 ## Everyone is a bot, you included (CLASS picks your seat; default mage).
 ##   [TAG=r1] [CLASS=priest] godot --path . --script res://tools/mmo_shots.gd
 
@@ -89,11 +92,15 @@ func _go() -> void:
 	hud.tooltip.visible = false
 	# SCORCH=1: Scorched Earth (G37) frames, warning, burning, turning, then quit
 	if OS.get_environment("SCORCH") != "":
-		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [100.0, "scorch_spin"], [128.0, "scorch_rest"]]:
+		var son := MmoTune.value("scorch_spin_at")
+		for mark in [[41.0, "scorch_warn"], [44.2, "scorch_warn_late"], [52.0, "scorch_live"], [son + 5.0, "scorch_spin"],
+				[son + MmoTune.value("scorch_spin_on") + 4.0, "scorch_rest"]]:
 			while s.winner == "" and s.time - s.pull_time < float(mark[0]):
 				v._tick()
 			await _wait(1.0)
 			await _shot(str(mark[1]))
+			if str(mark[1]) in ["scorch_spin", "scorch_rest"]:
+				await _top(str(mark[1]))                  # G52: the chevrons from above
 		# burning ground left by a bomb (G40)
 		while s.winner == "" and not s.areas.any(func(a: Dictionary) -> bool: return str(a.get("look", "")) == "fire_pool"):
 			v._tick()
@@ -102,21 +109,35 @@ func _go() -> void:
 		print("mmo_shots: %d frames to %s" % [shots.size(), out])
 		quit(0)
 		return
-	var want := ["upheaval", "meteors", "bombs", "gather", "brand"]
+	var want := ["upheaval", "meteors", "bombs", "gather", "brand", "combo"]
 	var guard := 0
-	while not want.is_empty() and s.winner == "" and guard < 4000:
+	while not want.is_empty() and s.winner == "" and guard < 40000:
 		guard += 1
 		# Cinderbrand (G30): a frame of the raid burning, a couple of seconds in
 		var burning: Array = s.living().filter(func(p: MmoUnit) -> bool: return p.has_aura(MmoSim.BRAND))
-		if "brand" in want and burning.size() >= 3:
+		if "brand" in want and burning.size() >= 1:
 			var ba: Dictionary = (burning[0] as MmoUnit).aura(MmoSim.BRAND)
 			if float(ba.dur) - float(ba.t) > 0.8:
 				await _shot("brand")
+				# G52: close up on someone burning
+				var bu: MmoUnit = burning[0]
+				var cam := v.camera()
+				v.cam_hold = true
+				var bp := Vector3(bu.pos.x, 0.0, bu.pos.y)
+				var off := Vector3(bu.forward().x, 0.0, bu.forward().y) * 4.5
+				cam.position = bp + off + Vector3(1.2, 1.9, 0)
+				cam.look_at(bp + Vector3(0, 1.1, 0))
+				await _shot("brand_close")
+				v.cam_hold = false
 				want.erase("brand")
 				continue
 			await process_frame
 			continue
 		# run fast until a spell is about to start, then in real time
+		var combo_only: bool = want == ["combo"]
+		if combo_only and not (s.spell.has("then") or s.spell.get("chained", false)):
+			v._tick()
+			continue
 		if s.spell.is_empty() and s.next_spell_at - s.time > 1.2:
 			v._tick()
 			continue
@@ -124,6 +145,13 @@ func _go() -> void:
 		if s.spell.is_empty():
 			continue
 		var id := str(s.spell.id)
+		if s.spell.get("chained", false) and "combo" in want and str(s.spell.stage) in ["ring", "fuse"] and float(s.spell.t) > float(s.spell.total) + 0.8:
+			await _shot("combo")
+			await _top("combo")
+			want.erase("combo")
+			continue
+		if s.spell.has("then") or s.spell.get("chained", false):
+			continue                                     # the single-spell frames come from above 75%
 		if not id in want:
 			continue
 		var t := float(s.spell.t)
@@ -145,6 +173,16 @@ func _go() -> void:
 	await _shot("report")
 	print("mmo_shots: %d frames to %s" % [shots.size(), out])
 	quit(0)
+
+
+## The same moment from high over the courtyard.
+func _top(name: String) -> void:
+	var cam := v.camera()
+	v.cam_hold = true
+	cam.position = Vector3(0, 40, 34)
+	cam.look_at(Vector3(0, 0, 2))
+	await _shot(name + "_top")
+	v.cam_hold = false
 
 
 ## The same moment from the side: the Giant mid-move, the camera on it.

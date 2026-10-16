@@ -992,6 +992,11 @@ func _begin_spell() -> void:
 			_bag.push_back(_bag.pop_front())
 	var id := str(_bag.pop_front())
 	spell = { "id": id, "t": 0.0, "total": float(SPELL_CAST[id]), "stage": "cast" }
+	# G52: below combo_at, Earthshatter and the bombs come back to back (group up, then spread, or the other way)
+	if id in ["bombs", "gather"] and boss.hp_pct() <= MmoTune.value("combo_at"):
+		var partner := "gather" if id == "bombs" else "bombs"
+		_bag.erase(partner)
+		spell["then"] = partner
 	boss.cast = { "ab": id, "t": 0.0, "total": float(SPELL_CAST[id]), "channel": id == "meteors" }
 	boss.cast_serial += 1
 	boss.last_ab = id
@@ -1019,14 +1024,37 @@ func _begin_spell() -> void:
 		"bombs":
 			_emit({ "type": "warn", "text": "Bombs on everyone: SPREAD OUT!", "col": "#ff4a3a" })
 		"gather":
-			var ang := rng.randf() * TAU
-			if not scorch.is_empty():
-				# Scorched Earth (G37): the ring lands behind the fire's trailing edge
-				ang = float(scorch.ang) + float(scorch.get("dir", 1.0)) * (PI * 0.5 + 0.5 + (ang / TAU) * 1.0)
-			var at := boss.pos + Vector2(cos(ang), sin(ang)) * 11.0
-			if at.length() > ARENA_R - 6.0:
-				at = at.normalized() * (ARENA_R - 6.0)
-			spell["at"] = at
+			spell["at"] = _gather_spot()
+
+
+## Where Earthshatter's ring goes: 11 m from the Giant, behind the fire's trailing edge once Scorched Earth is up (G37).
+func _gather_spot() -> Vector2:
+	var ang := rng.randf() * TAU
+	if not scorch.is_empty():
+		ang = float(scorch.ang) + float(scorch.get("dir", 1.0)) * (PI * 0.5 + 0.5 + (ang / TAU) * 1.0)
+	var at := boss.pos + Vector2(cos(ang), sin(ang)) * 11.0
+	if at.length() > ARENA_R - 6.0:
+		at = at.normalized() * (ARENA_R - 6.0)
+	return at
+
+
+## G52: the second half of a back-to-back pair starts the moment the first
+## resolves: a short cast, then combo_fuse seconds to get there. false = no pair.
+func _chain() -> bool:
+	var nxt := str(spell.get("then", ""))
+	if nxt == "":
+		return false
+	var total := float(SPELL_CAST[nxt])
+	spell = { "id": nxt, "t": total - 0.4, "total": total, "stage": "cast", "fuse": MmoTune.value("combo_fuse"), "chained": true }
+	boss.cast = { "ab": nxt, "t": float(spell.t), "total": total, "channel": false }
+	boss.cast_serial += 1
+	boss.last_ab = nxt
+	if nxt == "gather":
+		spell["at"] = _gather_spot()
+	else:
+		_emit({ "type": "warn", "text": "And the bombs: SPREAD OUT!", "col": "#ff4a3a" })
+	_emit({ "type": "boss_spell", "spell": nxt, "stage": "chain" })
+	return true
 
 
 ## Cinderbrand (G30): not in the bag; on its own clock it takes the next
@@ -1250,7 +1278,7 @@ func _bombs() -> void:
 	if str(spell.stage) == "cast" and float(spell.t) >= float(spell.total):
 		spell.stage = "fuse"
 		boss.cast = {}
-		var fuse := MmoTune.value("bomb_fuse")
+		var fuse := float(spell.get("fuse", MmoTune.value("bomb_fuse")))
 		_bomb_fault = {}
 		for u: MmoUnit in living():
 			u.mech_faced += 1.0
@@ -1267,7 +1295,8 @@ func _bombs() -> void:
 		spell.fuse_t = float(spell.fuse_t) - TICK
 		if float(spell.fuse_t) <= -0.1:
 			resolving = 0
-			_end_spell(0.3)
+			if not _chain():
+				_end_spell(0.3)
 
 
 func _bomb_pop(c: MmoUnit) -> void:
@@ -1307,14 +1336,15 @@ func _gather() -> void:
 	if str(spell.stage) == "cast" and float(spell.t) >= float(spell.total):
 		spell.stage = "ring"
 		boss.cast = {}
-		var fuse := MmoTune.value("gather_fuse")
+		var fuse := float(spell.get("fuse", MmoTune.value("gather_fuse")))
 		resolving += 1
 		spell["ring"] = _add_area({ "kind": "ring", "pos": spell.at, "r": MmoTune.value("gather_radius"), "t": fuse, "dur": fuse,
 			"look": "gather", "owner": "boss", "on_fire": "gather" })
 		_emit({ "type": "warn", "text": "Earthshatter! GET IN THE RING!", "col": "#ffd040" })
 		_emit({ "type": "boss_spell", "spell": "gather", "stage": "fire", "at": spell.at })
 	if str(spell.stage) == "ring" and resolving <= 0:
-		_end_spell(0.4)
+		if not _chain():
+			_end_spell(0.4)
 
 
 func _gather_fire(a: Dictionary) -> void:

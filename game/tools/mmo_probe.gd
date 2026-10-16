@@ -267,7 +267,45 @@ func _mechanics() -> void:
 	if outs != 1:
 		_fail("ring: %d fails, expected 1 (the one outside)" % outs)
 	print("ring: %d outside" % outs)
+	_combo()
 	_items()
+
+
+## G52: below combo_at the ring and the bombs come back to back: the second
+## starts as the first resolves, with combo_fuse to get there; its partner
+## leaves the bag.
+func _combo() -> void:
+	for first in ["gather", "bombs"]:
+		var c := _raid(8)
+		c._pull()
+		c.boss.hp = c.boss.max_hp * 0.7
+		var ps := c.players()
+		for i in ps.size():
+			(ps[i] as MmoUnit).pos = Vector2(sin(TAU * i / ps.size()), cos(TAU * i / ps.size())) * 17.0
+		c._bag = [first, "upheaval", "gather" if first == "bombs" else "bombs"]
+		c.next_spell_at = 0.0
+		var t_first := -1.0
+		var t_second := -1.0
+		var second := "gather" if first == "bombs" else "bombs"
+		var fuse := 0.0
+		for i in 900:
+			for e: Dictionary in c.step({}):
+				if e.type == "explode" and str(e.what) == ("gather" if first == "gather" else "bomb") and t_first < 0.0:
+					t_first = c.time
+				if e.type == "boss_spell" and str(e.spell) == second and e.stage == "fire" and t_second < 0.0:
+					t_second = c.time
+					for a: Dictionary in c.areas:
+						if str(a.kind) in ["ring", "bomb"]:
+							fuse = float(a.dur)
+			if t_second >= 0.0:
+				break
+		print("combo %s then %s: %.1f s apart, %.1f s to get there; bag %s" % [first, second, t_second - t_first, fuse, c._bag])
+		if t_first < 0.0 or t_second < 0.0 or t_second - t_first > 1.0:
+			_fail("combo: %s didn't follow %s straight away" % [second, first])
+		if not is_equal_approx(fuse, MmoTune.value("combo_fuse")):
+			_fail("combo: the second one's fuse is %.1f, not combo_fuse" % fuse)
+		if c._bag.has(second):
+			_fail("combo: %s still in the bag" % second)
 
 
 ## G52: the consumables: every one goes off from Shift+1-8's ids, off the
@@ -483,7 +521,7 @@ func _raids(runs: int) -> void:
 	var burnt := 0.0
 	for p: MmoUnit in sc.players():
 		burnt += p.scorch_t
-	# G40: the fire turns in bursts (15 s), holds (30 s); bombs leave burning ground about half the time
+	# G40: the fire turns in bursts (scorch_spin_on), holds (scorch_spin_off; G52: 12 s); bombs leave burning ground about half the time
 	var gr := _raid(7171)
 	var gb := {}
 	for p: MmoUnit in gr.players():
@@ -492,7 +530,8 @@ func _raids(runs: int) -> void:
 	var pools := 0
 	var bombs := 0
 	var on := MmoTune.value("scorch_spin_at")
-	var marks := [on + 2.0, on + 12.0, on + MmoTune.value("scorch_spin_on") + 3.0, on + MmoTune.value("scorch_spin_on") + 25.0]
+	var son := MmoTune.value("scorch_spin_on")
+	var marks := [on + 2.0, on + 12.0, on + son + 1.0, on + son + MmoTune.value("scorch_spin_off") - 1.0]
 	while gr.winner == "" and gr.time < 900.0:
 		var orders := {}
 		for id: String in gb:
@@ -509,7 +548,7 @@ func _raids(runs: int) -> void:
 	if at.size() == 4:
 		var turning := absf(angle_difference(float(at[marks[0]]), float(at[marks[1]])))
 		var resting := absf(angle_difference(float(at[marks[2]]), float(at[marks[3]])))
-		print("  G40: turned %.0f deg in 10 s of a burst, %.1f deg in 22 s of rest" % [rad_to_deg(turning), rad_to_deg(resting)])
+		print("  G40: turned %.0f deg in 10 s of a burst, %.1f deg in %.0f s of rest" % [rad_to_deg(turning), rad_to_deg(resting), float(marks[3]) - float(marks[2])])
 		if turning < deg_to_rad(30.0) or resting > 0.001:
 			_fail("Scorched Earth doesn't turn in bursts")
 	print("  G40: %d of %d bombs left burning ground" % [pools, bombs])

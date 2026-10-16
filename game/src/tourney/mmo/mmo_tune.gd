@@ -55,10 +55,11 @@ const ENTRIES := {
 	"scorch_at": ["Scorched Earth: half the courtyard burns from (s into the fight)", 45.0, 10.0, 300.0, 1.0, "Scorched Earth"],
 	"scorch_warn": ["Scorched Earth: warning before it burns (s)", 8.0, 2.0, 20.0, 0.5, "Scorched Earth"],
 	"scorch_pct": ["Scorched Earth: damage per second (fraction of max HP)", 0.25, 0.0, 2.0, 0.05, "Scorched Earth"],
-	"scorch_spin_at": ["Scorched Earth: starts turning at (s into the fight)", 90.0, 10.0, 600.0, 1.0, "Scorched Earth"],
+	"scorch_spin_at": ["Scorched Earth: starts turning at (s into the fight)", 70.0, 10.0, 600.0, 1.0, "Scorched Earth"],
 	"scorch_spin": ["Scorched Earth: turn speed (deg/s)", 9.0, 0.0, 45.0, 0.5, "Scorched Earth"],
 	"scorch_spin_on": ["Scorched Earth: turns for (s) at a time", 15.0, 1.0, 30.0, 0.5, "Scorched Earth"],
-	"scorch_spin_off": ["Scorched Earth: then holds still for (s)", 30.0, 0.0, 30.0, 0.5, "Scorched Earth"],
+	"scorch_spin_off": ["Scorched Earth: then holds still for (s)", 12.0, 0.0, 30.0, 0.5, "Scorched Earth"],
+	"scorch_spin_warn": ["Scorched Earth: the chevrons flash this long before a turn (s)", 1.0, 0.0, 10.0, 0.25, "Scorched Earth"],
 	"bomb_pool_chance": ["A bomb leaves burning ground (chance)", 0.5, 0.0, 1.0, 0.05, "Giant"],
 	"bomb_pool_r": ["Burning ground radius (m)", 4.0, 1.0, 10.0, 0.25, "Giant"],
 	"bomb_pool_dur": ["Burning ground lasts (s)", 15.0, 1.0, 60.0, 1.0, "Giant"],
@@ -66,6 +67,8 @@ const ENTRIES := {
 	"silence_at": ["Below this HP, no more text warnings (\"You're on your own now.\")", 0.5, 0.0, 1.0, 0.05, "Giant"],
 	"frenzy_at": ["Below this HP, the spell rotation speeds up", 0.25, 0.0, 1.0, 0.05, "Giant"],
 	"frenzy_rate": ["Spell rotation speed below that (x)", 2.0, 1.0, 4.0, 0.25, "Giant"],
+	"combo_at": ["Below this HP, Earthshatter and the bombs come back to back (G52)", 0.75, 0.0, 1.0, 0.05, "Giant"],
+	"combo_fuse": ["Back to back: time to get to the second one (s)", 4.0, 1.5, 10.0, 0.25, "Giant"],
 	"brand_first": ["Cinderbrand: first after the pull (s)", 20.0, 5.0, 120.0, 1.0, "Cinderbrand"],
 	"brand_every": ["Cinderbrand: every (s)", 45.0, 15.0, 180.0, 1.0, "Cinderbrand"],
 	"brand_pct": ["Cinderbrand: share of max HP if left alone (0 = off)", 0.25, 0.0, 1.0, 0.01, "Cinderbrand"],
@@ -111,6 +114,10 @@ const ENTRIES := {
 	"bot_slip": ["Bot chance to fumble a mechanic (0-1)", 0.12, 0.0, 1.0, 0.01, "Bots"],
 	"bot_run_off": ["Bots run the brand off below this HP (0-1)", 0.6, 0.0, 1.0, 0.05, "Bots"],
 }
+
+## G52: defaults that changed. A saved value still equal to the old default is
+## dropped on load, so a cfg written before the change picks up the new one.
+const RETIRED := { "add_hp": 20000.0, "scorch_spin_at": 90.0, "scorch_spin_off": 30.0, "add_dmg": 520.0, "add_every": 1.5, "tank_rush_rate": 2.0 }
 
 static var _values := {}
 static var _loaded := false
@@ -159,7 +166,10 @@ static func _ensure() -> void:
 	for k: String in ENTRIES:
 		if cf.has_section_key("mmo", k):
 			var e: Array = ENTRIES[k]
-			_values[k] = clampf(float(cf.get_value("mmo", k)), float(e[2]), float(e[3]))
+			var v := float(cf.get_value("mmo", k))
+			if RETIRED.has(k) and is_equal_approx(v, float(RETIRED[k])):
+				continue
+			_values[k] = clampf(v, float(e[2]), float(e[3]))
 
 
 static func save() -> void:
