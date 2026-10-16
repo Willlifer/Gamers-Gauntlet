@@ -8,7 +8,8 @@ extends CanvasLayer
 ## through OsrsView.queue; the sim decides. G53: the inventory holds the
 ## weapons you aren't wielding (click one to wield it; the one you held takes
 ## its slot, like OSRS), the damage potion, sharks and prayer potions; hover
-## any slot for what it does. A banner calls the skull phases.
+## any slot for what it does. G53c: the skull phases read through the screen,
+## not text: a skull-purple pulse round the edges that quickens as they charge.
 
 const STONE := Color("#3e3529")
 const STONE_DARK := Color("#2a241b")
@@ -35,8 +36,9 @@ var _splat_layer: Control
 var _end: PanelContainer
 var _sim: OsrsSim
 var _wslots: Array = []                       # the weapons in the inventory, in slot order
-var _banner: Label
-var _banner_t := 0.0
+var _vignette: Control
+var _pulse_t := 0.0
+var _pulse_col := Color("#c040ff")
 
 
 static func clock(secs: float) -> String:
@@ -62,19 +64,44 @@ func _ready() -> void:
 	_build_chat()
 	_build_boss_bar()
 	_top = _text(_root, "", Vector2(14, 10), 15, YELLOW)
-	_banner = _text(_root, "", Vector2(0, 250), 34, Color.WHITE)
-	_banner.size = Vector2(PANEL_X - 20, 60)
-	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.add_theme_constant_override("outline_size", 10)
-	_banner.add_theme_color_override("font_outline_color", Color.BLACK)
-	_banner.modulate.a = 0.0
+	_vignette = Control.new()
+	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vignette.draw.connect(_draw_vignette)
+	_root.add_child(_vignette)
+	_root.move_child(_vignette, 0)
 
 
-## A big call-out over the fight (the skull phases), fading after a few seconds.
-func banner(text: String, col: Color) -> void:
-	_banner.text = text
-	_banner.add_theme_color_override("font_color", col)
-	_banner_t = 3.0
+## A flash round the screen's edges (the skulls rising, bursting).
+func pulse(col: Color) -> void:
+	_pulse_col = col
+	_pulse_t = 1.0
+
+
+## The screen's edges glow skull purple while skulls are up, beating faster
+## and hotter as they charge; a flash on pulse().
+func _draw_vignette() -> void:
+	var a := 0.0
+	var col := Color("#c040ff")
+	if _sim != null and not _sim.skull_phase.is_empty():
+		var ch := 1.0 - float(_sim.skull_phase.t) / maxf(1.0, float(_sim.skull_phase.total))
+		a = (0.25 + 0.35 * ch) * (0.6 + 0.4 * absf(sin(Time.get_ticks_msec() / (90.0 + 260.0 * (1.0 - ch)))))
+		col = col.lerp(Color("#ff2050"), ch)
+	if _pulse_t > 0.0:
+		a = maxf(a, _pulse_t * 0.8)
+		col = col.lerp(_pulse_col, _pulse_t)
+	if a <= 0.01:
+		return
+	var sz := _vignette.size
+	for i in 14:
+		var k := float(i) / 14.0
+		var w := 9.0
+		var c := Color(col, a * (1.0 - k) * (1.0 - k))
+		var o := i * w
+		_vignette.draw_rect(Rect2(o, o, sz.x - o * 2, w), c)
+		_vignette.draw_rect(Rect2(o, sz.y - o - w, sz.x - o * 2, w), c)
+		_vignette.draw_rect(Rect2(o, o + w, w, sz.y - o * 2 - w * 2), c)
+		_vignette.draw_rect(Rect2(sz.x - o - w, o + w, w, sz.y - o * 2 - w * 2), c)
 
 
 func _text(parent: Control, s: String, at: Vector2, size: int, col: Color) -> Label:
@@ -255,7 +282,7 @@ func _tip(d: Dictionary) -> String:
 	match str(d.kind):
 		"bow": return "Bow: %d-%d every %d ticks, range %d. Click to wield." % [int(OsrsTune.value("bow_lo")), int(OsrsTune.value("bow_hi")), int(OsrsTune.value("bow_speed")), int(OsrsTune.value("range"))]
 		"staff": return "Staff: %d-%d every %d ticks, range %d. Click to wield." % [int(OsrsTune.value("staff_lo")), int(OsrsTune.value("staff_hi")), int(OsrsTune.value("staff_speed")), int(OsrsTune.value("range"))]
-		"dagger": return "Lightning dagger: %d every tick, always lands, range %d.\nBreaks the Warden's skulls fast (any hit takes 1 from a skull). Click to wield." % [int(OsrsTune.value("dagger_dmg")), int(OsrsTune.value("dagger_range"))]
+		"dagger": return "Lightning dagger: %d every tick, always lands; melee (a square straight next to the target).\nClick a skull and you run beside it and strike the tick you arrive: skate the lane. Click to wield." % int(OsrsTune.value("dagger_dmg"))
 		"boost": return "Damage potion (%d): a dose makes your bow and staff hit x%.1f for %d s. Click to drink." % [int(d.doses), OsrsTune.value("boost_mult"), int(OsrsTune.value("boost_ticks") * OsrsSim.TICK)]
 		"shark": return "Shark: heals %d%%. Delays your next attack %d ticks. Click to eat." % [int(OsrsTune.value("restore") * 100.0), int(OsrsTune.value("eat_delay"))]
 		"potion": return "Prayer potion (%d): restores %d%% prayer. Click to drink." % [int(d.doses), int(OsrsTune.value("restore") * 100.0)]
@@ -267,7 +294,12 @@ func _draw_slot(c: Control, slot: int) -> void:
 	if slot >= it.size():
 		return
 	var d: Dictionary = it[slot]
-	var m := c.size * 0.5
+	draw_item(c, d, _font, c.size)
+
+
+## An inventory item's icon in a `size` box (the slots, and OsrsCard).
+static func draw_item(c: CanvasItem, d: Dictionary, font: Font, size: Vector2) -> void:
+	var m := size * 0.5
 	match str(d.kind):
 		"shark":
 			var body := PackedVector2Array([m + Vector2(-16, 0), m + Vector2(-6, -8), m + Vector2(10, -6), m + Vector2(16, 0), m + Vector2(10, 6), m + Vector2(-6, 7)])
@@ -281,31 +313,36 @@ func _draw_slot(c: Control, slot: int) -> void:
 			c.draw_rect(Rect2(m + Vector2(-8, 13 - fill), Vector2(16, fill)), Color("#3fc7d8") if d.kind == "potion" else Color("#e8402a"))
 			c.draw_rect(Rect2(m + Vector2(-4, -14), Vector2(8, 8)), Color("#b9c8cf", 0.8))
 			c.draw_rect(Rect2(m + Vector2(-5, -17), Vector2(10, 4)), Color("#8a5a2a"))
-			c.draw_string(_font, Vector2(2, 12), "(%d)" % int(d.doses), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
+			c.draw_string(font, Vector2(2, 12), "(%d)" % int(d.doses), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
 		"bow":
 			c.draw_arc(m + Vector2(6, 0), 17.0, PI * 0.6, PI * 1.4, 14, Color("#8a5a2a"), 3.0)
 			c.draw_line(m + Vector2(-2, -16), m + Vector2(-2, 16), Color("#e0e0e0"), 1.0)
-			c.draw_string(_font, Vector2(2, 12), "Bow", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
+			c.draw_string(font, Vector2(2, 12), "Bow", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
 		"staff":
 			c.draw_line(m + Vector2(-12, 16), m + Vector2(8, -10), Color("#7a5230"), 3.0)
 			c.draw_circle(m + Vector2(10, -13), 5.0, Color("#b07aff"))
-			c.draw_string(_font, Vector2(2, 12), "Staff", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
+			c.draw_string(font, Vector2(2, 12), "Staff", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
 		"dagger":
 			c.draw_line(m + Vector2(-10, 12), m + Vector2(-5, 7), Color("#5a3a20"), 4.0)
 			c.draw_line(m + Vector2(-9, 4), m + Vector2(-1, 12), Color("#c8b060"), 2.0)
 			c.draw_colored_polygon(PackedVector2Array([m + Vector2(-6, 6), m + Vector2(12, -14), m + Vector2(-2, 10)]), Color("#d8f0ff"))
 			c.draw_polyline(PackedVector2Array([m + Vector2(4, -12), m + Vector2(8, -6), m + Vector2(5, -5), m + Vector2(10, 1)]), Color("#7ad0ff"), 2.0)
-			c.draw_string(_font, Vector2(1, 11), "Dagger", HORIZONTAL_ALIGNMENT_LEFT, c.size.x - 2, 8, YELLOW)
+			c.draw_string(font, Vector2(1, 11), "Dagger", HORIZONTAL_ALIGNMENT_LEFT, size.x - 2, 8, YELLOW)
 
 
 func _draw_prayer(b: Control, p: String) -> void:
 	var on := _sim != null and str(_sim.me.prayer) == p
-	var r := Rect2(Vector2.ZERO, b.size)
+	draw_prayer_icon(b, p, on, _font, b.size)
+
+
+## A protect prayer's button face in a `size` box (the panel, and OsrsCard).
+static func draw_prayer_icon(b: CanvasItem, p: String, on: bool, font: Font, size: Vector2) -> void:
+	var r := Rect2(Vector2.ZERO, size)
 	b.draw_rect(r, Color("#5a4d3b") if on else STONE_DARK)
 	if on:
 		b.draw_rect(r.grow(-2), Color("#e8d27a", 0.35))
 	b.draw_rect(r, Color("#b89a5a") if on else Color("#1a1610"), false, 2.0)
-	var c := b.size * 0.5 + Vector2(0, -4)
+	var c := size * 0.5 + Vector2(0, -4)
 	var col := { "magic": Color("#5ab0ff"), "ranged": Color("#7cff5a"), "melee": Color("#ff6a5a") }[p] as Color
 	if not on:
 		col = col.darkened(0.45)
@@ -323,7 +360,7 @@ func _draw_prayer(b: Control, p: String) -> void:
 		"melee":
 			b.draw_line(c + Vector2(-14, 14), c + Vector2(14, -14), col, 4.0)
 			b.draw_line(c + Vector2(-8, 2), c + Vector2(2, 12), col, 3.0)
-	b.draw_string(_font, Vector2(0, b.size.y - 4), { "magic": "Magic", "ranged": "Missiles", "melee": "Melee" }[p], HORIZONTAL_ALIGNMENT_CENTER, b.size.x, 10, YELLOW if on else Color("#c8b88a"))
+	b.draw_string(font, Vector2(0, size.y - 4), { "magic": "Magic", "ranged": "Missiles", "melee": "Melee" }[p], HORIZONTAL_ALIGNMENT_CENTER, size.x, 10, YELLOW if on else Color("#c8b88a"))
 
 
 func _draw_orbs() -> void:
@@ -453,6 +490,13 @@ func _draw_boss_bar() -> void:
 		return
 	var f := clampf(float(_sim.boss.hp) / float(_sim.boss.max_hp), 0.0, 1.0)
 	_boss_bar.draw_string(_font, Vector2(0, 11), "Tumeken's Warden", HORIZONTAL_ALIGNMENT_CENTER, 600, 11, ORANGE)
+	var sh := str(_sim.boss.shield)
+	if sh != "":                                              # G53b/c: what its shield stops, as an icon
+		var sc := Color("#5ab0ff") if sh == "magic" else Color("#7cff5a")
+		var at := Vector2(612, 22)
+		_boss_bar.draw_colored_polygon(PackedVector2Array([at + Vector2(-11, -12), at + Vector2(11, -12), at + Vector2(11, 0), at + Vector2(0, 13), at + Vector2(-11, 0)]), Color(sc, 0.35))
+		_boss_bar.draw_polyline(PackedVector2Array([at + Vector2(-11, -12), at + Vector2(11, -12), at + Vector2(11, 0), at + Vector2(0, 13), at + Vector2(-11, 0), at + Vector2(-11, -12)]), sc, 2.0)
+		_boss_bar.draw_string(_font, at + Vector2(-10, 5), "✦" if sh == "magic" else "➶", HORIZONTAL_ALIGNMENT_CENTER, 20, 13, Color.WHITE)
 	_boss_bar.draw_rect(Rect2(0, 15, 600, 14), Color("#0e0c08"))
 	_boss_bar.draw_rect(Rect2(2, 17, 596, 10), Color("#9a0c0c"))
 	_boss_bar.draw_rect(Rect2(2, 17, 596 * f, 10), Color("#10a010"))
@@ -466,8 +510,7 @@ func _draw_boss_bar() -> void:
 		_boss_bar.draw_circle(c + Vector2(2, -1), 1.5, Color.BLACK)
 	if not _sim.skull_phase.is_empty():
 		_boss_bar.draw_rect(Rect2(2, 17, 596 * f, 10), Color("#c040a0", 0.55 + 0.25 * sin(Time.get_ticks_msec() / 150.0)))
-		var secs := float(_sim.skull_phase.t) * OsrsSim.TICK
-		_boss_bar.draw_string(_font, Vector2(0, 84), "SHIELDED: break the skulls  ·  %d left  ·  %.1f s" % [_sim.skulls.size(), secs], HORIZONTAL_ALIGNMENT_CENTER, 600, 15, Color("#ff9ae0"))
+
 	var style := str(_sim.boss.last_style)
 	if style != "":
 		for i in 2:
@@ -532,8 +575,8 @@ func refresh(s: OsrsSim) -> void:
 	var it := _items()
 	for i in _inv.size():
 		(_inv[i] as Control).tooltip_text = _tip(it[i]) if i < it.size() else ""
-	_banner_t = maxf(0.0, _banner_t - dt)
-	_banner.modulate.a = clampf(_banner_t / 0.6, 0.0, 1.0)
+	_pulse_t = maxf(0.0, _pulse_t - dt * 1.4)
+	_vignette.queue_redraw()
 
 
 func finish(r: Dictionary) -> void:

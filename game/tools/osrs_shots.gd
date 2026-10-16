@@ -4,6 +4,9 @@ extends SceneTree
 ## boulders, slam, sigil, tear-out, the end card; G53: a phantom's shot
 ## leaving the flank, the slam's third hit (centre column only), a fast slam
 ## below 50%, the damage potion up, the skulls rising, the dagger on them.
+## G53b: a falling boulder (no cast shadow, only its square), the three-
+## column slam, a phantom winding up and firing, both shields, the skulls
+## charging, a skate mid-chain.
 ## Runs at 2x speed.
 ##   [TAG=r1] godot --path . --script res://tools/osrs_shots.gd
 
@@ -74,6 +77,23 @@ func _go() -> void:
 			await _shot("skulls_rise")
 		if not s.skull_phase.is_empty() and s.me.weapon == "dagger" and s.skulls.size() <= int(s.skull_phase.n) - 2 and s.me.attack:
 			await _shot("skulls_dagger")
+		# G53b
+		if s.falls.any(func(x: Dictionary) -> bool: return int(x.t) == 2) and v._acc > 0.3:
+			await _shot("boulder_noshadow")
+		if s.slams.size() == 3 and int(s.slams[0].t) == 1 and v._acc > 0.3:
+			await _shot("slam_columns")
+		if s.slams.size() == 2 and int(s.slams[0].t) == 1 and v._acc > 0.3:
+			await _shot("slam_columns2")
+		if int(s.boss.auto_cd) <= 1 and OsrsSim.boss_dist(s.me.tile) > 1 and v._acc > 0.45:
+			await _shot("phantom_windup")
+		if str(s.boss.shield) == "magic" and int(s.boss.shield_cd) <= int(OsrsTune.value("shield_every")) - 3:
+			await _shot("shield_magic")
+		if str(s.boss.shield) == "ranged" and int(s.boss.shield_cd) <= int(OsrsTune.value("shield_every")) - 3:
+			await _shot("shield_bowfire")
+		if not s.skull_phase.is_empty() and float(s.skull_phase.t) / float(s.skull_phase.total) < 0.45 and not s.skulls.is_empty():
+			await _shot("skulls_charging")
+		if not s.skull_phase.is_empty() and s.me.weapon == "dagger" and s.skulls.size() <= int(s.skull_phase.n) - 3 and s.skulls.size() >= 2 and (s.me.trail as Array).size() >= 2 and v._acc > 0.3:
+			await _shot("skate")
 	Engine.time_scale = 1.0
 	await create_timer(1.2).timeout
 	await _shot("end")

@@ -17,6 +17,7 @@ var _pick_t := PICK_TIME
 var _timer_l: Label
 var _view: OsrsView
 var _bot_run := {}
+var _picked := false
 
 static var autopilot := false
 
@@ -103,7 +104,7 @@ func _build_pick() -> void:
 
 
 func _process(delta: float) -> void:
-	if _view or _pick == null:
+	if _view or _pick == null or _picked:
 		return
 	_pick_t -= delta
 	_timer_l.text = "%d s" % ceili(maxf(_pick_t, 0.0))
@@ -112,9 +113,20 @@ func _process(delta: float) -> void:
 
 
 func _start(weapon: String) -> void:
-	if _view:
+	if _view or _picked:
 		return
+	_picked = true
 	_pick.queue_free()
+	# G53c: the first time on this profile, a short card on the controls first
+	if (not autopilot or OsrsCard.force) and OsrsCard.should_show():
+		var card := OsrsCard.new()
+		card.done.connect(func() -> void: _begin(weapon))
+		add_child(card)
+		return
+	_begin(weapon)
+
+
+func _begin(weapon: String) -> void:
 	var s := OsrsSim.new(int(match_cfg.seed))
 	s.me.weapon = weapon
 	_view = OsrsView.new()

@@ -56,7 +56,9 @@ var hud: OsrsHud
 var _tune: OsrsTunePanel
 var _mats := {}
 var _phantoms := {}                               # "west" / "east" -> { node, light, label }
-var _skulls := {}                                 # skull id -> { node, pips, ring }
+var _skulls := {}                                 # skull id -> { node, pips, ring, head, light }
+var _shield: MeshInstance3D                       # the Warden's magic / bowfire shield bubble (G53b)
+var _shield_mark: Label3D
 
 
 func setup(p_sim: OsrsSim) -> void:
@@ -80,7 +82,8 @@ func _ready() -> void:
 	hud.chat("Welcome to the Warden's Trial.", Color("#0000a0"))
 	hud.chat("Click a square to move; click the Warden to attack. 1 2 3 pray against magic, missiles, melee.", Color("#000000"))
 	hud.chat("The phantoms on the flanks fire the shots you pray against; the Warden does the specials.", Color("#000000"))
-	hud.chat("At 75%, 50% and 25% it raises skulls: wield the lightning dagger and break them all.", Color("#7a0060"))
+	hud.chat("At 75%, 50% and 25% it raises skulls: wield the lightning dagger and skate the lane, clicking skull after skull.", Color("#7a0060"))
+	hud.chat("When it shields itself against magic, use the bow; against bowfire, the staff.", Color("#00407a"))
 	hud.chat("Stand on a Sun Sigil as it ignites: your next shots hit twice as hard.", Color("#7a4a00"))
 	_place_camera(1.0)
 
@@ -287,9 +290,9 @@ func _build_boss() -> void:
 		var ph := BWCharacter.create(MobaLook.boss_unit())
 		MobaLook.tint(ph, Color("#ff4a3a"))
 		_ghost(ph)
-		ph.scale = Vector3.ONE * 2.3
+		ph.scale = Vector3.ONE * 2.6
 		add_child(ph)
-		ph.position = Vector3(side * 16.5, -0.4, -5.0)
+		ph.position = Vector3(side * 14.4, 0.2, -6.0)
 		ph.rotation.y = -side * PI * 0.5
 		ph.pose("idle")
 		var pl := OmniLight3D.new()
@@ -307,7 +310,40 @@ func _build_boss() -> void:
 		lab.no_depth_test = true
 		lab.position = ph.position + Vector3(0, 6.6, 0)
 		add_child(lab)
-		_phantoms["west" if side < 0.0 else "east"] = { "node": ph, "light": pl, "label": lab, "t": 0.0, "side": side }
+		var orb := MeshInstance3D.new()                       # G53b: the shot gathering in its hand before it looses
+		var om := SphereMesh.new()
+		om.radius = 0.4
+		om.height = 0.8
+		orb.mesh = om
+		orb.material_override = _mat("ph_orb", Color("#fff0e0"), 6.0)
+		orb.visible = false
+		add_child(orb)
+		_phantoms["west" if side < 0.0 else "east"] = { "node": ph, "light": pl, "label": lab, "t": 0.0, "side": side, "orb": orb, "wind": false }
+	# the shield bubble and its mark (G53b)
+	_shield = MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 5.4
+	sm.height = 10.8
+	_shield.mesh = sm
+	var shm := StandardMaterial3D.new()
+	shm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	shm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_shield.material_override = shm
+	_shield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_shield.position = Vector3(0, 3.6, 0)
+	_shield.visible = false
+	_boss_root.add_child(_shield)
+	_shield_mark = Label3D.new()
+	_shield_mark.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_shield_mark.fixed_size = true
+	_shield_mark.pixel_size = 0.0016
+	_shield_mark.font_size = 64
+	_shield_mark.outline_size = 10
+	_shield_mark.no_depth_test = true
+	_shield_mark.position = Vector3(0, 9.2, 0)
+	_boss_root.add_child(_shield_mark)
 
 
 ## A phantom: every mesh half see-through with a red glow laid over it.
@@ -503,6 +539,9 @@ func _event(e: Dictionary) -> void:
 				lab.modulate = Color("#5ab0ff") if p.style == "magic" else Color("#7cff5a")
 				(ph.light as OmniLight3D).light_color = lab.modulate
 				ph.t = 1.4
+				ph.wind = false
+				(ph.orb as MeshInstance3D).visible = false
+				_dust(n.position, lab.modulate)
 			else:
 				_boss.anim_speed = 1.6
 				_boss.pose("strike")
@@ -529,6 +568,9 @@ func _event(e: Dictionary) -> void:
 				hit_node = _skulls[sk].node if _skulls.has(sk) else null
 			_shots.append({ "node": arrow, "from": arrow.position, "to": to, "t": 0.0, "dur": (int(e.land) - int(e.tick)) * OsrsSim.TICK,
 				"dmg": int(e.dmg), "emp": bool(e.empowered), "hit": hit_node, "h": 1.5 if sk >= 0 else 3.6 })
+			if bool(e.get("warded", false)) and not _overhead.has_meta("warded" + str(sim.boss.shield_n)):
+				_overhead.set_meta("warded" + str(sim.boss.shield_n), true)
+				hud.chat("Your %s can't get through its shield!" % ("spells" if str(e.weapon) == "staff" else "arrows"), Color("#b00000"))
 			if bool(e.get("shielded", false)) and not _overhead.has_meta("shield"):
 				_overhead.set_meta("shield", true)
 				hud.chat("The Warden is shielded while its skulls are up!", Color("#7a0060"))
@@ -549,7 +591,8 @@ func _event(e: Dictionary) -> void:
 			_shake = maxf(_shake, 0.25)
 			hud.chat("The Warden slams the floor!", Color("#b00000"))
 		"slam":
-			hud.chat("The floor glows %s..." % { "east": "to the east", "west": "to the west", "both": "on both sides" }[str(e.side)], Color("#7a4a00"))
+			if str(e.side) == "1":
+				hud.chat("The floor glows! Run to the safe column, then the next, then the next.", Color("#7a4a00"))
 		"rip_warn":
 			hud.chat("The far row cracks!", Color("#b00000"))
 		"rip":
@@ -567,8 +610,9 @@ func _event(e: Dictionary) -> void:
 		"sigil":
 			hud.chat("A Sun Sigil kindles nearby.", Color("#7a4a00"))
 		"skulls":
-			hud.chat("The Warden raises %d skulls! Wield the lightning dagger and break them all!" % int(e.n), Color("#b00060"))
-			hud.banner("SKULLS!  Wield the lightning dagger and break all %d" % int(e.n), Color("#ff6ad0"))
+			_say("Rise, and burn!")                          # G53c: read by the screen, not a banner
+			_skull_burst()
+			hud.pulse(Color("#c040ff"))
 			_shake = maxf(_shake, 0.3)
 		"skull_dead":
 			_dust(w(e.tile) + Vector3(0, 0.6, 0), Color("#e8e0c8"))
@@ -582,14 +626,17 @@ func _event(e: Dictionary) -> void:
 			_overhead.remove_meta("shield")
 			if int(e.left) == 0:
 				hud.chat("You break every skull. The Warden's shield falls.", Color("#007000"))
-				hud.banner("Skulls broken!", Color("#7cff5a"))
 			else:
 				for t in e.tiles:
 					_dust(w(t) + Vector3(0, 0.6, 0), Color("#ff40c0"))
 					_bolt_fx(w(t))
 				hud.chat("%d skulls burst!" % int(e.left), Color("#b00000"))
-				hud.banner("%d skulls burst!" % int(e.left), Color("#ff3020"))
+				hud.pulse(Color("#ff2010"))
 				_shake = 0.5
+		"shield":
+			var mag := str(e.style) == "magic"
+			_say("Your magic is nothing to me!" if mag else "Your arrows are nothing to me!")
+			_dust(BOSS_POS + Vector3(0, 4.0, 1.0), Color("#4aa0ff") if mag else Color("#5aff4a"))
 		"boost":
 			hud.chat("You drink some of your damage potion. Your bow and staff hit harder.", Color("#000000"))
 		"swap":
@@ -625,6 +672,74 @@ func _event(e: Dictionary) -> void:
 
 func _boss_hand() -> Vector3:
 	return BOSS_POS + Vector3(0, 5.5, 1.6)
+
+
+## The Warden says something over its head, OSRS style (yellow, ~3 s), and
+## the chat box echoes it.
+func _say(text: String) -> void:
+	_overhead.text = text
+	_overhead.modulate = Color("#ffff00")
+	_overhead.set_meta("t", 3.0)
+	hud.chat("Tumeken's Warden: %s" % text, Color("#000080"))
+
+
+## The skulls' call (G53c): a big skull swells over the Warden and smaller
+## ones scatter out of it.
+func _skull_burst() -> void:
+	var big := _skull_head()
+	add_child(big)
+	big.position = BOSS_POS + Vector3(0, 7.0, 1.0)
+	big.scale = Vector3.ONE * 0.2
+	var tw := create_tween()
+	tw.tween_property(big, "scale", Vector3.ONE * 3.2, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.9)
+	tw.tween_property(big, "scale", Vector3.ONE * 0.05, 0.3)
+	tw.tween_callback(big.queue_free)
+	for i in 8:
+		var h := _skull_head()
+		add_child(h)
+		h.position = big.position
+		h.scale = Vector3.ONE * 0.9
+		var dir := Vector3(cos(i * TAU / 8.0), 0.4 + 0.3 * sin(i * 1.7), sin(i * TAU / 8.0) * 0.6 + 0.5)
+		var t2 := create_tween()
+		t2.tween_property(h, "position", big.position + dir * 7.0, 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		t2.parallel().tween_property(h, "scale", Vector3.ONE * 0.1, 0.9).set_ease(Tween.EASE_IN)
+		t2.tween_callback(h.queue_free)
+	var l := OmniLight3D.new()
+	l.light_color = Color("#c040ff")
+	l.light_energy = 12.0
+	l.omni_range = 18.0
+	add_child(l)
+	l.position = big.position
+	var t3 := create_tween()
+	t3.tween_property(l, "light_energy", 0.0, 1.2)
+	t3.tween_callback(l.queue_free)
+
+
+## A bone-white skull head (the skulls and their burst).
+func _skull_head() -> Node3D:
+	var head := Node3D.new()
+	var bone := _mat("skull_bone", Color("#efe6cf"), 0.35)
+	var dark := _mat("skull_eye", Color("#120408"))
+	var s := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.42
+	sm.height = 0.8
+	s.mesh = sm
+	s.material_override = bone
+	head.add_child(s)
+	_box(Vector3(0.46, 0.22, 0.4), Vector3(0, -0.34, 0.08), bone, head)
+	for x in [-0.15, 0.15]:
+		var e := MeshInstance3D.new()
+		var em := SphereMesh.new()
+		em.radius = 0.11
+		em.height = 0.22
+		e.mesh = em
+		e.material_override = _mat("skull_glint", Color("#ff40c0"), 5.0)
+		head.add_child(e)
+		e.position = Vector3(x, 0.02, 0.34)
+	_box(Vector3(0.08, 0.1, 0.06), Vector3(0, -0.14, 0.4), dark, head)
+	return head
 
 
 ## Where a shot leaves: a phantom's hand (west / east), or the Warden's.
@@ -796,6 +911,7 @@ func _sync_marks() -> void:
 				r.material_override = _mat("boulder", Color("#6d665c"))
 				n.add_child(r)
 				r.name = "Rock"
+				r.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # G53b: only the landing square is marked
 			if kind == "bolt":
 				var zz := Node3D.new()
 				zz.name = "Zig"
@@ -843,8 +959,9 @@ func _sync_marks() -> void:
 			_rocks.erase(t)
 
 
-## A skull (G53): a bone-white head floating over its square, a ring under it
-## that runs from pink to red as the burst nears, its hits left as pips.
+## A skull (G53, G53b): a bone-white head floating over its square. As it
+## charges it swells, shakes, glows hotter and its ring grows from pink to
+## white-hot red; a yellow mark over the one you're after.
 func _skull_node(k: Dictionary) -> Dictionary:
 	var n := Node3D.new()
 	add_child(n)
@@ -907,7 +1024,7 @@ func _skull_node(k: Dictionary) -> Dictionary:
 	n.add_child(pips)
 	n.scale = Vector3.ONE * 0.1
 	create_tween().tween_property(n, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	return { "node": n, "pips": pips, "ring": ring, "head": head, "bob": randf() * TAU }
+	return { "node": n, "pips": pips, "ring": ring, "head": head, "bob": randf() * TAU, "light": l }
 
 
 # ------------------------------------------------------------------ frame
@@ -986,19 +1103,36 @@ func _animate(delta: float) -> void:
 				hud.splat(s.hit, int(s.dmg), false, bool(s.emp), float(s.h))
 			n.queue_free()
 			_shots.erase(s)
+	# a phantom winds up the tick before it looses (G53b): a gathering orb, a cast pose
+	var nxt := ["west", "east"][int(sim.boss.flank) % 2] as String
+	for side in _phantoms:
+		var ph: Dictionary = _phantoms[side]
+		var winding: bool = side == nxt and int(sim.boss.auto_cd) <= 1 and OsrsSim.boss_dist(sim.me.tile) > 1 and sim.over == ""
+		var orb := ph.orb as MeshInstance3D
+		if winding and not bool(ph.wind):
+			ph.wind = true
+			var body: BWCharacter = ph.node
+			body.anim_speed = 0.7
+			body.pose("cast" if body.has_clip("cast") else "strike")
+		orb.visible = winding
+		if winding:
+			orb.position = _src_hand(side)
+			orb.scale = Vector3.ONE * (0.3 + 1.0 * f) * randf_range(0.92, 1.08)
 	# the phantoms' overheads fade after they loose
 	for side in _phantoms:
 		var ph: Dictionary = _phantoms[side]
 		ph.t = maxf(0.0, float(ph.t) - delta)
 		var lab: Label3D = ph.label
+		var pb := ph.node as Node3D
+		pb.rotation.y = lerp_angle(pb.rotation.y, atan2(pos.x - pb.position.x, pos.z - pb.position.z), minf(1.0, delta * 4.0))
 		lab.modulate.a = clampf(float(ph.t) / 0.4, 0.0, 1.0)
 		lab.outline_modulate = Color(0, 0, 0, lab.modulate.a)
 		(ph.light as OmniLight3D).light_energy = 4.0 + 6.0 * clampf(float(ph.t) - 0.8, 0.0, 1.0)
 		var body: BWCharacter = ph.node
-		if float(ph.t) <= 0.6 and body.pose_name() != "idle":
+		if float(ph.t) <= 0.6 and not bool(ph.wind) and body.pose_name() != "idle":
 			body.anim_speed = 1.0
 			body.pose("idle")
-	# skulls bob, show their hits left and redden as the burst nears
+	# skulls charge: swell, shake, glow, a growing ring
 	var left := 1.0
 	if not sim.skull_phase.is_empty():
 		left = clampf((float(sim.skull_phase.t) - f) / maxf(1.0, float(sim.skull_phase.total)), 0.0, 1.0)
@@ -1007,18 +1141,26 @@ func _animate(delta: float) -> void:
 		var k := sim.skull(int(id))
 		if k.is_empty():
 			continue
-		(sd.head as Node3D).position.y = 0.12 * sin(Time.get_ticks_msec() / 300.0 + float(sd.bob))
-		(sd.head as Node3D).rotation.y = atan2(_cam.global_position.x - (sd.node as Node3D).position.x, _cam.global_position.z - (sd.node as Node3D).position.z)
-		var pips := ""
-		for i in int(k.max):
-			pips += "●" if i < int(k.hp) else "○"
-		(sd.pips as Label3D).text = pips
-		(sd.pips as Label3D).modulate = Color("#ff9ae0") if int(k.id) != int(sim.me.target) else Color("#ffff40")
-		var rc := Color("#ff40c0").lerp(Color("#ff1010"), 1.0 - left)
+		var ch := 1.0 - left                                   # 0 just risen .. 1 bursting
+		var head := sd.head as Node3D
+		var shake := ch * ch * 0.14
+		head.position = Vector3(randf_range(-shake, shake), 0.12 * sin(Time.get_ticks_msec() / 300.0 + float(sd.bob)) + randf_range(-shake, shake) * 0.5, randf_range(-shake, shake))
+		head.scale = Vector3.ONE * (1.0 + 0.45 * ch * ch)
+		head.rotation.y = atan2(_cam.global_position.x - (sd.node as Node3D).position.x, _cam.global_position.z - (sd.node as Node3D).position.z)
+		(sd.pips as Label3D).text = "▼" if int(k.id) == int(sim.me.target) else ""
+		(sd.pips as Label3D).modulate = Color("#ffff40")
+		var pulse := 0.5 + 0.5 * absf(sin(Time.get_ticks_msec() / (50.0 + 250.0 * left)))
+		var rc := Color("#ff40c0").lerp(Color("#ff1010"), ch).lerp(Color("#fff0e0"), ch * ch * pulse * 0.6)
 		var rm := (sd.ring as MeshInstance3D).material_override as StandardMaterial3D
 		rm.albedo_color = rc
 		rm.emission = rc
-		rm.emission_energy_multiplier = 2.0 + 4.0 * (1.0 - left) * (0.5 + 0.5 * absf(sin(Time.get_ticks_msec() / (60.0 + 200.0 * left))))
+		rm.emission_energy_multiplier = 2.0 + 6.0 * ch * pulse
+		var ring := sd.ring as MeshInstance3D
+		ring.scale = Vector3(0.55 + 0.75 * ch, 0.2, 0.55 + 0.75 * ch)
+		var lt := sd.light as OmniLight3D
+		lt.light_color = rc
+		lt.light_energy = 1.6 + 7.0 * ch * pulse
+		lt.omni_range = 2.6 + 1.6 * ch
 	# telegraphs grow
 	for k in _marks:
 		var m: Dictionary = _marks[k]
@@ -1040,14 +1182,32 @@ func _animate(delta: float) -> void:
 					rock.position.y = lerpf(16.0, 0.4, prog * prog)
 			_:
 				disc.scale = Vector3.ONE * (0.75 + 0.2 * sin(Time.get_ticks_msec() / 1000.0 * (4.0 + prog * 10.0)))
-	# slam and tear-out glow
+	# the Warden's shield: a blue (magic) or green (bowfire) bubble and its mark
+	var sh := str(sim.boss.shield)
+	_shield.visible = sh != ""
+	_shield_mark.text = ("✦" if sh == "magic" else "➶") if sh != "" else ""
+	if sh != "":
+		var sc := Color("#4aa0ff") if sh == "magic" else Color("#5aff4a")
+		(_shield.material_override as StandardMaterial3D).albedo_color = Color(sc, 0.05 + 0.025 * sin(Time.get_ticks_msec() / 200.0))
+		_shield_mark.modulate = sc
+	# slam (G53b: only the next hit glows; its safe column is lit green, the one
+	# after it a fainter green) and tear-out glow
 	var lit := {}
-	for s in sim.slams:
+	var order: Array = sim.slams.duplicate()
+	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.t) < int(b.t))
+	if not order.is_empty():
+		var s: Dictionary = order[0]
 		if int(s.t) <= int(s.total):
 			var a := 0.25 + 0.5 * clampf(1.0 - (float(s.t) - f) / float(s.total), 0.0, 1.0)
 			for x in s.cols:
 				for y in OsrsSim.H:
 					lit[Vector2i(int(x), y)] = [Color("#c8361a"), a * 0.8]
+		for y in OsrsSim.H:
+			lit[Vector2i(int(s.safe), y)] = [Color("#30ff60"), 0.55]
+		if order.size() >= 2:
+			for y in OsrsSim.H:
+				if not lit.has(Vector2i(int(order[1].safe), y)) or (lit[Vector2i(int(order[1].safe), y)][0] as Color) != Color("#30ff60"):
+					lit[Vector2i(int(order[1].safe), y)] = [Color("#2a9a48"), 0.3]
 	if not sim.rip.is_empty():
 		var a := 0.35 + 0.35 * absf(sin(Time.get_ticks_msec() / 90.0))
 		for x in OsrsSim.W:
