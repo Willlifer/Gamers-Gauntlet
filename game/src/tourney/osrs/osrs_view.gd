@@ -1,12 +1,14 @@
 class_name OsrsView
 extends Node3D
 ## The OSRS raid on screen (G34): the square floor (clear tiles, a gold rim),
-## the Warden and its two phantoms in the void north, you on your square.
+## the Warden in the void north and its two phantoms on the flanks (they
+## loose the prayable shots, G53), you on your square, skulls when it raises them.
 ## OsrsSim ticks every 0.6 s; between ticks everything glides along the
 ## squares it crossed, so pieces look like they pass between squares while
 ## the game only knows squares.
 ##   left click a square   walk / run there (the path snaps to squares)
 ##   left click the Warden  attack (walks into range first)
+##   left click a skull     attack it (G53: wield the lightning dagger first)
 ##   1 / 2 / 3             Protect from Magic / Missiles / Melee
 ##   arrows, A/D, W/S       turn and tilt the camera; middle drag too; wheel zoom
 ##   F1                     the numbers (OsrsTune)
@@ -53,6 +55,8 @@ var _pose_t := 0.0
 var hud: OsrsHud
 var _tune: OsrsTunePanel
 var _mats := {}
+var _phantoms := {}                               # "west" / "east" -> { node, light, label }
+var _skulls := {}                                 # skull id -> { node, pips, ring }
 
 
 func setup(p_sim: OsrsSim) -> void:
@@ -75,6 +79,8 @@ func _ready() -> void:
 	add_child(hud)
 	hud.chat("Welcome to the Warden's Trial.", Color("#0000a0"))
 	hud.chat("Click a square to move; click the Warden to attack. 1 2 3 pray against magic, missiles, melee.", Color("#000000"))
+	hud.chat("The phantoms on the flanks fire the shots you pray against; the Warden does the specials.", Color("#000000"))
+	hud.chat("At 75%, 50% and 25% it raises skulls: wield the lightning dagger and break them all.", Color("#7a0060"))
 	hud.chat("Stand on a Sun Sigil as it ignites: your next shots hit twice as hard.", Color("#7a4a00"))
 	_place_camera(1.0)
 
@@ -275,7 +281,8 @@ func _build_boss() -> void:
 	l.omni_range = 12.0
 	l.position = Vector3(0, 5, 3)
 	_boss_root.add_child(l)
-	# the phantoms (decoration, after the reference: red ghosts on the flanks)
+	# the phantoms on the flanks (after the reference: red ghosts): they loose
+	# the prayable shots by turns (G53)
 	for side in [-1.0, 1.0]:
 		var ph := BWCharacter.create(MobaLook.boss_unit())
 		MobaLook.tint(ph, Color("#ff4a3a"))
@@ -291,6 +298,16 @@ func _build_boss() -> void:
 		pl.omni_range = 11.0
 		add_child(pl)
 		pl.position = ph.position + Vector3(0, 3, 1)
+		var lab := Label3D.new()
+		lab.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		lab.fixed_size = true
+		lab.pixel_size = 0.0016
+		lab.font_size = 34
+		lab.outline_size = 10
+		lab.no_depth_test = true
+		lab.position = ph.position + Vector3(0, 6.6, 0)
+		add_child(lab)
+		_phantoms["west" if side < 0.0 else "east"] = { "node": ph, "light": pl, "label": lab, "t": 0.0, "side": side }
 
 
 ## A phantom: every mesh half see-through with a red glow laid over it.
@@ -314,8 +331,8 @@ func _player_unit(weapon: String) -> BWUnit:
 	u.id = "you"
 	u.name = "You"
 	u.team = "player"
-	u.weapon_model = "longbow" if weapon == "bow" else "moon_staff"
-	u.weapon_class = weapon
+	u.weapon_model = { "bow": "longbow", "staff": "moon_staff", "dagger": "jagged_dagger" }.get(weapon, "longbow")
+	u.weapon_class = "daggers" if weapon == "dagger" else weapon
 	var p := TourneyState.load_profile()
 	u.cosmetics = { "hair_style": str(p.get("hair_style", "buzzed")), "hair_hex": str(p.get("hair_hex", "#e0b040")), "gender": "a",
 		"top": str(p.get("top", "hoodie")), "bottom": str(p.get("bottom", "sweatpants")), "clothing_shade": str(p.get("shade", "mid")) }
@@ -398,6 +415,10 @@ func _click_at(screen: Vector2) -> void:
 		_mark(_boss_root.global_position + Vector3(0, 0.1, 2.5), Color("#ff2020"))
 		return
 	var tile := _tile_at(screen)
+	if tile != Vector2i(-99, -99) and sim.skull_at(tile) >= 0:
+		queue({ "target": sim.skull_at(tile) })
+		_mark(w(tile) + Vector3(0, 0.05, 0), Color("#ff2020"))
+		return
 	if tile != Vector2i(-99, -99):
 		queue({ "move": tile, "attack": false })
 		_mark(w(tile), Color("#ffff00"))
@@ -470,21 +491,28 @@ func _event(e: Dictionary) -> void:
 			var p: Dictionary = e.proj
 			var n := _proj_node(str(p.style))
 			add_child(n)
-			n.position = _boss_hand()
+			n.position = _src_hand(str(p.get("src", "warden")))
 			_projs[int(p.id)] = { "node": n, "proj": p }
-			if str(p.style) != "melee":
-				_overhead.text = ""
-				_overhead.modulate = Color("#5ab0ff") if p.style == "magic" else Color("#7cff5a")
-				_overhead.set_meta("t", 1.6)
+			var ph: Dictionary = _phantoms.get(str(p.get("src", "")), {})
+			if not ph.is_empty():
+				var body: BWCharacter = ph.node
+				body.anim_speed = 1.6
+				body.pose("cast" if p.style == "magic" and body.has_clip("cast") else "strike")
+				var lab: Label3D = ph.label
+				lab.text = "✦" if p.style == "magic" else "➶"
+				lab.modulate = Color("#5ab0ff") if p.style == "magic" else Color("#7cff5a")
+				(ph.light as OmniLight3D).light_color = lab.modulate
+				ph.t = 1.4
+			else:
 				_boss.anim_speed = 1.6
-				_boss.pose("cast" if p.style == "magic" and _boss.has_clip("cast") else "strike")
+				_boss.pose("strike")
 				_pose_t = 0.7
 		"blocked":
 			hud.splat(_player_root, 0, true, false, 1.1)
 		"hurt":
 			if float(e.dmg) > 0.0 or str(e.what) != "magic" and str(e.what) != "ranged":
 				hud.splat(_player_root, int(e.dmg), false, false, 1.1)
-			if str(e.what) in ["slam", "boulder", "fall"]:
+			if str(e.what) in ["slam", "boulder", "fall", "skulls"]:
 				_shake = 0.35
 		"attack":
 			_player.anim_speed = 1.6
@@ -493,8 +521,17 @@ func _event(e: Dictionary) -> void:
 			var arrow := _shot_node(str(e.weapon), bool(e.empowered))
 			add_child(arrow)
 			arrow.position = _player_root.position + Vector3(0, 1.3, 0)
-			_shots.append({ "node": arrow, "from": arrow.position, "t": 0.0, "dur": (int(e.land) - int(e.tick)) * OsrsSim.TICK,
-				"dmg": int(e.dmg), "emp": bool(e.empowered) })
+			var sk := int(e.get("skull", -1))
+			var to := BOSS_POS + Vector3(0, 3.5, 0)
+			var hit_node: Node3D = _boss_root
+			if sk >= 0:
+				to = w(e.tile) + Vector3(0, 0.9, 0)
+				hit_node = _skulls[sk].node if _skulls.has(sk) else null
+			_shots.append({ "node": arrow, "from": arrow.position, "to": to, "t": 0.0, "dur": (int(e.land) - int(e.tick)) * OsrsSim.TICK,
+				"dmg": int(e.dmg), "emp": bool(e.empowered), "hit": hit_node, "h": 1.5 if sk >= 0 else 3.6 })
+			if bool(e.get("shielded", false)) and not _overhead.has_meta("shield"):
+				_overhead.set_meta("shield", true)
+				hud.chat("The Warden is shielded while its skulls are up!", Color("#7a0060"))
 		"bolt":
 			_bolt_fx(w(e.tile))
 		"boulder":
@@ -529,6 +566,35 @@ func _event(e: Dictionary) -> void:
 			hud.chat("Boulders fall from above!", Color("#b00000"))
 		"sigil":
 			hud.chat("A Sun Sigil kindles nearby.", Color("#7a4a00"))
+		"skulls":
+			hud.chat("The Warden raises %d skulls! Wield the lightning dagger and break them all!" % int(e.n), Color("#b00060"))
+			hud.banner("SKULLS!  Wield the lightning dagger and break all %d" % int(e.n), Color("#ff6ad0"))
+			_shake = maxf(_shake, 0.3)
+		"skull_dead":
+			_dust(w(e.tile) + Vector3(0, 0.6, 0), Color("#e8e0c8"))
+			if _skulls.has(int(e.id)):
+				var sn: Node3D = _skulls[int(e.id)].node
+				var tw := create_tween()
+				tw.tween_property(sn, "scale", Vector3.ONE * 0.05, 0.25)
+				tw.tween_callback(sn.queue_free)
+				_skulls.erase(int(e.id))
+		"skulls_end":
+			_overhead.remove_meta("shield")
+			if int(e.left) == 0:
+				hud.chat("You break every skull. The Warden's shield falls.", Color("#007000"))
+				hud.banner("Skulls broken!", Color("#7cff5a"))
+			else:
+				for t in e.tiles:
+					_dust(w(t) + Vector3(0, 0.6, 0), Color("#ff40c0"))
+					_bolt_fx(w(t))
+				hud.chat("%d skulls burst!" % int(e.left), Color("#b00000"))
+				hud.banner("%d skulls burst!" % int(e.left), Color("#ff3020"))
+				_shake = 0.5
+		"boost":
+			hud.chat("You drink some of your damage potion. Your bow and staff hit harder.", Color("#000000"))
+		"swap":
+			if str(e.weapon) == "dagger":
+				hud.chat("You wield the lightning dagger.", Color("#000000"))
 		"sigil_fire":
 			if e.took:
 				hud.chat("The Sun Sigil blesses your next attacks!", Color("#7a4a00"))
@@ -561,6 +627,14 @@ func _boss_hand() -> Vector3:
 	return BOSS_POS + Vector3(0, 5.5, 1.6)
 
 
+## Where a shot leaves: a phantom's hand (west / east), or the Warden's.
+func _src_hand(src: String) -> Vector3:
+	if _phantoms.has(src):
+		var ph: Dictionary = _phantoms[src]
+		return (ph.node as Node3D).position + Vector3(-float(ph.side) * 1.4, 4.6, 0.6)
+	return _boss_hand()
+
+
 func _proj_node(style: String) -> Node3D:
 	var n := Node3D.new()
 	if style == "magic":
@@ -587,6 +661,12 @@ func _proj_node(style: String) -> Node3D:
 func _shot_node(weapon: String, emp: bool) -> Node3D:
 	var n := Node3D.new()
 	var col := Color("#ffd040") if emp else (Color("#c8ff9a") if weapon == "bow" else Color("#c07aff"))
+	if weapon == "dagger":
+		var zap := _mat("szap", Color("#bfe8ff"), 6.0)
+		for i in 3:
+			var seg := _box(Vector3(0.05, 0.05, 0.35), Vector3(0.08 * (1 - i % 2 * 2), 0, -0.3 + i * 0.3), zap, n)
+			seg.rotation.y = 0.5 * (1 - i % 2 * 2)
+		return n
 	if weapon == "bow":
 		_box(Vector3(0.05, 0.05, 0.9), Vector3.ZERO, _mat("sarrow" + col.to_html(), col, 2.0), n)
 	else:
@@ -738,6 +818,10 @@ func _sync_marks() -> void:
 			_marks[k] = { "node": n, "disc": disc, "data": d, "kind": kind }
 		else:
 			_marks[k].data = want[k]
+	# skulls
+	for k: Dictionary in sim.skulls:
+		if not _skulls.has(int(k.id)):
+			_skulls[int(k.id)] = _skull_node(k)
 	# rocks that landed
 	for t in sim.rocks:
 		if not _rocks.has(t):
@@ -757,6 +841,73 @@ func _sync_marks() -> void:
 		if not sim.rocks.has(t):
 			(_rocks[t] as Node3D).queue_free()
 			_rocks.erase(t)
+
+
+## A skull (G53): a bone-white head floating over its square, a ring under it
+## that runs from pink to red as the burst nears, its hits left as pips.
+func _skull_node(k: Dictionary) -> Dictionary:
+	var n := Node3D.new()
+	add_child(n)
+	n.position = w(k.tile)
+	var head := Node3D.new()
+	head.name = "Head"
+	n.add_child(head)
+	var bone := _mat("skull_bone", Color("#efe6cf"), 0.35)
+	var dark := _mat("skull_eye", Color("#120408"))
+	var s := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.42
+	sm.height = 0.8
+	s.mesh = sm
+	s.material_override = bone
+	head.add_child(s)
+	s.position.y = 1.0
+	_box(Vector3(0.46, 0.22, 0.4), Vector3(0, 0.66, 0.08), bone, head)
+	for x in [-0.15, 0.15]:
+		var e := MeshInstance3D.new()
+		var em := SphereMesh.new()
+		em.radius = 0.11
+		em.height = 0.22
+		e.mesh = em
+		e.material_override = dark
+		head.add_child(e)
+		e.position = Vector3(x, 1.02, 0.33)
+		var glow := MeshInstance3D.new()
+		var gm := SphereMesh.new()
+		gm.radius = 0.045
+		gm.height = 0.09
+		glow.mesh = gm
+		glow.material_override = _mat("skull_glint", Color("#ff40c0"), 5.0)
+		head.add_child(glow)
+		glow.position = Vector3(x, 1.02, 0.4)
+	_box(Vector3(0.08, 0.1, 0.06), Vector3(0, 0.86, 0.4), dark, head)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = TILE * 0.36
+	tm.outer_radius = TILE * 0.47
+	ring.mesh = tm
+	ring.scale.y = 0.2
+	ring.position.y = 0.05
+	ring.material_override = _mat("skull_ring", Color("#ff40c0"), 2.0).duplicate()
+	n.add_child(ring)
+	var l := OmniLight3D.new()
+	l.light_color = Color("#ff40c0")
+	l.light_energy = 1.6
+	l.omni_range = 2.6
+	l.position.y = 1.0
+	n.add_child(l)
+	var pips := Label3D.new()
+	pips.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pips.fixed_size = true
+	pips.pixel_size = 0.0016
+	pips.font_size = 26
+	pips.outline_size = 8
+	pips.no_depth_test = true
+	pips.position.y = 1.85
+	n.add_child(pips)
+	n.scale = Vector3.ONE * 0.1
+	create_tween().tween_property(n, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	return { "node": n, "pips": pips, "ring": ring, "head": head, "bob": randf() * TAU }
 
 
 # ------------------------------------------------------------------ frame
@@ -827,13 +978,47 @@ func _animate(delta: float) -> void:
 		s.t = float(s.t) + delta
 		var n: Node3D = s.node
 		var k := clampf(float(s.t) / maxf(0.1, float(s.dur)), 0.0, 1.0)
-		var to := BOSS_POS + Vector3(0, 3.5, 0)
+		var to: Vector3 = s.to
 		var at: Vector3 = (s.from as Vector3).lerp(to, k) + Vector3(0, sin(k * PI) * 0.8, 0)
 		_fly(n, at)
 		if k >= 1.0:
-			hud.splat(_boss_root, int(s.dmg), false, bool(s.emp), 3.6)
+			if is_instance_valid(s.hit):
+				hud.splat(s.hit, int(s.dmg), false, bool(s.emp), float(s.h))
 			n.queue_free()
 			_shots.erase(s)
+	# the phantoms' overheads fade after they loose
+	for side in _phantoms:
+		var ph: Dictionary = _phantoms[side]
+		ph.t = maxf(0.0, float(ph.t) - delta)
+		var lab: Label3D = ph.label
+		lab.modulate.a = clampf(float(ph.t) / 0.4, 0.0, 1.0)
+		lab.outline_modulate = Color(0, 0, 0, lab.modulate.a)
+		(ph.light as OmniLight3D).light_energy = 4.0 + 6.0 * clampf(float(ph.t) - 0.8, 0.0, 1.0)
+		var body: BWCharacter = ph.node
+		if float(ph.t) <= 0.6 and body.pose_name() != "idle":
+			body.anim_speed = 1.0
+			body.pose("idle")
+	# skulls bob, show their hits left and redden as the burst nears
+	var left := 1.0
+	if not sim.skull_phase.is_empty():
+		left = clampf((float(sim.skull_phase.t) - f) / maxf(1.0, float(sim.skull_phase.total)), 0.0, 1.0)
+	for id in _skulls:
+		var sd: Dictionary = _skulls[id]
+		var k := sim.skull(int(id))
+		if k.is_empty():
+			continue
+		(sd.head as Node3D).position.y = 0.12 * sin(Time.get_ticks_msec() / 300.0 + float(sd.bob))
+		(sd.head as Node3D).rotation.y = atan2(_cam.global_position.x - (sd.node as Node3D).position.x, _cam.global_position.z - (sd.node as Node3D).position.z)
+		var pips := ""
+		for i in int(k.max):
+			pips += "●" if i < int(k.hp) else "○"
+		(sd.pips as Label3D).text = pips
+		(sd.pips as Label3D).modulate = Color("#ff9ae0") if int(k.id) != int(sim.me.target) else Color("#ffff40")
+		var rc := Color("#ff40c0").lerp(Color("#ff1010"), 1.0 - left)
+		var rm := (sd.ring as MeshInstance3D).material_override as StandardMaterial3D
+		rm.albedo_color = rc
+		rm.emission = rc
+		rm.emission_energy_multiplier = 2.0 + 4.0 * (1.0 - left) * (0.5 + 0.5 * absf(sin(Time.get_ticks_msec() / (60.0 + 200.0 * left))))
 	# telegraphs grow
 	for k in _marks:
 		var m: Dictionary = _marks[k]

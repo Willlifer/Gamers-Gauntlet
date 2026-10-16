@@ -5,7 +5,10 @@ extends CanvasLayer
 ## orbs (hitpoints, prayer, run), the inventory always open with the three
 ## protect prayers beside it, the chat box bottom left, the Warden's health
 ## bar top centre, hitsplats over heads. Everything here only sends orders
-## through OsrsView.queue; the sim decides.
+## through OsrsView.queue; the sim decides. G53: the inventory holds the
+## weapons you aren't wielding (click one to wield it; the one you held takes
+## its slot, like OSRS), the damage potion, sharks and prayer potions; hover
+## any slot for what it does. A banner calls the skull phases.
 
 const STONE := Color("#3e3529")
 const STONE_DARK := Color("#2a241b")
@@ -31,6 +34,9 @@ var _splats: Array = []                       # { node, val, col, t, height, emp
 var _splat_layer: Control
 var _end: PanelContainer
 var _sim: OsrsSim
+var _wslots: Array = []                       # the weapons in the inventory, in slot order
+var _banner: Label
+var _banner_t := 0.0
 
 
 static func clock(secs: float) -> String:
@@ -56,6 +62,19 @@ func _ready() -> void:
 	_build_chat()
 	_build_boss_bar()
 	_top = _text(_root, "", Vector2(14, 10), 15, YELLOW)
+	_banner = _text(_root, "", Vector2(0, 250), 34, Color.WHITE)
+	_banner.size = Vector2(PANEL_X - 20, 60)
+	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.add_theme_constant_override("outline_size", 10)
+	_banner.add_theme_color_override("font_outline_color", Color.BLACK)
+	_banner.modulate.a = 0.0
+
+
+## A big call-out over the fight (the skull phases), fading after a few seconds.
+func banner(text: String, col: Color) -> void:
+	_banner.text = text
+	_banner.add_theme_color_override("font_color", col)
+	_banner_t = 3.0
 
 
 func _text(parent: Control, s: String, at: Vector2, size: int, col: Color) -> Label:
@@ -190,12 +209,23 @@ func _build_side() -> void:
 	pass
 
 
-## What the 28 slots hold, from the sim: the other weapon, sharks, potions.
+## What the 28 slots hold, from the sim: the weapons you aren't wielding,
+## the damage potion, sharks, prayer potions.
 func _items() -> Array:
 	var out: Array = []
 	if _sim == null:
 		return out
-	out.append({ "kind": "staff" if _sim.me.weapon == "bow" else "bow" })
+	var others: Array = OsrsSim.WEAPONS.filter(func(x: String) -> bool: return x != str(_sim.me.weapon))
+	var have := _wslots.duplicate()
+	have.sort()
+	var want := others.duplicate()
+	want.sort()
+	if have != want:
+		_wslots = others
+	for x in _wslots:
+		out.append({ "kind": x })
+	if int(_sim.me.boost_doses) > 0:
+		out.append({ "kind": "boost", "doses": int(_sim.me.boost_doses) })
 	for k in int(_sim.me.food):
 		out.append({ "kind": "shark" })
 	var doses := int(_sim.me.doses)
@@ -212,8 +242,24 @@ func _use(slot: int) -> void:
 	match str(it[slot].kind):
 		"shark": view.queue({ "eat": true })
 		"potion": view.queue({ "drink": true })
-		_: view.queue({ "swap": true })
+		"boost": view.queue({ "boost": true })
+		_:
+			var x := str(it[slot].kind)
+			view.queue({ "wield": x })
+			_wslots[_wslots.find(x)] = str(_sim.me.weapon)      # the one you held takes its slot
 	BWSfx.ui("ui_click")
+
+
+## A slot's hover text.
+func _tip(d: Dictionary) -> String:
+	match str(d.kind):
+		"bow": return "Bow: %d-%d every %d ticks, range %d. Click to wield." % [int(OsrsTune.value("bow_lo")), int(OsrsTune.value("bow_hi")), int(OsrsTune.value("bow_speed")), int(OsrsTune.value("range"))]
+		"staff": return "Staff: %d-%d every %d ticks, range %d. Click to wield." % [int(OsrsTune.value("staff_lo")), int(OsrsTune.value("staff_hi")), int(OsrsTune.value("staff_speed")), int(OsrsTune.value("range"))]
+		"dagger": return "Lightning dagger: %d every tick, always lands, range %d.\nBreaks the Warden's skulls fast (any hit takes 1 from a skull). Click to wield." % [int(OsrsTune.value("dagger_dmg")), int(OsrsTune.value("dagger_range"))]
+		"boost": return "Damage potion (%d): a dose makes your bow and staff hit x%.1f for %d s. Click to drink." % [int(d.doses), OsrsTune.value("boost_mult"), int(OsrsTune.value("boost_ticks") * OsrsSim.TICK)]
+		"shark": return "Shark: heals %d%%. Delays your next attack %d ticks. Click to eat." % [int(OsrsTune.value("restore") * 100.0), int(OsrsTune.value("eat_delay"))]
+		"potion": return "Prayer potion (%d): restores %d%% prayer. Click to drink." % [int(d.doses), int(OsrsTune.value("restore") * 100.0)]
+	return ""
 
 
 func _draw_slot(c: Control, slot: int) -> void:
@@ -229,10 +275,10 @@ func _draw_slot(c: Control, slot: int) -> void:
 			c.draw_colored_polygon(PackedVector2Array([m + Vector2(-16, 0), m + Vector2(-22, -7), m + Vector2(-21, 7)]), Color("#62778c"))
 			c.draw_colored_polygon(PackedVector2Array([m + Vector2(-2, -7), m + Vector2(3, -14), m + Vector2(5, -6)]), Color("#62778c"))
 			c.draw_circle(m + Vector2(10, -2), 1.5, Color.BLACK)
-		"potion":
+		"potion", "boost":
 			c.draw_rect(Rect2(m + Vector2(-9, -6), Vector2(18, 20)), Color("#b9c8cf", 0.7))
-			var fill := 18.0 * float(d.doses) / 4.0
-			c.draw_rect(Rect2(m + Vector2(-8, 13 - fill), Vector2(16, fill)), Color("#3fc7d8"))
+			var fill := 18.0 * float(mini(4, int(d.doses))) / 4.0
+			c.draw_rect(Rect2(m + Vector2(-8, 13 - fill), Vector2(16, fill)), Color("#3fc7d8") if d.kind == "potion" else Color("#e8402a"))
 			c.draw_rect(Rect2(m + Vector2(-4, -14), Vector2(8, 8)), Color("#b9c8cf", 0.8))
 			c.draw_rect(Rect2(m + Vector2(-5, -17), Vector2(10, 4)), Color("#8a5a2a"))
 			c.draw_string(_font, Vector2(2, 12), "(%d)" % int(d.doses), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
@@ -244,6 +290,12 @@ func _draw_slot(c: Control, slot: int) -> void:
 			c.draw_line(m + Vector2(-12, 16), m + Vector2(8, -10), Color("#7a5230"), 3.0)
 			c.draw_circle(m + Vector2(10, -13), 5.0, Color("#b07aff"))
 			c.draw_string(_font, Vector2(2, 12), "Staff", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, YELLOW)
+		"dagger":
+			c.draw_line(m + Vector2(-10, 12), m + Vector2(-5, 7), Color("#5a3a20"), 4.0)
+			c.draw_line(m + Vector2(-9, 4), m + Vector2(-1, 12), Color("#c8b060"), 2.0)
+			c.draw_colored_polygon(PackedVector2Array([m + Vector2(-6, 6), m + Vector2(12, -14), m + Vector2(-2, 10)]), Color("#d8f0ff"))
+			c.draw_polyline(PackedVector2Array([m + Vector2(4, -12), m + Vector2(8, -6), m + Vector2(5, -5), m + Vector2(10, 1)]), Color("#7ad0ff"), 2.0)
+			c.draw_string(_font, Vector2(1, 11), "Dagger", HORIZONTAL_ALIGNMENT_LEFT, c.size.x - 2, 8, YELLOW)
 
 
 func _draw_prayer(b: Control, p: String) -> void:
@@ -406,6 +458,16 @@ func _draw_boss_bar() -> void:
 	_boss_bar.draw_rect(Rect2(2, 17, 596 * f, 10), Color("#10a010"))
 	for m in [0.66, 0.33]:
 		_boss_bar.draw_line(Vector2(2 + 596 * m, 17), Vector2(2 + 596 * m, 27), Color(0, 0, 0, 0.7), 2.0)
+	for m in OsrsSim.SKULL_AT:                                 # the skull phases: little skulls on the bar
+		var c := Vector2(2 + 596 * float(m), 22)
+		_boss_bar.draw_circle(c + Vector2(0, -1), 5.0, Color("#efe6cf"))
+		_boss_bar.draw_rect(Rect2(c + Vector2(-3, 2), Vector2(6, 4)), Color("#efe6cf"))
+		_boss_bar.draw_circle(c + Vector2(-2, -1), 1.5, Color.BLACK)
+		_boss_bar.draw_circle(c + Vector2(2, -1), 1.5, Color.BLACK)
+	if not _sim.skull_phase.is_empty():
+		_boss_bar.draw_rect(Rect2(2, 17, 596 * f, 10), Color("#c040a0", 0.55 + 0.25 * sin(Time.get_ticks_msec() / 150.0)))
+		var secs := float(_sim.skull_phase.t) * OsrsSim.TICK
+		_boss_bar.draw_string(_font, Vector2(0, 84), "SHIELDED: break the skulls  ·  %d left  ·  %.1f s" % [_sim.skulls.size(), secs], HORIZONTAL_ALIGNMENT_CENTER, 600, 15, Color("#ff9ae0"))
 	var style := str(_sim.boss.last_style)
 	if style != "":
 		for i in 2:
@@ -432,10 +494,11 @@ func _draw_splats() -> void:
 	if cam == null:
 		return
 	for s in _splats:
-		var n: Node3D = s.node
-		if not is_instance_valid(n):
+		if is_instance_valid(s.node):                     # a skull may break under its last splat
+			s["pos"] = (s.node as Node3D).global_position
+		elif not s.has("pos"):
 			continue
-		var wp := n.global_position + Vector3(0, float(s.h), 0)
+		var wp: Vector3 = s.pos + Vector3(0, float(s.h), 0)
 		if cam.is_position_behind(wp):
 			continue
 		var p := cam.unproject_position(wp) + (s.off as Vector2)
@@ -463,7 +526,14 @@ func refresh(s: OsrsSim) -> void:
 	for c in _inv:
 		(c as Control).queue_redraw()
 	var emp := int(s.me.empowered)
-	_top.text = "%s%s" % [clock(s.tick * OsrsSim.TICK), ("    Sun-blessed x%d" % emp) if emp > 0 else ""]
+	var bst := int(s.me.boost)
+	_top.text = "%s%s%s" % [clock(s.tick * OsrsSim.TICK), ("    Sun-blessed x%d" % emp) if emp > 0 else "",
+		("    Damage boost %d s" % ceili(bst * OsrsSim.TICK)) if bst > 0 else ""]
+	var it := _items()
+	for i in _inv.size():
+		(_inv[i] as Control).tooltip_text = _tip(it[i]) if i < it.size() else ""
+	_banner_t = maxf(0.0, _banner_t - dt)
+	_banner.modulate.a = clampf(_banner_t / 0.6, 0.0, 1.0)
 
 
 func finish(r: Dictionary) -> void:
@@ -482,7 +552,8 @@ func finish(r: Dictionary) -> void:
 	var title: String = { "win": "The Warden falls!", "dead": "Oh dear, you are dead!", "time": "Out of time." }.get(str(r.how), "")
 	var t := _text(v, title, Vector2.ZERO, 26, YELLOW if r.how == "win" else Color("#ff3020"))
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var lines := "Time %s   ·   damage dealt %d (%d%%)\nPrayed right %d of %d   ·   dodged %d, hit by %d   ·   Sun Sigils %d" % [clock(float(r.secs)), int(r.boss_dmg),
-		int(round(float(r.boss_pct) * 100.0)), int(r.blocked), int(r.blocked) + int(r.unblocked), int(r.dodged), int(r.struck), int(r.sigils)]
+	var lines := "Time %s   ·   damage dealt %d (%d%%)\nPrayed right %d of %d   ·   dodged %d, hit by %d   ·   Sun Sigils %d\nSkulls broken %d, burst %d" % [clock(float(r.secs)), int(r.boss_dmg),
+		int(round(float(r.boss_pct) * 100.0)), int(r.blocked), int(r.blocked) + int(r.unblocked), int(r.dodged), int(r.struck), int(r.sigils),
+		int(r.get("skulls", 0)), int(r.get("skulls_left", 0))]
 	var l := _text(v, lines, Vector2.ZERO, 14, Color.WHITE)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

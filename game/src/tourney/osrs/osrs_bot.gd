@@ -103,11 +103,15 @@ func _safe(s: OsrsSim, bad: Dictionary) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var bd := 999.0
 	var later := s.danger(5)
+	var slam_cols := {}                                 # every column the pending slams will hit (the centre one survives them all)
+	for sl in s.slams:
+		for x in sl.cols:
+			slam_cols[int(x)] = true
 	for t: Vector2i in s.floor_tiles():
 		if not s.walkable(t) or bad.has(t):
 			continue
 		var d := Vector2(t).distance_to(Vector2(me.tile)) + (2.0 if later.has(t) else 0.0) + (1.5 if OsrsSim.boss_dist(t) > int(OsrsTune.value("range")) else 0.0) \
-			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0)
+			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0) + (4.0 if slam_cols.has(t.x) else 0.0)
 		if d < bd:
 			bd = d
 			best = t

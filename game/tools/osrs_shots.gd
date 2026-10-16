@@ -1,7 +1,10 @@
 extends SceneTree
 ## Windowed: the OSRS raid on autopilot, frames of each mechanic to
 ## design/shots/osrs/<TAG>_<what>.png (TAG default r0): start, lightning,
-## boulders, slam, sigil, tear-out, the end card. Runs at 2x speed.
+## boulders, slam, sigil, tear-out, the end card; G53: a phantom's shot
+## leaving the flank, the slam's third hit (centre column only), a fast slam
+## below 50%, the damage potion up, the skulls rising, the dagger on them.
+## Runs at 2x speed.
 ##   [TAG=r1] godot --path . --script res://tools/osrs_shots.gd
 
 var out := ""
@@ -58,6 +61,19 @@ func _go() -> void:
 			await _shot("tearout")
 		if s.phase() == 3 and s.gone.size() >= OsrsSim.W * 2:
 			await _shot("phase3")
+		# G53
+		if s.projs.any(func(p: Dictionary) -> bool: return str(p.get("src", "")) in ["west", "east"] and s.tick - int(p.launch) == 1) and v._acc > 0.3:
+			await _shot("flank_shot")
+		if s.slams.size() == 1 and str(s.slams[0].side) == "both" and int(s.slams[0].t) == 1:
+			await _shot("slam_third")
+		if s.slams.size() == 2 and s.slam_gap() == 2 and int(s.slams[0].t) == 1:
+			await _shot("slam_fast")
+		if int(s.me.boost) > 0 and int(s.me.boost) < int(OsrsTune.value("boost_ticks")) - 2:
+			await _shot("boost")
+		if not s.skull_phase.is_empty() and int(s.skull_phase.total) - int(s.skull_phase.t) == 1:
+			await _shot("skulls_rise")
+		if not s.skull_phase.is_empty() and s.me.weapon == "dagger" and s.skulls.size() <= int(s.skull_phase.n) - 2 and s.me.attack:
+			await _shot("skulls_dagger")
 	Engine.time_scale = 1.0
 	await create_timer(1.2).timeout
 	await _shot("end")
