@@ -2,7 +2,9 @@ extends SceneTree
 ## Windowed: the FPS prototype's frames at scripted moments (hip, scoped 4x,
 ## running with the reticle open, crouch, prone, shotgun mid-pump, slingshot
 ## drawn, the bot up close, the bolt mid-cycle), saved to design/shots/fps/
-## and as one sheet. Exit 0.
+## and as one sheet. G51: the sights' pictures (automatic rifle hip and
+## aimed, marksman hip), the pistols aimed in at a foot, a bullet trail
+## fading in from the barrel, and a muzzle flash per gun. Exit 0.
 ##   [MAP=campus] godot --path . --script res://tools/fps_shots.gd
 
 var out := ""
@@ -12,6 +14,7 @@ var shots: Array[Image] = []
 
 func _initialize() -> void:
 	FpsTune.use_defaults()
+	FpsBinds.defaults_only = true
 	FpsWorld.ask_loadout = false
 	out = ProjectSettings.globalize_path("res://").path_join("../design/shots/fps").simplify_path()
 	if OS.get_environment("MAP") != "":
@@ -110,10 +113,24 @@ func _go() -> void:
 	await _wait(1.0)
 	await _shot("11_radial")
 	if w._menu:
+		w._menu.toggle_options()                # G51: the shooter's settings, in the buy phase
+		await _wait(0.4)
+		await _shot("11b_radial_options")
+		w._menu.toggle_options()
+	if w._menu:
 		w._menu._pick("dual_berettas" if FpsWeapons.available("dual_berettas") else "sniper")
 	FpsWorld.ask_loadout = false
 	await _wait(0.8)
 	await _shot("12_loadout_in_hand")
+	# G51b: the F1 panel's recoil presets (scrolled to the bottom)
+	if w._menu == null:
+		w._toggle_tune()
+		await _wait(0.2)
+		for sc in w._tune.find_children("*", "ScrollContainer", true, false):
+			(sc as ScrollContainer).scroll_vertical = 100000
+		await _wait(0.3)
+		await _shot("11c_tune_recoil_presets")
+		w._toggle_tune()
 	if pl.weapon == "dual_berettas":
 		pl.ammo.dual_l = 0
 		pl._reload()
@@ -123,8 +140,50 @@ func _go() -> void:
 		await _shot("14_duals_flip")
 		await _wait(0.6)
 		await _shot("15_duals_catch")
-	# sheet: 5 x 3 thumbnails
-	var sheet := Image.create(1600, 540, false, Image.FORMAT_RGB8)
+	# G51: the sights' pictures, the pistols aimed in, a trail, the flashes
+	pl.shielded = true
+	bot.set_physics_process(false)
+	_look_at(bot.eye())
+	for g in [["auto_rifle", "16_auto_rifle_lens_hip", false], ["auto_rifle", "17_auto_rifle_lens_aimed", true], ["marksman", "18_marksman_lens_hip", false],
+			["pistol", "19_pistol_aimed", true], ["deagle", "20_deagle_aimed", true]]:
+		if not FpsWeapons.available(str(g[0])):
+			continue
+		pl.set_loadout(str(g[0]), "pistol")
+		pl.debug_aim = bool(g[2])
+		await _wait(0.8)
+		await _shot(str(g[1]))
+	pl.debug_aim = false
+	# a trail seen from beside the shot: step aside, fire past the bot
+	pl.set_loadout("sniper", "pistol")
+	await _wait(0.6)
+	pl.debug_fire = true
+	await _wait(0.03)
+	pl.debug_fire = false
+	await _wait(0.02)
+	await _shot("21_trail_from_barrel")
+	var n := 22
+	for id in FpsWeapons.ORDER:
+		if id == "slingshot" or id == "dual_berettas" or not FpsWeapons.available(id):
+			continue
+		pl.set_loadout(id, "pistol")
+		await _wait(0.7)
+		pl._cool = 0.0
+		pl._held_before = false
+		pl.vm.flash_seed = 7
+		pl.debug_fire = true
+		await physics_frame
+		await process_frame
+		pl.debug_fire = false
+		# hold the flash at a fixed moment (seeded) for the review
+		pl.vm._flash.set_process(false)
+		pl.vm._flash._shape(0.15)
+		pl.vm._flash.visible = true
+		await _shot("%d_flash_%s" % [n, id])
+		pl.vm._flash.set_process(true)
+		n += 1
+	# sheet: 5 across, as many rows as frames
+	var rows := ceili(shots.size() / 5.0)
+	var sheet := Image.create(1600, 180 * rows, false, Image.FORMAT_RGB8)
 	for i in shots.size():
 		var t := shots[i].duplicate() as Image
 		t.convert(Image.FORMAT_RGB8)

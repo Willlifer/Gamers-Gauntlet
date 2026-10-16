@@ -29,6 +29,8 @@ var _tune: FpsTunePanel
 var _menu: FpsLoadoutMenu
 var _last_pick := ""
 var _rng := RandomNumberGenerator.new()
+## The match seed (G51): spawn pockets and loadout rolls follow it; < 0 random.
+var match_seed := -1
 ## Tools: skip the radial and take the first primary at once.
 static var ask_loadout := true
 var paintball := false
@@ -37,8 +39,12 @@ const PAINT := { "player": Color("#2a7ad8"), "bot": Color("#e0308a") }
 
 
 func _ready() -> void:
-	_rng.randomize()
+	if match_seed >= 0:
+		_rng.seed = match_seed
+	else:
+		_rng.randomize()
 	map = GKRegistry.build(map_id)
+	FpsMuzzleFlash.warm()                       # build the flash textures now, not on the first shot
 	paintball = map_id == "campus"
 	hide_volumes = map.meta.get("hide_volumes", [])
 	var stage := GKStage.outdoor(map.lights)
@@ -49,6 +55,8 @@ func _ready() -> void:
 	add_child(map.instantiate(true))
 	player = FpsPlayer.new()
 	player.world = self
+	if paintball:
+		player.run_key = "campus_speed"         # G51: the floaty max speed is the campus's alone
 	add_child(player)
 	player.global_transform = _spawn("a")
 	player.died.connect(_on_player_died)
@@ -121,6 +129,23 @@ func _bot_area() -> Array:
 	return [Rect2(r.position.x, r.position.y, r.size.x * 0.5, r.size.y) if b.x < xm else Rect2(xm, r.position.y, r.size.x * 0.5, r.size.y)]
 
 
+## Can a body walk straight from `a` to `b` (G51: the bot has no pathfinding,
+## so it only picks spots it can reach in a line)? A capsule swept along the
+## floor at knee height, against the level.
+func walk_clear(a: Vector3, b: Vector3, radius := 0.4) -> bool:
+	var sh := CapsuleShape3D.new()
+	sh.radius = radius
+	sh.height = 1.2
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.collision_mask = 1
+	var from := a + Vector3(0, 1.0, 0)
+	q.transform = Transform3D(Basis.IDENTITY, from)
+	q.motion = Vector3(b.x - a.x, 0, b.z - a.z)
+	var r := get_world_3d().direct_space_state.cast_motion(q)
+	return r.size() == 2 and r[0] >= 0.999
+
+
 ## Is `p` inside a bush (a hide volume)?
 func in_bush(p: Vector3) -> bool:
 	for h: Dictionary in hide_volumes:
@@ -147,8 +172,14 @@ func _exit_tree() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
+## A life's start: one of the side's spawn markers, from the seeded rng
+## (G51: the Dust hallway has two tucked pockets a side, so which one is a
+## coin flip the other player can't read).
 func _spawn(side: String) -> Transform3D:
-	var k := randi() % 3
+	var n := 0
+	while map.markers.has("spawn_%s%d" % [side, n]):
+		n += 1
+	var k := _rng.randi() % maxi(n, 1)
 	var t := map.marker("spawn_%s%d" % [side, k])
 	return Transform3D(t.basis, t.origin + Vector3(0, 0.2, 0))
 
@@ -212,11 +243,10 @@ func fire_bullet(from: Vector3, dir: Vector3, shooter: Node, damage: float, head
 	var bm := BoxMesh.new()
 	bm.size = Vector3(0.03, 0.03, 1.0)
 	m.mesh = bm
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(col, 0.95)
+	var mat := ShaderMaterial.new()
+	mat.shader = _trail_shader()
+	mat.set_shader_parameter("col", Color(col, 0.95))
+	mat.set_shader_parameter("fade", FpsTune.value("trail_fade"))
 	m.material_override = mat
 	m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	m.visible = false
@@ -232,7 +262,7 @@ func _fly_bullets(delta: float) -> void:
 		var mesh: MeshInstance3D = b.mesh
 		if b.dead:
 			b.fade -= delta
-			(b.mat as StandardMaterial3D).albedo_color.a = maxf(0.0, b.fade / 0.1) * 0.95
+			(b.mat as ShaderMaterial).set_shader_parameter("col", Color(b.col as Color, maxf(0.0, b.fade / 0.1) * 0.95))
 			if b.fade <= 0.0:
 				mesh.queue_free()
 				_bullets.erase(b)
@@ -260,7 +290,36 @@ func _fly_bullets(delta: float) -> void:
 		var d: Vector3 = head - tail
 		var n := d.normalized()
 		mesh.visible = true
+		(b.mat as ShaderMaterial).set_shader_parameter("len", d.length())
+		(b.mat as ShaderMaterial).set_shader_parameter("tail_d", float(b.went) - ln)
 		mesh.global_transform = Transform3D(Basis.looking_at(n, Vector3.UP if absf(n.y) < 0.99 else Vector3.RIGHT).scaled_local(Vector3(1, 1, d.length())), tail + d * 0.5)
+
+
+static var _trail_sh: Shader
+
+
+## The trail's look (G51): additive, see-through at the barrel and full
+## strength `fade` metres out (the author: ~3 ft), so a 30 m streak doesn't
+## start as a bar out of the gun. The box runs local z +0.5 (tail) to -0.5
+## (head); tail_d is how far the tail is from the barrel along the path.
+static func _trail_shader() -> Shader:
+	if _trail_sh == null:
+		_trail_sh = Shader.new()
+		_trail_sh.code = """shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, shadows_disabled;
+uniform vec4 col : source_color = vec4(1.0);
+uniform float len = 1.0;
+uniform float tail_d = 0.0;
+uniform float fade = 1.1;
+varying float d;
+void vertex() { d = tail_d + (0.5 - VERTEX.z) * len; }
+void fragment() {
+	float a = fade <= 0.001 ? 1.0 : smoothstep(0.0, fade, d);
+	ALBEDO = col.rgb;
+	ALPHA = col.a * a;
+}
+"""
+	return _trail_sh
 
 
 func player_hit(head: bool) -> void:
@@ -328,7 +387,15 @@ func tracer(from: Vector3, to: Vector3, col: Color) -> void:
 	tw.tween_callback(m.queue_free)
 
 
-func muzzle_flash(at: Vector3, dir: Vector3) -> void:
+func muzzle_flash(at: Vector3, dir: Vector3, size := 1.0) -> void:
+	# the flash itself (G51, FpsMuzzleFlash), along the shot
+	var f := FpsMuzzleFlash.new()
+	f.size = size
+	add_child(f)
+	var d := dir.normalized()
+	f.global_transform = Transform3D(Basis.looking_at(-d, Vector3.UP if absf(d.y) < 0.99 else Vector3.RIGHT), at)
+	f.pop()
+	get_tree().create_timer(FpsMuzzleFlash.LIFE + 0.1).timeout.connect(f.queue_free)
 	var l := OmniLight3D.new()
 	l.light_color = Color(1.0, 0.75, 0.4)
 	l.light_energy = 4.0
@@ -338,6 +405,20 @@ func muzzle_flash(at: Vector3, dir: Vector3) -> void:
 	puff(at + dir * 0.15, Color(1.0, 0.7, 0.3), 0.06)
 	var tw := create_tween()
 	tw.tween_property(l, "light_energy", 0.0, 0.08)
+	tw.tween_callback(l.queue_free)
+
+
+## The player's shot lights the world round the muzzle (G51), sized by the
+## gun's flash; the Desert Eagle has its own, bigger boom().
+func muzzle_light(at: Vector3, size: float) -> void:
+	var l := OmniLight3D.new()
+	l.light_color = Color(1.0, 0.72, 0.38)
+	l.light_energy = 2.5 + 3.0 * size
+	l.omni_range = 3.0 + 3.5 * size
+	add_child(l)
+	l.global_position = at
+	var tw := create_tween()
+	tw.tween_property(l, "light_energy", 0.0, 0.06 + 0.04 * size)
 	tw.tween_callback(l.queue_free)
 
 

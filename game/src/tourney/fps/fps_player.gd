@@ -35,6 +35,7 @@ var speed01 := 0.0
 var aiming := false
 var scoped := false                         ## the sniper's scope is up (the HUD draws it)
 var input_on := true
+var run_key := "run_speed"                  ## FpsTune key of the top speed (the campus: campus_speed, G51)
 var debug_aim := false                      ## tools: hold aim without a mouse
 var debug_move := Vector2.ZERO              ## tools: x strafe, y forward (-1..1)
 var debug_fire := false                     ## tools: hold the trigger
@@ -47,6 +48,7 @@ var _bloom := 0.0                           # shot bloom, degrees, decays
 var _shape: CollisionShape3D
 var _drawing := false
 var _punch := 0.0
+var _recover := 0.5                         # the last shot's punch recovery (rad/s, its recoil profile)
 
 
 func _ready() -> void:
@@ -87,16 +89,18 @@ func _unhandled_input(ev: InputEvent) -> void:
 		_pitch = clampf(_pitch - ev.relative.y * sens, -1.45, 1.45)
 		_look += ev.relative
 	elif ev is InputEventKey and ev.pressed and not ev.echo:
-		match ev.physical_keycode:
-			KEY_SPACE:
-				if stance != "stand":
-					stance = "stand"
-				elif is_on_floor():
-					velocity.y = FpsTune.value("jump")
-			KEY_R:
-				_reload()
-			KEY_1, KEY_2:
-				_switch(str(slots[ev.physical_keycode - KEY_1]))
+		var k: int = ev.physical_keycode           # the keys are FpsBinds' (G51: set in the buy phase)
+		if k == FpsBinds.key("jump"):
+			if stance != "stand":
+				stance = "stand"
+			elif is_on_floor():
+				velocity.y = FpsTune.value("jump")
+		elif k == FpsBinds.key("reload"):
+			_reload()
+		elif k == FpsBinds.key("primary"):
+			_switch(str(slots[0]))
+		elif k == FpsBinds.key("sidearm"):
+			_switch(str(slots[1]))
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP or ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			var i := slots.find(weapon) + 1
@@ -157,7 +161,7 @@ func _reload() -> void:
 func _physics_process(delta: float) -> void:
 	var cap := _shape.shape as CapsuleShape3D
 	# stance: tap Shift to crouch / stand, hold it to lie down
-	if input_on and alive and Input.is_physical_key_pressed(KEY_SHIFT):
+	if input_on and alive and FpsBinds.pressed("crouch"):
 		if _shift_t < 0.0:
 			_shift_t = 0.0
 		_shift_t += delta
@@ -176,15 +180,15 @@ func _physics_process(delta: float) -> void:
 	# movement
 	var dir := Vector3.ZERO
 	if input_on and alive:
-		var f := int(Input.is_physical_key_pressed(KEY_W)) - int(Input.is_physical_key_pressed(KEY_S))
-		var s := int(Input.is_physical_key_pressed(KEY_D)) - int(Input.is_physical_key_pressed(KEY_A))
+		var f := int(FpsBinds.pressed("forward")) - int(FpsBinds.pressed("back"))
+		var s := int(FpsBinds.pressed("right")) - int(FpsBinds.pressed("left"))
 		if debug_move != Vector2.ZERO:
 			f = int(signf(debug_move.y))
 			s = int(signf(debug_move.x))
 		dir = (-transform.basis.z * f + transform.basis.x * s)
 		dir.y = 0.0
 		dir = dir.normalized()
-	var top := FpsTune.value("run_speed")
+	var top := FpsTune.value(run_key)
 	if stance == "crouch":
 		top = FpsTune.value("crouch_speed")
 	elif stance == "prone":
@@ -199,26 +203,30 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
-	speed01 = clampf(Vector2(velocity.x, velocity.z).length() / FpsTune.value("run_speed"), 0.0, 1.0)
+	speed01 = clampf(Vector2(velocity.x, velocity.z).length() / FpsTune.value(run_key), 0.0, 1.0)
 	_weapon(delta)
 
 
 func _process(delta: float) -> void:
 	aiming = input_on and alive and (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or debug_aim) and not spec().get("dual", false)
-	_punch = move_toward(_punch, 0.0, delta * 0.5)
+	_punch = move_toward(_punch, 0.0, delta * _recover)
 	cam.position.y = _eye
-	cam.rotation.x = _pitch + _punch
+	# G51 sideways sway: a slow drift of the aim itself, doubled in a scope
+	var sd := vm.side_drift() * (2.0 if scoped else (0.35 + 0.35 * vm.ads))
+	cam.rotation.x = _pitch + _punch + sd.y
+	cam.rotation.y = sd.x
 	var sp := spec()
 	scoped = bool(sp.scope) and vm.ads > 0.97
 	var base := FpsTune.value("fov")
 	var div := zoom() if scoped else lerpf(1.0, float(sp.ads_div), vm.ads)
 	cam.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(base) * 0.5) / div))
 	vm.visible = not scoped
-	vm.update(delta, aiming, speed01, is_on_floor(), stance, _look)
+	var strafe := clampf(velocity.dot(global_transform.basis.x) / maxf(FpsTune.value(run_key), 0.1), -1.0, 1.0)
+	vm.update(delta, aiming, speed01, is_on_floor(), stance, _look, strafe)
 	_look = Vector2.ZERO
 	# one inaccuracy number: hip / aimed cone, the run, the air, the stance, the bloom
 	var aimw := vm.ads
-	var cone := lerpf(float(sp.spread), float(sp.ads_spread), aimw)
+	var cone := lerpf(float(sp.spread) * FpsTune.value("rest_spread"), float(sp.ads_spread), aimw)
 	cone += float(sp.move_spread) * FpsTune.value("move_spread") * speed01 * (1.0 - 0.4 * aimw)
 	if not is_on_floor():
 		cone += 6.0
@@ -307,10 +315,16 @@ func _shoot(power: float, side := "") -> void:
 			if ammo[weapon] <= 0:
 				_reload_pending = true
 	vm.fire(side)
-	_bloom += float(sp.recoil) * 0.35
-	_punch += deg_to_rad(float(sp.recoil)) * 0.12 * FpsTune.value("recoil") * (0.4 if scoped else 1.0) * (1.8 if sp.get("boom", false) else 1.0)
+	var rc := FpsTune.recoil(weapon)            # G51b: the gun's preset, trimmed in F1
+	_bloom += float(rc.bloom)
+	# the camera's kick (G51: the Desert Eagle's punch, scaled per gun); a
+	# scope keeps most of it so a sniper shot still lands
+	_punch += deg_to_rad(float(rc.punch)) * FpsTune.value("recoil") * (0.7 if scoped else 1.0)
+	_recover = float(rc.recover)
 	if sp.get("boom", false):
 		world.boom(vm.muzzle_global())
+	elif float(sp.get("flash", 0.0)) > 0.0:
+		world.muzzle_light(vm.muzzle_global(side), float(sp.flash))
 	var from := cam.global_position
 	var fwd := -cam.global_transform.basis.z
 	if sp.action == "draw":

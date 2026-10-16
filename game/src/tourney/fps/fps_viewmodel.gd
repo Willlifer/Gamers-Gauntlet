@@ -5,13 +5,19 @@ extends Node3D
 ## never clips into walls). All motion is procedural:
 ##   hip / aim    aiming slides the kit item's `eye` marker onto the eye (the
 ##                sniper then hands over to the scope overlay)
-##   bob, sway    the run cycle and a lag behind the mouse
+##   bob, sway    the run cycle and a lag behind the mouse; G51: a sideways
+##                sway too (a slow figure-eight drift, and the gun swinging
+##                out against a strafe), which side_drift() lends the camera
+##                so a scope drifts across the target
 ##   recoil       a spring kick back and up per shot
 ##   actions      the sniper's bolt (its `bolt` part lifts, slides, closes),
 ##                the shotgun's pump (its `pump` part racks), the pistols' slide
 ##                (their `slide` part kicks back, G43), the slingshot's
 ##                draw (five prebuilt frames of the band pulled back)
 ##   reload, equip  the gun dips and rolls out of view and back
+##   lens         (G51) the sniper's, marksman's and automatic rifle's sights
+##                show a small low-res magnified picture of the world (a
+##                96 px SubViewport camera riding the eye) on the ocular lens
 ##   duals        (G43) two pistols, one per hand, each with its own slide; the
 ##                trick reload: both mags drop, both guns backflip up, two fresh
 ##                mags rise from below and the guns land on them
@@ -35,15 +41,19 @@ var _rv := Vector3.ZERO
 var _ap := Vector3.ZERO                    # recoil spring: rotation (pitch, yaw, roll)
 var _av := Vector3.ZERO
 var _sway := Vector2.ZERO
+var _strafe := 0.0                         # smoothed sideways run (-1 left .. 1 right)
 var _bob := 0.0
 var _bob_amt := 0.0
-var _flash: Node3D
-var _flash_t := 0.0
+var _flash: FpsMuzzleFlash                 # G51: after design/ref/kit/muzzle_flash.png
 var _assets := {}                          # id -> GKAsset (built once)
 var gun_l: Node3D                          # duals: the left hand's gun
 var action_l := -1.0                       # duals: the left slide
 var _flash_side := ""
 var _new_mags: Array[MeshInstance3D] = []  # duals: the fresh mags rising for the catch
+var lens_view: SubViewport                 ## the sight's picture (G51); null on guns without one
+var _lens_cam: Camera3D
+var _lens: MeshInstance3D
+const LENS_PX := 96                         ## the picture's resolution: low-def on purpose
 
 
 func equip(id: String) -> void:
@@ -95,11 +105,93 @@ func equip(id: String) -> void:
 				add_child(fresh)
 				_new_mags.append(fresh)
 	_make_flash()
+	_make_lens()
 	equip_t = 0.0
 	action_t = -1.0
 	action_l = -1.0
 	reload_t = -1.0
 	draw = 0.0
+
+
+## The sight's picture-in-picture (G51): a small SubViewport sharing the
+## world, its camera on the eye at the sight's magnification (world layer
+## only), drawn onto a disc over the ocular lens, round-masked.
+func _make_lens() -> void:
+	if _lens and is_instance_valid(_lens):
+		_lens.queue_free()
+	_lens = null
+	if not spec.has("lens") or not asset.markers.has("eye") or gun == null:
+		if lens_view:
+			lens_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		return
+	if lens_view == null:
+		lens_view = SubViewport.new()
+		lens_view.size = Vector2i(LENS_PX, LENS_PX)
+		lens_view.world_3d = get_viewport().world_3d
+		add_child(lens_view)
+		_lens_cam = Camera3D.new()
+		_lens_cam.cull_mask = 1
+		_lens_cam.near = 0.3
+		_lens_cam.far = 1500.0
+		lens_view.add_child(_lens_cam)
+		_lens_cam.current = true
+	lens_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var l: Array = spec.lens
+	var sc := float((spec.params as Dictionary).get("scale", 1.0))
+	_lens = MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = Vector2.ONE * float(l[1]) * 2.0 * sc
+	_lens.mesh = q
+	var m := ShaderMaterial.new()
+	m.shader = _lens_shader()
+	m.set_shader_parameter("view", lens_view.get_texture())
+	_lens.material_override = m
+	_lens.layers = LAYER
+	_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	gun.add_child(_lens)
+	# just behind the ocular glass, facing the eye (the model looks +Z)
+	_lens.position = asset.marker("eye").origin + Vector3(0, 0, float(l[0]) * sc - 0.0015)
+	_lens.rotation.y = PI
+
+
+static var _lens_sh: Shader
+
+
+static func _lens_shader() -> Shader:
+	if _lens_sh == null:
+		_lens_sh = Shader.new()
+		_lens_sh.code = """shader_type spatial;
+render_mode unshaded, cull_disabled, shadows_disabled;
+uniform sampler2D view : source_color, filter_linear;
+void fragment() {
+	vec2 c = UV - 0.5;
+	float r = length(c) * 2.0;
+	if (r > 1.0) discard;
+	vec3 col = texture(view, UV).rgb;
+	// glass: a dark rim, a faint blue cast, a soft glint top-left
+	col *= mix(1.0, 0.25, smoothstep(0.62, 1.0, r));
+	col = mix(col, col * vec3(0.86, 0.95, 1.05), 0.5);
+	col += vec3(0.18) * smoothstep(0.3, 0.0, length(c - vec2(-0.2, -0.22)));
+	ALBEDO = col;
+}
+"""
+	return _lens_sh
+
+
+## Keep the sight's camera on the eye, at the main view's FOV over the zoom.
+func _lens_follow() -> void:
+	if _lens == null or lens_view == null:
+		return
+	var cam := get_parent() as Camera3D
+	if cam == null:
+		return
+	var on := visible and ads < 0.97 and equip_t >= 1.0
+	lens_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+	_lens_cam.global_transform = cam.global_transform
+	var z := float(spec.get("lens_zoom", spec.get("zoom", FpsTune.value("scope_zoom"))))
+	var base := FpsTune.value("fov")
+	_lens_cam.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(base) * 0.5) / z))
+	_lens_cam.keep_aspect = Camera3D.KEEP_HEIGHT
 
 
 ## A stand-in magazine for a pistol model without a `mag` part.
@@ -124,49 +216,35 @@ func _prep(n: Node3D) -> Node3D:
 func _make_flash() -> void:
 	if _flash:
 		_flash.queue_free()
-	_flash = Node3D.new()
+	var f := FpsMuzzleFlash.new()
+	f.layer = LAYER
+	# first person: the camera looks along the barrel, so the flash reads
+	# small; lift it, the small guns most (the review's r6 note)
+	f.size = 0.5 + float(spec.get("flash", 1.0)) * 0.9
+	_flash = f
 	add_child(_flash)
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	m.albedo_color = Color(1.0, 0.75, 0.35)
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	m.no_depth_test = true
-	for k in 3:
-		var q := MeshInstance3D.new()
-		var qm := QuadMesh.new()
-		qm.size = Vector2(0.09, 0.22)
-		q.mesh = qm
-		q.material_override = m
-		q.rotation = Vector3(PI * 0.5, 0, k * PI / 3.0)
-		q.position.z = -0.08
-		q.layers = LAYER
-		_flash.add_child(q)
-	var core := MeshInstance3D.new()
-	var cm := QuadMesh.new()
-	cm.size = Vector2(0.12, 0.12)
-	core.mesh = cm
-	core.material_override = m
-	core.layers = LAYER
-	_flash.add_child(core)
-	_flash.visible = false
 
 
 ## A shot: the spring kicks, the flash pops, the action starts. `side` "l"
 ## or "r" for the duals.
 func fire(side := "") -> void:
 	_flash_side = side
-	var k := FpsTune.value("recoil") * float(spec.recoil) / 8.0
-	_rv += Vector3(0, 0.25, 2.2) * float(spec.kick) * 10.0 * k
-	_av += Vector3(deg_to_rad(float(spec.recoil)) * 9.0, randf_range(-0.6, 0.6), randf_range(-1.5, 1.5)) * k
+	var rc := FpsTune.recoil(weapon_id)        # G51b: the gun's preset, trimmed in F1
+	var k := FpsTune.value("recoil") * float(rc.recoil) / 8.0
+	_rv += Vector3(0, 0.25, 2.2) * float(rc.kick) * 10.0 * k
+	_av += Vector3(deg_to_rad(float(rc.recoil)) * 9.0, randf_range(-0.6, 0.6) * float(rc.side), randf_range(-1.5, 1.5)) * k
 	if spec.action != "draw":
-		_flash_t = 0.05
-		_flash.rotation.z = randf() * TAU
+		_flash.pop(flash_seed)
+		flash_seed = -1
 	if side == "l":
 		action_l = 0.0
 	elif spec.action in ["bolt", "pump", "slide"]:
 		action_t = 0.0
 	draw = 0.0
+
+
+## Tools: the next flash's seed (fixed frames); -1 random.
+var flash_seed := -1
 
 
 func start_reload() -> void:
@@ -183,7 +261,7 @@ func muzzle_global(side := "") -> Vector3:
 
 ## stance: "stand" | "crouch" | "prone"; speed01: run fraction; look: mouse
 ## delta this frame (pixels).
-func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: String, look: Vector2) -> void:
+func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: String, look: Vector2, strafe := 0.0) -> void:
 	if gun == null:
 		return
 	# aim in / out
@@ -205,7 +283,6 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 		if reload_t >= 1.0:
 			reload_t = -1.0
 	equip_t = minf(1.0, equip_t + delta / 0.35)
-	_flash_t -= delta
 	# springs
 	_rv += (-_rp * 260.0 - _rv * 24.0) * delta
 	_rp += _rv * delta
@@ -214,6 +291,8 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 	# sway: lag behind the look, settle back
 	var sw := FpsTune.value("sway") * (1.0 - e * 0.8)
 	_sway = _sway.lerp(Vector2(-look.x, -look.y) * 0.0018 * sw, minf(1.0, delta * 10.0))
+	_strafe = lerpf(_strafe, strafe, minf(1.0, delta * 6.0))
+	var drift := side_drift() * (1.0 - e * 0.5)
 	# bob: the run cycle, scaled by speed
 	var moving := speed01 if grounded else 0.0
 	_bob_amt = move_toward(_bob_amt, moving * FpsTune.value("bob") * (1.0 - e * 0.85), delta * 4.0)
@@ -223,10 +302,12 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 	# where it sits
 	var hip: Vector3 = spec.hip
 	var eye_mk := "eye" if asset.markers.has("eye") else "muzzle"
-	var aim_at := Vector3(0, 0, -0.06) if eye_mk == "eye" else Vector3(0, -0.03, -0.5)
+	var aim_at := Vector3(0, 0, -float(spec.get("ads_dist", 0.06))) if eye_mk == "eye" else Vector3(0, -0.03, -0.5)
 	var ads_pos := aim_at - R * asset.marker(eye_mk).origin
-	var pos := hip.lerp(ads_pos, e) + bob + breathe + _rp * Vector3(1, 1, 1)
-	var rot := Vector3(_sway.y + _ap.x * 0.02, _sway.x + _ap.y * 0.02, _ap.z * 0.02 + sin(_bob * 0.5) * 0.01 * _bob_amt)
+	var side := Vector3(-_strafe * 0.012 * sw + drift.x * 1.5, 0, 0)
+	var pos := hip.lerp(ads_pos, e) + bob + breathe + side + _rp * Vector3(1, 1, 1)
+	var rot := Vector3(_sway.y + _ap.x * 0.02 + drift.y, _sway.x + _ap.y * 0.02 + drift.x * 2.0 + _strafe * 0.02 * sw,
+		_ap.z * 0.02 + sin(_bob * 0.5) * 0.01 * _bob_amt - _strafe * 0.05 * sw)
 	if stance == "crouch":
 		rot.z += deg_to_rad(3.0) * (1.0 - e)
 	elif stance == "prone":
@@ -272,8 +353,8 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 		_dual_reload(gun_l, xl, 1, -1.0)
 		_slide_on(gun_l, action_l)
 	var fx: Transform3D = gun_l.transform if _flash_side == "l" and gun_l else gun.transform
-	_flash.transform = Transform3D(fx.basis, fx * asset.marker("muzzle").origin)
-	_flash.visible = _flash_t > 0.0
+	_flash.transform = Transform3D(fx.basis.orthonormalized(), fx * asset.marker("muzzle").origin) * Transform3D(Basis(Vector3.BACK, _flash.roll), Vector3.ZERO)
+	_lens_follow()
 
 
 ## The duals' trick reload over reload_t: the mags drop out (0-0.2); the
@@ -311,6 +392,15 @@ func _dual_reload(g: Node3D, rest: Transform3D, idx: int, side: float) -> void:
 		var c := clampf((t - 0.35) / 0.27, 0.0, 1.0)
 		var rise := 1.0 - (1.0 - c) * (1.0 - c)
 		fresh.transform = Transform3D(rest.basis, rest.origin + Vector3(0, -0.42 * (1.0 - rise), 0))
+
+
+## G51 sideways sway: a slow figure-eight (radians: x yaw, y pitch), scaled
+## by FpsTune sway (2.3 = 1x) and sway_side. The player adds it to the camera
+## (doubled in a scope) and the gun carries it.
+func side_drift() -> Vector2:
+	var t := Time.get_ticks_msec() * 0.001
+	var k := 0.0035 * FpsTune.value("sway_side") * FpsTune.value("sway") / 2.3
+	return Vector2(sin(t * 0.9) + 0.25 * sin(t * 2.3 + 1.0), 0.35 * sin(t * 1.8)) * k
 
 
 ## 0 outside [a, b], rising and falling smoothly inside.

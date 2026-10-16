@@ -36,6 +36,7 @@ func setup(m: Dictionary) -> void:
 			other = p
 	var world := FpsWorld.new()
 	world.map_id = map_id()
+	world.match_seed = int(m.get("seed", -1))
 	world.match_over.connect(func(won: bool, summary: String) -> void:
 		finished.emit({ "winner": human.id if won else other.id, "summary": summary, "stats": {} }))
 	add_child(world)

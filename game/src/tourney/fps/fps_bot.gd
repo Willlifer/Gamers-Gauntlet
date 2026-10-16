@@ -125,7 +125,7 @@ func _physics_process(delta: float) -> void:
 			crouched = true
 			if sees and _seen > 0.15:
 				_set_state("engage")
-			elif _t > _rng.randf_range(2.5, 4.5):
+			elif _t > (_rng.randf_range(1.0, 2.0) if world.map.meta.get("bot_hunt", false) else _rng.randf_range(2.5, 4.5)):
 				_goal = _pick_spot()
 				_set_state("move")
 		"engage":
@@ -204,14 +204,33 @@ func _pick_spot() -> Vector3:
 			var h: Dictionary = mine[_rng.randi() % mine.size()]
 			var c: Vector3 = h.center
 			return Vector3(c.x, y, c.z)
-	for i in 20:
+	# G51: no pathfinding, so only spots it can walk to in a straight line;
+	# on a map that asks (the Dust hallway's cover), it hunts: it prefers a
+	# reachable spot that sees where you are, else one nearer you
+	var hunt: bool = world.map.meta.get("bot_hunt", false) and target != null
+	var best := Vector3.INF
+	var best_score := -INF
+	for i in (30 if hunt else 20):
 		var r: Rect2 = roof[_rng.randi() % roof.size()]
-		var p := Vector3(_rng.randf_range(r.position.x + 3.0, r.end.x - 3.0), y + 0.5, _rng.randf_range(r.position.y + 3.0, r.end.y - 3.0))
+		var p := Vector3(_rng.randf_range(r.position.x + 1.5 if hunt else r.position.x + 3.0, r.end.x - (1.5 if hunt else 3.0)), y + 0.5,
+			_rng.randf_range(r.position.y + (1.5 if hunt else 3.0), r.end.y - (1.5 if hunt else 3.0)))
 		# not inside anything: a short down ray lands on the roof membrane
 		var hit := world.trace(p + Vector3(0, 2.0, 0), p + Vector3(0, -3.0, 0), [get_rid()])
-		if not hit.is_empty() and absf(hit.position.y - y) < 0.4:
-			return hit.position
-	return global_position
+		if hit.is_empty() or absf(hit.position.y - y) >= 0.4:
+			continue
+		var at: Vector3 = hit.position
+		if not world.walk_clear(global_position, at):
+			continue
+		if not hunt:
+			return at
+		var sc := -at.distance_to(target.global_position) * 0.1 + _rng.randf() * 2.0
+		var los := world.trace(at + Vector3(0, HEAD_Y.stand, 0), target.global_position + Vector3(0, 1.4, 0), [get_rid()], 1)
+		if los.is_empty():
+			sc += 6.0
+		if sc > best_score:
+			best_score = sc
+			best = at
+	return best if best != Vector3.INF else global_position
 
 
 func eye() -> Vector3:
@@ -238,7 +257,7 @@ func _fire() -> void:
 	acc *= clampf(1.15 - dist / 140.0, 0.35, 1.0)
 	var muzzle := gun.global_transform * gun_asset.marker("muzzle").origin
 	var sp: Dictionary = FpsWeapons.SPECS[weapon]
-	world.muzzle_flash(muzzle, (to - muzzle).normalized())
+	world.muzzle_flash(muzzle, (to - muzzle).normalized(), float(sp.get("flash", 1.0)))
 	if sp.get("boom", false):
 		world.boom(muzzle)
 	# the roll picks where it aims; the bullet still has to get there (G28):

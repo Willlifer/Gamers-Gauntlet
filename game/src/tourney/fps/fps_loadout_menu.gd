@@ -29,10 +29,7 @@ var _inv: VBoxContainer
 var _timer_l: Label
 var _done := false
 var _icons := {}                            # id -> SubViewport texture
-var _opts: PanelContainer                   # the options panel (G51); null when closed
-var _bind_box: VBoxContainer
-var _waiting := ""                          # a bind waiting for its key
-var _opt_note: Label
+var _opts: FpsOptionsPanel                  # the options panel (G51); null when closed
 
 
 func _ready() -> void:
@@ -218,28 +215,12 @@ func _wheel_input(ev: InputEvent) -> void:
 		_pick(str(options[_hover]))
 
 
-## A bind waiting for its key takes the next key press before anything else.
-func _input(ev: InputEvent) -> void:
-	if _waiting == "" or not (ev is InputEventKey and ev.pressed and not ev.echo):
-		return
-	get_viewport().set_input_as_handled()
-	var k: int = ev.physical_keycode
-	if k == KEY_ESCAPE:
-		_waiting = ""
-		_opt_note.text = ""
-	else:
-		var bumped := FpsBinds.set_key(_waiting, k)
-		_opt_note.text = ("%s was on %s; it's unbound now." % [FpsBinds.LABEL[bumped], FpsBinds.name_of(k)]) if bumped != "" else ""
-		_waiting = ""
-	_refresh_binds()
-
-
 func _unhandled_input(ev: InputEvent) -> void:
 	if not (ev is InputEventKey and ev.pressed and not ev.echo):
 		return
 	var k: int = ev.physical_keycode
 	if _opts:
-		if k == KEY_ESCAPE or k == KEY_O:
+		if (k == KEY_ESCAPE or k == KEY_O) and not _opts.capturing():
 			toggle_options()
 		get_viewport().set_input_as_handled()
 		return
@@ -276,94 +257,18 @@ func _pick(id: String) -> void:
 
 # ------------------------------------------------------------- options (G51)
 
-## Open or close the shooter's settings over the wheel.
+## Open or close the shooter's settings (FpsOptionsPanel) over the wheel.
 func toggle_options() -> void:
 	if _opts:
 		_opts.queue_free()
 		_opts = null
-		_waiting = ""
 		_wheel.visible = true
 		return
 	_wheel.visible = false
-	_opts = PanelContainer.new()
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.04, 0.045, 0.05, 0.9)
-	sb.border_color = GOLD
-	sb.set_border_width_all(1)
-	sb.set_content_margin_all(18)
-	_opts.add_theme_stylebox_override("panel", sb)
+	_opts = FpsOptionsPanel.new()
 	_opts.position = Vector2(150, 170)
-	_opts.custom_minimum_size = Vector2(620, 0)
+	_opts.closed.connect(toggle_options)
 	_wheel.get_parent().add_child(_opts)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
-	_opts.add_child(col)
-	_label(col, "OPTIONS", 26, Color(1, 1, 1, 0.92))
-	for key in ["mouse_sens", "ads_sens", "fov"]:
-		col.add_child(_slider(key))
-	_label(col, "Keys: click one, then press the key you want (Esc cancels)", 15, Color(1, 1, 1, 0.6))
-	_bind_box = VBoxContainer.new()
-	_bind_box.add_theme_constant_override("separation", 3)
-	col.add_child(_bind_box)
-	_refresh_binds()
-	_opt_note = _label(col, "", 15, GOLD)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	col.add_child(row)
-	var rs := Button.new()
-	rs.text = "Reset keys"
-	rs.focus_mode = Control.FOCUS_NONE
-	rs.pressed.connect(func() -> void:
-		FpsBinds.reset()
-		_refresh_binds())
-	row.add_child(rs)
-	var cl := Button.new()
-	cl.text = "Back to the wheel [O]"
-	cl.focus_mode = Control.FOCUS_NONE
-	cl.pressed.connect(toggle_options)
-	row.add_child(cl)
-
-
-## A labelled slider on an FpsTune number (the same store as the F1 panel).
-func _slider(key: String) -> HBoxContainer:
-	var e: Array = FpsTune.ENTRIES[key]
-	var row := HBoxContainer.new()
-	var l := _label(row, str(e[0]), 16, Color.WHITE)
-	l.custom_minimum_size.x = 300
-	var sl := HSlider.new()
-	sl.min_value = float(e[2])
-	sl.max_value = float(e[3])
-	sl.step = float(e[4])
-	sl.value = FpsTune.value(key)
-	sl.custom_minimum_size = Vector2(200, 24)
-	sl.focus_mode = Control.FOCUS_NONE
-	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(sl)
-	var v := _label(row, "%.2f" % sl.value, 16, GREEN)
-	sl.value_changed.connect(func(x: float) -> void:
-		FpsTune.set_value(key, x)
-		v.text = "%.2f" % x)
-	return row
-
-
-func _refresh_binds() -> void:
-	if _bind_box == null:
-		return
-	for c in _bind_box.get_children():
-		c.queue_free()
-	for a: String in FpsBinds.ORDER:
-		var row := HBoxContainer.new()
-		_bind_box.add_child(row)
-		var l := _label(row, str(FpsBinds.LABEL[a]), 16, Color(1, 1, 1, 0.85))
-		l.custom_minimum_size.x = 300
-		var b := Button.new()
-		b.text = "..." if _waiting == a else FpsBinds.name_of(FpsBinds.key(a))
-		b.custom_minimum_size.x = 160
-		b.focus_mode = Control.FOCUS_NONE
-		b.pressed.connect(func() -> void:
-			_waiting = a
-			_refresh_binds())
-		row.add_child(b)
 
 
 ## A side view of the gun, rendered once into a small transparent viewport.
