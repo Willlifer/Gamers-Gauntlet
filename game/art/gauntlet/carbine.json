@@ -19,9 +19,10 @@
   "socket": "hand_r"
  },
  "parts": {
-  "body": 4888,
+  "body": 4664,
   "charging": 200,
-  "mag": 1624
+  "mag": 1624,
+  "sights": 224
  },
  "tris": 6712,
  "version": 1

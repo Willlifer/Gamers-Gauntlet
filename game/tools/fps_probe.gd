@@ -238,10 +238,33 @@ func _g51_static() -> void:
 func _g51_world(w: FpsWorld) -> void:
 	var p := w.player
 	if FpsWeapons.available("auto_rifle"):
+		FpsTune.set_optic("auto_rifle", "scope")
 		p.set_loadout("auto_rifle", "pistol")
 		await _frames(30)
-		_ok(p.vm.lens_view != null and p.vm.lens_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "lens: the automatic rifle's sight renders a picture")
+		_ok(p.vm.lens_view != null and p.vm.lens_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "lens: the automatic rifle's scope renders a picture")
 		_ok(absf(p.vm._lens_cam.fov - p.cam.fov / 2.0) < p.cam.fov * 0.4, "lens: and it is magnified (fov %.1f vs %.1f)" % [p.vm._lens_cam.fov, p.cam.fov])
+		FpsTune.set_optic("auto_rifle", "red_dot")
+	# G51c: the optics on the automatic rifle and the carbine
+	for id in ["auto_rifle", "carbine"]:
+		if not FpsWeapons.available(id):
+			continue
+		for k: String in FpsWeapons.OPTIC_ORDER:
+			FpsTune.set_optic(id, k)
+			p.set_loadout(id, "pistol")
+			await _frames(30)
+			var o: Dictionary = FpsWeapons.SPECS[id].optics[k]
+			var hidden := (o.get("hide", []) as Array).all(func(part: String) -> bool:
+				var n := p.vm.gun.get_node_or_null(part) as Node3D
+				return n == null or not n.visible)
+			_ok(p.vm.optic != null and p.vm.optic.kind == k and hidden, "optics: %s with %s (its parts %s off)" % [id, k, o.get("hide", [])])
+			var pic := p.vm.lens_view != null and p.vm.lens_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS
+			_ok(pic == (k == "scope"), "optics: %s %s %s a picture" % [id, k, "shows" if k == "scope" else "has no"])
+			if k == "red_dot":
+				p.debug_aim = true
+				await _frames(40)
+				_ok(p.vm.optic._dot != null and p.vm.optic._dot.visible, "optics: %s red dot shows its dot when aimed in" % id)
+				p.debug_aim = false
+		FpsTune.set_optic(id, str(FpsWeapons.SPECS[id].optics.default))
 	p.set_loadout("shotgun", "pistol")
 	await _frames(10)
 	_ok(p.vm.lens_view == null or p.vm.lens_view.render_target_update_mode == SubViewport.UPDATE_DISABLED, "lens: a gun without a sight renders none")

@@ -51,13 +51,17 @@ var action_l := -1.0                       # duals: the left slide
 var _flash_side := ""
 var _new_mags: Array[MeshInstance3D] = []  # duals: the fresh mags rising for the catch
 var lens_view: SubViewport                 ## the sight's picture (G51); null on guns without one
+var optic: FpsOptic                        ## G51c: the sight bolted on (automatic rifle, carbine); null otherwise
+var _optic_kind := ""
+var _eye_point := Vector3.ZERO             # where the eye sits when aimed in (gun frame)
+var _lens_spec := {}                       # { pos, r, zoom } for the picture, or empty
 var _lens_cam: Camera3D
 var _lens: MeshInstance3D
 const LENS_PX := 96                         ## the picture's resolution: low-def on purpose
 
 
 func equip(id: String) -> void:
-	if id == weapon_id and gun:
+	if id == weapon_id and gun and _optic_kind == FpsTune.optic(id):
 		return
 	weapon_id = id
 	spec = FpsWeapons.SPECS[id]
@@ -104,6 +108,7 @@ func equip(id: String) -> void:
 				fresh.visible = false
 				add_child(fresh)
 				_new_mags.append(fresh)
+	_make_optic()
 	_make_flash()
 	_make_lens()
 	equip_t = 0.0
@@ -113,6 +118,36 @@ func equip(id: String) -> void:
 	draw = 0.0
 
 
+## The sight (G51c): an FpsOptic on guns with optics (the radial's pick),
+## which may hide model parts; then where the eye goes and where the
+## picture (if any) goes. Guns without optics: the eye marker and the spec's
+## lens.
+func _make_optic() -> void:
+	optic = null
+	_optic_kind = FpsTune.optic(weapon_id)
+	_lens_spec = {}
+	var sc := float((spec.params as Dictionary).get("scale", 1.0))
+	if asset.markers.has("eye"):
+		_eye_point = asset.marker("eye").origin
+	if spec.has("lens") and asset.markers.has("eye"):
+		var l: Array = spec.lens
+		_lens_spec = { "pos": _eye_point + Vector3(0, 0, float(l[0]) * sc - 0.0015), "r": float(l[1]) * sc,
+			"zoom": float(spec.get("zoom", FpsTune.value("scope_zoom"))) }
+	if _optic_kind == "" or gun == null or frames.size() > 0:
+		return
+	var o: Dictionary = spec.optics[_optic_kind]
+	for part: String in o.get("hide", []):
+		var n := gun.get_node_or_null(part) as Node3D
+		if n:
+			n.visible = false
+	optic = FpsOptic.new()
+	gun.add_child(optic)
+	optic.build(_optic_kind, o, sc, float(spec.optics.rail), LAYER)
+	_eye_point = optic.eye
+	if not optic.lens.is_empty():
+		_lens_spec = { "pos": (optic.lens.pos as Vector3) - Vector3(0, 0, 0.0015), "r": float(optic.lens.r), "zoom": float(o.get("zoom", 2.5)) }
+
+
 ## The sight's picture-in-picture (G51): a small SubViewport sharing the
 ## world, its camera on the eye at the sight's magnification (world layer
 ## only), drawn onto a disc over the ocular lens, round-masked.
@@ -120,7 +155,7 @@ func _make_lens() -> void:
 	if _lens and is_instance_valid(_lens):
 		_lens.queue_free()
 	_lens = null
-	if not spec.has("lens") or not asset.markers.has("eye") or gun == null:
+	if _lens_spec.is_empty() or gun == null:
 		if lens_view:
 			lens_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		return
@@ -136,11 +171,9 @@ func _make_lens() -> void:
 		lens_view.add_child(_lens_cam)
 		_lens_cam.current = true
 	lens_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	var l: Array = spec.lens
-	var sc := float((spec.params as Dictionary).get("scale", 1.0))
 	_lens = MeshInstance3D.new()
 	var q := QuadMesh.new()
-	q.size = Vector2.ONE * float(l[1]) * 2.0 * sc
+	q.size = Vector2.ONE * float(_lens_spec.r) * 2.0
 	_lens.mesh = q
 	var m := ShaderMaterial.new()
 	m.shader = _lens_shader()
@@ -150,7 +183,7 @@ func _make_lens() -> void:
 	_lens.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	gun.add_child(_lens)
 	# just behind the ocular glass, facing the eye (the model looks +Z)
-	_lens.position = asset.marker("eye").origin + Vector3(0, 0, float(l[0]) * sc - 0.0015)
+	_lens.position = _lens_spec.pos
 	_lens.rotation.y = PI
 
 
@@ -188,7 +221,7 @@ func _lens_follow() -> void:
 	var on := visible and ads < 0.97 and equip_t >= 1.0
 	lens_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 	_lens_cam.global_transform = cam.global_transform
-	var z := float(spec.get("lens_zoom", spec.get("zoom", FpsTune.value("scope_zoom"))))
+	var z := float(_lens_spec.get("zoom", 2.5))
 	var base := FpsTune.value("fov")
 	_lens_cam.fov = rad_to_deg(2.0 * atan(tan(deg_to_rad(base) * 0.5) / z))
 	_lens_cam.keep_aspect = Camera3D.KEEP_HEIGHT
@@ -301,9 +334,9 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 	var breathe := Vector3(0, sin(Time.get_ticks_msec() * 0.0021) * 0.002, 0) * (1.0 - e * 0.6)
 	# where it sits
 	var hip: Vector3 = spec.hip
-	var eye_mk := "eye" if asset.markers.has("eye") else "muzzle"
-	var aim_at := Vector3(0, 0, -float(spec.get("ads_dist", 0.06))) if eye_mk == "eye" else Vector3(0, -0.03, -0.5)
-	var ads_pos := aim_at - R * asset.marker(eye_mk).origin
+	var has_eye := asset.markers.has("eye") or optic != null
+	var aim_at := Vector3(0, 0, -float(spec.get("ads_dist", 0.06))) if has_eye else Vector3(0, -0.03, -0.5)
+	var ads_pos := aim_at - R * (_eye_point if has_eye else asset.marker("muzzle").origin)
 	var side := Vector3(-_strafe * 0.012 * sw + drift.x * 1.5, 0, 0)
 	var pos := hip.lerp(ads_pos, e) + bob + breathe + side + _rp * Vector3(1, 1, 1)
 	var rot := Vector3(_sway.y + _ap.x * 0.02 + drift.y, _sway.x + _ap.y * 0.02 + drift.x * 2.0 + _strafe * 0.02 * sw,
@@ -355,6 +388,10 @@ func update(delta: float, aiming: bool, speed01: float, grounded: bool, stance: 
 	var fx: Transform3D = gun_l.transform if _flash_side == "l" and gun_l else gun.transform
 	_flash.transform = Transform3D(fx.basis.orthonormalized(), fx * asset.marker("muzzle").origin) * Transform3D(Basis(Vector3.BACK, _flash.roll), Vector3.ZERO)
 	_lens_follow()
+	if optic and gun:
+		var cam := get_parent() as Node3D
+		if cam:
+			optic.track(gun.global_transform.affine_inverse() * cam.global_transform)
 
 
 ## The duals' trick reload over reload_t: the mags drop out (0-0.2); the

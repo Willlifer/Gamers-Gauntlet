@@ -14,7 +14,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-PARTS = {"body": [], "mag": [], "charging": []}
+PARTS = {"body": [], "mag": [], "charging": [], "optic": [], "sights": []}   # G51c: optic + sights apart, the game swaps them
 
 BORE = 0.091          # bore axis height above the fist
 RAIL = 0.118          # top of the receiver / handguard (rail base)
@@ -297,33 +297,33 @@ def optic():
     r = 0.0158
     f0, f1 = 0.100, 0.160
     # riser mount
-    side_prism([(0.100, RAIL_TOP), (0.160, RAIL_TOP), (0.150, 0.158), (0.110, 0.158)], -0.0095, 0.0095, AB, bevel=0.002)
-    box(0.100, 0.160, -0.0135, 0.0135, RAIL_TOP - 0.004, RAIL_TOP + 0.006, AB, bevel=0.0012)   # rail clamp
-    cyl_x(-0.0135, -0.0215, 0.130, 0.128, 0.0062, AB, segs=12)      # clamp knob (right)
-    cyl_x(0.0135, 0.0165, 0.130, 0.128, 0.004, AB, segs=8)          # bolt head (left)
+    side_prism([(0.100, RAIL_TOP), (0.160, RAIL_TOP), (0.150, 0.158), (0.110, 0.158)], -0.0095, 0.0095, AB, part="optic", bevel=0.002)
+    box(0.100, 0.160, -0.0135, 0.0135, RAIL_TOP - 0.004, RAIL_TOP + 0.006, AB, part="optic", bevel=0.0012)   # rail clamp
+    cyl_x(-0.0135, -0.0215, 0.130, 0.128, 0.0062, AB, part="optic", segs=12)      # clamp knob (right)
+    cyl_x(0.0135, 0.0165, 0.130, 0.128, 0.004, AB, part="optic", segs=8)          # bolt head (left)
     # tube body with front/rear bells
-    cyl_f(f0, f1, 0, zc, r, AB, segs=20)
-    cyl_f(f1 - 0.010, f1 + 0.002, 0, zc, r + 0.0018, AB, segs=20)
-    cyl_f(f0 - 0.002, f0 + 0.008, 0, zc, r + 0.0012, AB, segs=20)
+    cyl_f(f0, f1, 0, zc, r, AB, part="optic", segs=20)
+    cyl_f(f1 - 0.010, f1 + 0.002, 0, zc, r + 0.0018, AB, part="optic", segs=20)
+    cyl_f(f0 - 0.002, f0 + 0.008, 0, zc, r + 0.0012, AB, part="optic", segs=20)
     # lenses (stand proud of the end faces)
-    cyl_f(f1 + 0.002, f1 + 0.0032, 0, zc, r - 0.003, "glass_lens", segs=20)
-    cyl_f(f0 - 0.0032, f0 - 0.002, 0, zc, r - 0.003, "glass_lens", segs=20)
+    cyl_f(f1 + 0.002, f1 + 0.0032, 0, zc, r - 0.003, "glass_lens", part="optic", segs=20)
+    cyl_f(f0 - 0.0032, f0 - 0.002, 0, zc, r - 0.003, "glass_lens", part="optic", segs=20)
     # turrets: elevation on top, windage on the RIGHT, battery/brightness on the LEFT
-    cyl_z(zc + r - 0.002, zc + r + 0.0085, 0.131, 0, 0.0075, AB, segs=12)
-    cyl_x(-(r - 0.002), -(r + 0.0085), 0.131, zc, 0.0075, AB, segs=12)
-    cyl_x(r - 0.002, r + 0.0065, 0.128, zc, 0.0095, AB, segs=12)
+    cyl_z(zc + r - 0.002, zc + r + 0.0085, 0.131, 0, 0.0075, AB, part="optic", segs=12)
+    cyl_x(-(r - 0.002), -(r + 0.0085), 0.131, zc, 0.0075, AB, part="optic", segs=12)
+    cyl_x(r - 0.002, r + 0.0065, 0.128, zc, 0.0095, AB, part="optic", segs=12)
     # turret housing block
-    box(0.120, 0.142, -0.0172, 0.0172, zc - 0.010, zc + 0.0172, AB, bevel=0.002)
+    box(0.120, 0.142, -0.0172, 0.0172, zc - 0.010, zc + 0.0172, AB, part="optic", bevel=0.002)
 
 
 def sights():
     AB = "alloy_black"
     # rear flip-up, folded, at the rear of the upper rail
-    side_prism([(0.006, RAIL_TOP), (0.040, RAIL_TOP), (0.040, 0.136), (0.010, 0.137)], -0.0115, 0.0115, AB, bevel=0.0012)
-    side_prism([(0.010, 0.136), (0.038, 0.136), (0.036, 0.143), (0.016, 0.145), (0.010, 0.142)], -0.0095, 0.0095, AB, bevel=0.001)
+    side_prism([(0.006, RAIL_TOP), (0.040, RAIL_TOP), (0.040, 0.136), (0.010, 0.137)], -0.0115, 0.0115, AB, part="sights", bevel=0.0012)
+    side_prism([(0.010, 0.136), (0.038, 0.136), (0.036, 0.143), (0.016, 0.145), (0.010, 0.142)], -0.0095, 0.0095, AB, part="sights", bevel=0.001)
     # front flip-up, folded, at the end of the handguard rail
-    side_prism([(0.436, RAIL_TOP), (0.470, RAIL_TOP), (0.468, 0.137), (0.440, 0.138)], -0.0115, 0.0115, AB, bevel=0.0012)
-    side_prism([(0.434, 0.137), (0.468, 0.136), (0.466, 0.142), (0.446, 0.148), (0.436, 0.146)], -0.0085, 0.0085, AB, bevel=0.001)
+    side_prism([(0.436, RAIL_TOP), (0.470, RAIL_TOP), (0.468, 0.137), (0.440, 0.138)], -0.0115, 0.0115, AB, part="sights", bevel=0.0012)
+    side_prism([(0.434, 0.137), (0.468, 0.136), (0.466, 0.142), (0.446, 0.148), (0.436, 0.146)], -0.0085, 0.0085, AB, part="sights", bevel=0.001)
 
 
 def magazine():

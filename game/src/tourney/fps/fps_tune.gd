@@ -50,6 +50,7 @@ const ENTRIES := {
 static var _values := {}
 static var _presets := {}                   ## G51b: gun id -> recoil preset name ("" = baked)
 static var _scales := {}                    ## gun id -> its recoil scale (x)
+static var _optics := {}                    ## G51c: gun id -> its sight (FpsWeapons.OPTIC_ORDER)
 static var _loaded := false
 static var _defaults_only := false
 
@@ -60,6 +61,7 @@ static func use_defaults() -> void:
 	_values = {}
 	_presets = {}
 	_scales = {}
+	_optics = {}
 
 
 static func value(key: String) -> float:
@@ -78,6 +80,7 @@ static func reset() -> void:
 	_values = {}
 	_presets = {}
 	_scales = {}
+	_optics = {}
 	save()
 
 
@@ -92,6 +95,22 @@ static func recoil(id: String) -> Dictionary:
 	for k in ["recoil", "kick", "punch", "side"]:
 		out[k] = float(out[k]) * sc
 	return out
+
+
+## G51c: the sight on `id` (one of its SPECS optics; "" for a gun without).
+static func optic(id: String) -> String:
+	_ensure()
+	var o: Dictionary = FpsWeapons.SPECS[id].get("optics", {})
+	if o.is_empty():
+		return ""
+	var k := str(_optics.get(id, o.default))
+	return k if o.has(k) else str(o.default)
+
+
+static func set_optic(id: String, k: String) -> void:
+	_ensure()
+	_optics[id] = k
+	save()
 
 
 static func recoil_preset(id: String) -> String:
@@ -143,6 +162,8 @@ static func _ensure() -> void:
 	for id in FpsWeapons.SPECS:
 		if cf.has_section_key("recoil_preset", id):
 			_presets[id] = str(cf.get_value("recoil_preset", id))
+		if cf.has_section_key("optic", id):
+			_optics[id] = str(cf.get_value("optic", id))
 		if cf.has_section_key("recoil_scale", id):
 			_scales[id] = clampf(float(cf.get_value("recoil_scale", id)), 0.0, 3.0)
 
@@ -167,4 +188,6 @@ static func save() -> void:
 		cf.set_value("recoil_preset", id, _presets[id])
 	for id in _scales:
 		cf.set_value("recoil_scale", id, snappedf(float(_scales[id]), 0.001))
+	for id in _optics:
+		cf.set_value("optic", id, _optics[id])
 	cf.save(PATH)

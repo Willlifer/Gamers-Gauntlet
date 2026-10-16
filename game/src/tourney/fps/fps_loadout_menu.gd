@@ -151,6 +151,8 @@ func _draw_wheel() -> void:
 		var at := c + dir * r * 0.66
 		var name_ := "Random" if id == "random" else str(FpsWeapons.SPECS[id].name)
 		var role := "Surprise me" if id == "random" else str(FpsWeapons.ROLE.get(id, ""))
+		if id != "random" and FpsWeapons.SPECS[id].has("optics"):
+			role = "%s  [V]" % FpsWeapons.OPTIC_NAMES[FpsTune.optic(id)]
 		var isz := Vector2(r * 0.5, r * 0.22)
 		if _icons.has(id) and _icons[id]:
 			var tex: Texture2D = _icons[id]
@@ -195,6 +197,46 @@ func _refresh_inv() -> void:
 			_inv.add_child(tr)
 		var nm := "Random" if id == "random" or id == "" else str(FpsWeapons.SPECS[id].name)
 		_label(_inv, nm, 20, Color.WHITE)
+	_optic_rows()
+
+
+## G51c: the sight for each gun that takes one (automatic rifle, carbine):
+## three chips per gun; V cycles the hovered gun's. Saved (FpsTune.optic).
+func _optic_rows() -> void:
+	var guns := options.filter(func(o: String) -> bool: return o != "random" and FpsWeapons.SPECS[o].has("optics"))
+	if guns.is_empty():
+		return
+	_label(_inv, "Optics  [V] cycles the hovered gun", 15, GREEN)
+	for id: String in guns:
+		_label(_inv, str(FpsWeapons.SPECS[id].name), 14, Color(1, 1, 1, 0.75))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 4)
+		_inv.add_child(row)
+		var cur := FpsTune.optic(id)
+		for k: String in FpsWeapons.OPTIC_ORDER:
+			if not FpsWeapons.SPECS[id].optics.has(k):
+				continue
+			var b := Button.new()
+			b.text = str(FpsWeapons.OPTIC_NAMES[k])
+			b.toggle_mode = true
+			b.button_pressed = k == cur
+			b.focus_mode = Control.FOCUS_NONE
+			b.add_theme_font_size_override("font_size", 14)
+			b.pressed.connect(func() -> void:
+				FpsTune.set_optic(id, k)
+				_refresh_inv.call_deferred())
+			row.add_child(b)
+
+
+## V: the next sight on the hovered (or last picked) gun.
+func cycle_optic() -> void:
+	var id := str(options[_hover]) if _hover >= 0 else last
+	if id == "" or id == "random" or not FpsWeapons.SPECS[id].has("optics"):
+		return
+	var ks := FpsWeapons.OPTIC_ORDER.filter(func(k: String) -> bool: return FpsWeapons.SPECS[id].optics.has(k))
+	FpsTune.set_optic(id, str(ks[(ks.find(FpsTune.optic(id)) + 1) % ks.size()]))
+	_refresh_inv()
+	_wheel.queue_redraw()
 
 
 func _wheel_input(ev: InputEvent) -> void:
@@ -232,6 +274,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 		_pick(last)
 	elif k == KEY_F3:
 		_pick("random")
+	elif k == KEY_V:
+		cycle_optic()
 	get_viewport().set_input_as_handled()
 
 

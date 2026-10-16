@@ -286,28 +286,32 @@ def build_body():
         prism(b, tooth, y - 0.0053, y, AL, axis="y")
         y -= 0.010
 
-    # Flip-up sights (both up). Sight line at reference y 9.5.
+    # Flip-up sights (both up). Sight line at reference y 9.5. G51c: their own part,
+    # so the game can take them off under a red dot or a scope.
+    sg = Part("sights")
     zs = P(0, 9.5)[1]
     ztop_rail = zb + 0.0050
     # rear: clamp, a tapered leaf, an aperture ring
-    prism_px(b, [(241, 25), (262, 25), (262, 32.5), (241, 32.5)], -0.0112, 0.0112, AL, 0.0008)
+    prism_px(sg, [(241, 25), (262, 25), (262, 32.5), (241, 32.5)], -0.0112, 0.0112, AL, 0.0008)
     yr = P(250.5, 0)[0]
-    prism(b, [(-0.0085, P(0, 25.5)[1]), (0.0085, P(0, 25.5)[1]), (0.0052, zs - 0.0040), (-0.0052, zs - 0.0040)],
+    prism(sg, [(-0.0085, P(0, 25.5)[1]), (0.0085, P(0, 25.5)[1]), (0.0052, zs - 0.0040), (-0.0052, zs - 0.0040)],
           yr - 0.0018, yr + 0.0018, AL, axis="y")
-    lathe(b, [(0.0, 0.0016), (0.0, 0.0050), (0.0034, 0.0050), (0.0034, 0.0016)], (0, yr + 0.0017, zs),
+    lathe(sg, [(0.0, 0.0016), (0.0, 0.0050), (0.0034, 0.0050), (0.0034, 0.0016)], (0, yr + 0.0017, zs),
           (0, -1, 0), AL, seg=12, smooth=True, closed=True)
-    prism(b, [(-0.0007, zs + 0.0049), (0.0007, zs + 0.0049), (0.0007, zs + 0.0068), (-0.0007, zs + 0.0068)],
+    prism(sg, [(-0.0007, zs + 0.0049), (0.0007, zs + 0.0049), (0.0007, zs + 0.0068), (-0.0007, zs + 0.0068)],
           yr - 0.0012, yr + 0.0012, AL, axis="y")
     # front: clamp, two ears, the post between them
-    prism_px(b, [(482, 24), (501, 24), (501, 32.5), (482, 32.5)], -0.0112, 0.0112, AL, 0.0008)
+    prism_px(sg, [(482, 24), (501, 24), (501, 32.5), (482, 32.5)], -0.0112, 0.0112, AL, 0.0008)
     yf = P(491.5, 0)[0]
     zc = P(0, 24.5)[1]
     for s in (1, -1):
-        prism(b, [(s * 0.0047, zc + 0.0003), (s * 0.0085, zc + 0.0003), (s * 0.0072, P(0, 1.5)[1]), (s * 0.0047, P(0, 2.5)[1])],
+        prism(sg, [(s * 0.0047, zc + 0.0003), (s * 0.0085, zc + 0.0003), (s * 0.0072, P(0, 1.5)[1]), (s * 0.0047, P(0, 2.5)[1])],
               yf - 0.0019, yf + 0.0019, AL, axis="y")
-    prism(b, [(-0.0050, zc), (0.0050, zc), (0.0050, zc + 0.0045), (-0.0050, zc + 0.0045)],
+    prism(sg, [(-0.0050, zc), (0.0050, zc), (0.0050, zc + 0.0045), (-0.0050, zc + 0.0045)],
           yf - 0.0019, yf + 0.0019, AL, axis="y")
-    prism(b, [(-0.0011, zc), (0.0011, zc), (0.0009, zs), (-0.0009, zs)], yf - 0.0012, yf + 0.0012, AL, axis="y")
+    prism(sg, [(-0.0011, zc), (0.0011, zc), (0.0009, zs), (-0.0009, zs)], yf - 0.0012, yf + 0.0012, AL, axis="y")
+
+    sg.build()
 
     # Barrel and flash hider (axis at reference y 71)
     yb0, zbar = P(525, 71)

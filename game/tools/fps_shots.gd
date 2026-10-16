@@ -181,6 +181,45 @@ func _go() -> void:
 		await _shot("%d_flash_%s" % [n, id])
 		pl.vm._flash.set_process(true)
 		n += 1
+	# G51c: every optic on the automatic rifle and the carbine, aimed in (and
+	# the red dot at the hip); the scoped rifles at the hip and half aimed in
+	_look_at(bot.eye())
+	for id in ["auto_rifle", "carbine"]:
+		if not FpsWeapons.available(id):
+			continue
+		for k: String in FpsWeapons.OPTIC_ORDER:
+			FpsTune.set_optic(id, k)
+			pl.set_loadout(id, "pistol")
+			pl.debug_aim = true
+			await _wait(0.8)
+			await _shot("%d_optic_%s_%s_aimed" % [n, id, k])
+			n += 1
+			if k == "red_dot":
+				pl.debug_aim = false
+				await _wait(0.6)
+				await _shot("%d_optic_%s_%s_hip" % [n, id, k])
+				n += 1
+		FpsTune.set_optic(id, str(FpsWeapons.SPECS[id].optics.default))
+	pl.debug_aim = false
+	for id in ["sniper", "marksman"]:
+		pl.set_loadout(id, "pistol")
+		await _wait(0.8)
+		await _shot("%d_scope_%s_hip" % [n, id])
+		n += 1
+		pl.debug_aim = true
+		await _wait(FpsTune.value("ads_time") * 0.55)
+		await _shot("%d_scope_%s_half_aimed" % [n, id])
+		n += 1
+		pl.debug_aim = false
+		await _wait(0.5)
+	for id in ["pistol", "deagle"]:
+		pl.set_loadout("sniper", id)
+		pl._switch(id)
+		pl.debug_aim = true
+		await _wait(0.8)
+		await _shot("%d_%s_aimed_arms_length" % [n, id])
+		n += 1
+		pl.debug_aim = false
 	# sheet: 5 across, as many rows as frames
 	var rows := ceili(shots.size() / 5.0)
 	var sheet := Image.create(1600, 180 * rows, false, Image.FORMAT_RGB8)

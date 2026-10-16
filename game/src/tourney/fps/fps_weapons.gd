@@ -32,8 +32,17 @@ extends RefCounted
 ##            of the eye marker, its radius] in the model's own metres (x the
 ##            build scale), and lens_zoom; FpsViewmodel renders a small,
 ##            low-res magnified view onto it
+##   optics   (G51c) the sights you can pick on the radial: default, the rail
+##            top (model metres), and per kind (iron / red_dot / scope) either
+##            a `build` for FpsOptic (reflex, scope, irons: axis height, `at`
+##            along the gun, eye_back) or the model's own part (`eye` [height,
+##            z], a `lens` [z, radius]); `hide` lists model parts to take off
 ##   dual     two of the asset, one per hand: LMB fires the left, RMB the right,
 ##            no aiming in; `mag` is each gun's; the reload is a trick (G43)
+
+## The optics' names on the radial (G51c).
+const OPTIC_NAMES := { "iron": "Iron sights", "red_dot": "Red dot", "scope": "Scope" }
+const OPTIC_ORDER := ["iron", "red_dot", "scope"]
 
 const ORDER := ["sniper", "marksman", "shotgun", "carbine", "auto_rifle", "dual_berettas", "pistol", "deagle", "slingshot"]
 const PRIMARIES := ["sniper", "marksman", "shotgun", "carbine", "auto_rifle", "dual_berettas"]
@@ -113,11 +122,19 @@ const SPECS := {
 		"damage": 15.0, "head": 1.8, "pellets": 1, "cycle": 0.075, "mag": 30, "reload": 1.7,
 		"spread": 3.5, "ads_spread": 1.0, "move_spread": 1.5, "recoil": 4.2, "kick": 0.042, "punch": 0.5, "bloom": 0.7, "flash": 0.9, "sway": 0.7,
 		"ads_div": 1.2, "scope": false, "auto": true, "action": "auto", "range": 160.0,
+		"optics": { "default": "iron", "rail": 0.1287,
+			"iron": { "eye": [0.1489, -0.068], "hide": [] },
+			"red_dot": { "build": "reflex", "axis": 0.168, "at": 0.05, "eye_back": 0.1, "hide": ["sights"] },
+			"scope": { "build": "scope", "axis": 0.172, "at": 0.07, "len": 0.15, "r": 0.016, "zoom": 2.5, "eye_back": 0.1, "hide": ["sights"] } },
 		"hip": Vector3(0.14, -0.18, -0.36), "tracer": Color(1.0, 0.82, 0.5) },
 	"auto_rifle": { "name": "Automatic rifle", "asset": "auto_rifle", "params": { "scale": 1.25 },
 		"damage": 21.0, "head": 2.0, "pellets": 1, "cycle": 0.1, "mag": 30, "reload": 2.1,
 		"spread": 3.0, "ads_spread": 0.5, "move_spread": 3.5, "recoil": 4.6, "kick": 0.045, "punch": 0.6, "bloom": 0.98, "flash": 1.2, "sway": 0.7,
-		"ads_div": 1.4, "scope": false, "auto": true, "action": "auto", "range": 300.0, "lens": [0.0768, 0.0128], "lens_zoom": 2.5,
+		"ads_div": 1.4, "scope": false, "auto": true, "action": "auto", "range": 300.0,
+		"optics": { "default": "red_dot", "rail": 0.127,
+			"iron": { "build": "irons", "axis": 0.157, "rear": 0.03, "front": 0.45, "eye_back": 0.05, "hide": ["optic", "sights"] },
+			"red_dot": { "build": "reflex", "axis": 0.165, "at": 0.12, "eye_back": 0.1, "hide": ["optic"] },
+			"scope": { "eye": [0.171, 0.02], "lens": [0.0968, 0.0128], "zoom": 2.5, "hide": [] } },
 		"hip": Vector3(0.15, -0.19, -0.36), "tracer": Color(1.0, 0.8, 0.45) },
 	"dual_berettas": { "name": "Dual Berettas", "asset": "pistol", "params": { "scale": 1.25 },
 		"damage": 24.0, "head": 2.5, "pellets": 1, "cycle": 0.15, "mag": 15, "reload": 2.3,
