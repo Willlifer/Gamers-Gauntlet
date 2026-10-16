@@ -7,7 +7,10 @@ extends RefCounted
 ## and otherwise attacks. G53: it keeps a damage-potion dose going, and in a
 ## skull phase it wields the lightning dagger and breaks the nearest skull,
 ## then wields its main weapon again (`dagger` false: it stays on the main
-## weapon, which is too slow). Seeded: the same seed plays the same way.
+## weapon, which is too slow). G53b: it skates the skulls (always the one
+## fewest steps away, struck on arrival), swaps bow <-> staff when the Warden
+## shields itself against the one it holds (`swaps` false: it doesn't), and
+## runs column to column through the slam. Seeded: the same seed plays the same way.
 
 var rng := RandomNumberGenerator.new()
 var react := -1.0             ## chance it prays right (-1: OsrsTune.bot_react)
@@ -15,6 +18,7 @@ var dodge := -1.0             ## chance it dodges a telegraph (-1: OsrsTune.bot_
 var _choice := {}             # projectile id -> the prayer it will use
 var dagger := true            ## swaps to the lightning dagger for the skulls
 var boost := true             ## drinks the damage potion
+var swaps := true             ## swaps weapons against the Warden's shields
 var _dodge := {}              # "tick:tile" threat key -> dodges it?
 var _main := ""               # the bow or staff it picked
 
@@ -28,14 +32,18 @@ func think(s: OsrsSim) -> Dictionary:
 	var me: Dictionary = s.me
 	if not me.alive:
 		return o
-	if _main == "" or str(me.weapon) != "dagger":
+	if _main == "":
 		_main = str(me.weapon) if str(me.weapon) != "dagger" else "bow"
 	var skulls := not s.skull_phase.is_empty() and not s.skulls.is_empty()
-	# weapons: the dagger for the skulls, the main weapon otherwise
+	# weapons: the dagger for the skulls; otherwise the main weapon, or the
+	# other one while the Warden is shielded against it
+	var main := _main
+	if swaps and str(s.boss.shield) == OsrsSim.style_of(main):
+		main = "staff" if main == "bow" else "bow"
 	if skulls and dagger and str(me.weapon) != "dagger":
 		o["wield"] = "dagger"
-	elif not skulls and str(me.weapon) == "dagger":
-		o["wield"] = _main
+	elif not skulls and str(me.weapon) != main and (swaps or str(me.weapon) == "dagger"):
+		o["wield"] = main
 	# prayer: the next projectile to land
 	var next: Dictionary = {}
 	for p: Dictionary in s.projs:
@@ -49,7 +57,7 @@ func think(s: OsrsSim) -> Dictionary:
 		if me.prayer != want and float(me.pray) > 0.0:
 			o["pray"] = want
 	# supplies
-	if float(me.hp) < float(me.max_hp) * 0.5 and int(me.food) > 0:
+	if float(me.hp) < float(me.max_hp) * (0.3 if skulls else 0.5) and int(me.food) > 0:     # eating mid-skate costs 3 ticks
 		o["eat"] = true
 	elif float(me.pray) < 30.0 and int(me.doses) > 0:
 		o["drink"] = true
@@ -84,17 +92,32 @@ func think(s: OsrsSim) -> Dictionary:
 	return o
 
 
-## The skull to break: the one it's on, else the nearest by a walk.
+## The skull to break: the one it's on, else the one fewest steps from a
+## square next to it (0: strike it now), so it skates the lane.
 func _skull(s: OsrsSim) -> int:
-	if int(s.me.target) >= 0 and not s.skull(int(s.me.target)).is_empty():
-		return int(s.me.target)
-	var best := -1
-	var bd := 999
+	var keep_t := int(s.me.target)
+	var keep_w := str(s.me.weapon)
+	if dagger:
+		s.me.weapon = "dagger"                          # measure as it will strike (look only; restored below)
+	var mid := Vector2.ZERO                             # sweep from the lane's end: farther from its middle first
 	for k: Dictionary in s.skulls:
-		var d := OsrsSim._cheb(k.tile, s.me.tile)
+		mid += Vector2(k.tile)
+	mid /= float(s.skulls.size())
+	var best := -1
+	var bd := 1e9
+	for k: Dictionary in s.skulls:
+		s.me.target = int(k.id)
+		var d := 0.0 if s.in_reach(s.me.tile) else float(s.path_to_reach().size())
+		if d == 0.0 and not s.in_reach(s.me.tile):
+			d = 99.0                                    # can't get next to it
+		if int(k.id) == keep_t and d < 99.0:
+			d -= 0.5                                    # keep at the one it's after
+		d = d * 10.0 - Vector2(k.tile).distance_to(mid)
 		if d < bd:
 			bd = d
 			best = int(k.id)
+	s.me.target = keep_t
+	s.me.weapon = keep_w
 	return best
 
 
@@ -103,15 +126,16 @@ func _safe(s: OsrsSim, bad: Dictionary) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var bd := 999.0
 	var later := s.danger(5)
-	var slam_cols := {}                                 # every column the pending slams will hit (the centre one survives them all)
-	for sl in s.slams:
-		for x in sl.cols:
-			slam_cols[int(x)] = true
+	var next_safe := -1                                 # the slam after the imminent one: lean toward its column
+	var order: Array = s.slams.duplicate()
+	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.t) < int(b.t))
+	if order.size() >= 2:
+		next_safe = int(order[1].safe)
 	for t: Vector2i in s.floor_tiles():
 		if not s.walkable(t) or bad.has(t):
 			continue
 		var d := Vector2(t).distance_to(Vector2(me.tile)) + (2.0 if later.has(t) else 0.0) + (1.5 if OsrsSim.boss_dist(t) > int(OsrsTune.value("range")) else 0.0) \
-			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0) + (4.0 if slam_cols.has(t.x) else 0.0)
+			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0) + (0.6 * absi(t.x - next_safe) if next_safe >= 0 else 0.0)
 		if d < bd:
 			bd = d
 			best = t
