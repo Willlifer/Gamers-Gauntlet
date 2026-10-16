@@ -13,3 +13,16 @@ desktop.ini
 # Windows builds (build_windows.bat, D395)
 dist/
 design/shots/
+# Process and reference material: kept on disk, out of git (never in an export)
+# - the author's request docs and reference media (the transcribed .md in design/requests stays)
+*.docx
+*.mp4
+*.mov
+design/ref/
+# - Blender and other art sources (the export already excludes art/source/* and *.blend;
+#   the gauntlet .blend files are rebuilt by game/tools/blender/gauntlet/gg_<id>.py)
+*.blend
+*.blend1
+game/art/source/
+# - the author's untrimmed Chris takes (tools/audio/trim_chris.py makes the shipped loops)
+game/audio/source/

@@ -66,6 +66,7 @@ a `history/` summary when the session was long.
 - **Scope:** more modules first, online last (G32).
 - **The look** (G27, `src/tourney/ui/`): `TourneyTile` (menu tiles), `SlotReel` (the rolls), `TourneyBackdrop` (a game's map circling behind every screen), `TourneyPortraits` (plate portraits); palette and builders in `TourneyUI`.
 - **The range** (`RangeScreen`): no longer in the lobby (G50); kept for `aram_shots`.
+- **Local only (gitignored, on disk):** reference images `design/ref/`, art sources `game/art/source/` and every `.blend`, the untrimmed takes `game/audio/source/`, the author's `.docx`/`.mp4` requests. Nothing the export ships; a fresh clone lacks them, so ask the author for refs before a reference review.
 - **Play look-outs:** `design/PLAYTEST.md` (a checklist per batch; nothing owed). The author's request docs: `design/requests/`.
 - Black | White's own code stays under `src/core` and `src/game`; edit it only
   to expose what a module needs (e.g. `cosmetics.hair_hex`).
