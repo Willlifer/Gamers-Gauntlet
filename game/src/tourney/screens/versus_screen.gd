@@ -123,6 +123,14 @@ func _challenge() -> Control:
 		mark.set_anchors_preset(Control.PRESET_FULL_RECT)
 		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	if look.size() > 2 and ResourceLoader.exists(str(look[2])):
+		var logo := TextureRect.new()                       # the game's own logo over its map (G46)
+		logo.texture = load(str(look[2]))
+		logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		logo.position = Vector2(40, 40)
+		logo.size = Vector2(400, 210)
+		frame.add_child(logo)
 	var name_ := TourneyModules.name_of(game_id)
 	var parts := name_.split(":", true, 1)
 	var kind := TourneyUI.label(c, parts[0].strip_edges().to_upper() if parts.size() > 1 else "", BWStyle.F_SUB, TourneyUI.GOLD)

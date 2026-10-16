@@ -38,7 +38,7 @@ func think(s: MmoSim, u: MmoUnit) -> Dictionary:
 	var o := {}
 	if not u.alive or s.winner != "":
 		return o
-	var b := s.boss
+	var b := _foe(s, u)
 	o["target"] = b.id
 	var dest := _where(s, u)
 	var need_move := u.pos.distance_to(dest) > 0.8
@@ -73,6 +73,8 @@ func think(s: MmoSim, u: MmoUnit) -> Dictionary:
 func _where(s: MmoSim, u: MmoUnit) -> Vector2:
 	var b := s.boss
 	var idx := s.players().find(u)
+	if s.tank:
+		return _tank_where(s, u, idx)
 	# a bomb on me: my spread slot
 	if u.has_aura("bomb") and _react(s, "bomb%d" % int(s.time / 20.0)):
 		if not s.scorch.is_empty():
@@ -139,6 +141,70 @@ func _scorch_home(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
 	var r := b.radius + 1.8 if u.role == "tank" else (b.radius + 2.0 if melee else 8.5)
 	var a := float(s.scorch.ang) + float(s.scorch.get("dir", 1.0)) * (PI * 0.5 + 0.6 + float(idx % 3) * 0.32)
 	return (b.pos + Vector2(cos(a), sin(a)) * r).limit_length(MmoSim.ARENA_R - 1.5)
+
+
+## Who to hit: the boss, or (Planet of Tanks, G46) the weakest light tank
+## while any is up, for the damage dealers: focus fire.
+func _foe(s: MmoSim, u: MmoUnit) -> MmoUnit:
+	if s.tank == null or u.role != "dps":
+		return s.boss
+	var best: MmoUnit = null
+	for a: MmoUnit in s.tank.adds:
+		if a.alive and (best == null or a.hp < best.hp):
+			best = a
+	return best if best else s.boss
+
+
+## Planet of Tanks (G46): the blast's catcher (the first warrior, else the
+## first paladin) holds the gun at the north side, close in; every other
+## warrior and paladin stays farther out so the gun keeps to the catcher; the
+## raid gathers south (melee at the tail, ranged in an arc). Damage dealers
+## chase the light tanks while they live. Anything telegraphed: the nearest
+## safe spot from MmoTankFight.safe_spots.
+func _tank_where(s: MmoSim, u: MmoUnit, idx: int) -> Vector2:
+	var b := s.boss
+	var tf := s.tank
+	var catcher: MmoUnit = null
+	for cls in ["warrior", "paladin"]:
+		for p: MmoUnit in s.living():
+			if p.cls == cls and catcher == null:
+				catcher = p
+	var north := MmoTankFight.HOME_DIR
+	var melee: bool = float(MmoClasses.CLASSES[u.cls].auto.get("range", 0.0)) <= MmoClasses.MELEE and MmoClasses.CLASSES[u.cls].auto.has("dmg")
+	var home: Vector2
+	if not s.pulled and u != catcher:
+		home = u.pos if u.pos.distance_to(b.pos) > MmoSim.PULL_R + 2.0 else b.pos + (u.pos - b.pos).normalized() * (MmoSim.PULL_R + 3.0)
+	elif u == catcher:
+		home = b.pos + north * (b.radius + 1.4)
+	else:
+		var away := -north
+		var foe := _foe(s, u)
+		if foe != b and melee:
+			home = foe.pos + (u.pos - foe.pos).normalized() * (foe.radius + 1.6)
+		elif melee or u.cls in ["warrior", "paladin"]:
+			var side := (0.45 + 0.12 * (idx % 3)) * (1.0 if idx % 2 == 0 else -1.0)
+			var rr := b.radius + (3.4 if u.cls in ["warrior", "paladin"] else 2.0)
+			home = b.pos + away.rotated(side) * rr
+		else:
+			var arc := [-0.7, 0.0, 0.7, -0.35, 0.35]
+			home = b.pos + away.rotated(float(arc[idx % arc.size()])) * 12.0
+	home = home.limit_length(MmoSim.ARENA_R - 1.5)
+	if s.danger_at(u.pos, 0.6, u.id) and _react(s, "thaz%d" % int(s.time * 2.0)):
+		return _tank_safe(s, u, home)
+	if s.danger_at(home, 0.8, u.id):
+		return _tank_safe(s, u, home)
+	return home
+
+
+func _tank_safe(s: MmoSim, u: MmoUnit, prefer: Vector2) -> Vector2:
+	var best := u.pos
+	var bd := INF
+	for p: Vector2 in s.tank.safe_spots(u.id):
+		var score := p.distance_to(u.pos) + 0.3 * p.distance_to(prefer)
+		if score < bd:
+			bd = score
+			best = p
+	return best
 
 
 func _tank(s: MmoSim) -> MmoUnit:
@@ -208,7 +274,7 @@ func _ready(s: MmoSim, u: MmoUnit, ab: Dictionary, moving: bool) -> bool:
 
 
 func _want(s: MmoSim, u: MmoUnit, ab: Dictionary, tag: String) -> Dictionary:
-	var b := s.boss
+	var b := _foe(s, u)
 	var go := { "ab": str(ab.id) }
 	var r := float(ab.get("range", 0.0))
 	var kind := str(ab.get("tgt", "none"))

@@ -65,6 +65,7 @@ var _next := 1
 var _pending: Array = []        # { t, f: Callable }
 var _queued := {}               # unit id -> ability id
 var _bag_last := ""
+var tank: MmoTankFight = null   ## Planet of Tanks (G46): the boss is the kit tank; its brain is MmoTankFight
 
 
 func _init(p_seed: int = 1) -> void:
@@ -100,7 +101,7 @@ func add_player(cls_id: String, pname: String) -> MmoUnit:
 ## Scale the Giant to the raid: MmoTune.boss_hp is for six (G39: raids of up to 8).
 func scale_boss() -> void:
 	var n := players().size()
-	boss.base_hp = MmoTune.value("boss_hp") * float(n) / 6.0
+	boss.base_hp = MmoTune.value("tank_hp" if tank else "boss_hp") * float(n) / 6.0
 	boss.max_hp = boss.base_hp
 	boss.hp = boss.max_hp
 
@@ -122,6 +123,23 @@ func add_boss() -> MmoUnit:
 	return u
 
 
+## Planet of Tanks (G46): the boss is the tank, parked in the middle of the clearing.
+func add_tank() -> MmoUnit:
+	var u := add_boss()
+	u.name = "The Tank"
+	u.radius = 2.6
+	u.pos = Vector2.ZERO
+	tank = MmoTankFight.new(self)
+	return u
+
+
+## The boss's spells by name, for the HUD (the tank's are vague on purpose).
+func spell_name(id: String) -> String:
+	if tank:
+		return str(MmoTankFight.NAMES.get(id, ""))
+	return str(SPELL_NAMES.get(id, ""))
+
+
 func unit(id: String) -> MmoUnit:
 	for u: MmoUnit in units:
 		if u.id == id:
@@ -138,7 +156,7 @@ func living() -> Array:
 
 
 func is_enemy(a: MmoUnit, b: MmoUnit) -> bool:
-	return a.kind != b.kind
+	return (a.kind == "player") != (b.kind == "player")      # the boss and its adds (G46) are on one side
 
 
 # ------------------------------------------------------------------- tick
@@ -731,6 +749,8 @@ func damage(src: MmoUnit, t: MmoUnit, amount: float, school: String, what: Strin
 	if src and src.kind == "player":
 		n *= src.mod("dmg") * MmoTune.value("dmg_mult")
 		n *= t.mod("taken")
+		if tank and t == boss and tank.flank_open and tank.on_flank(src.pos):
+			n *= MmoTune.value("flank_mult")                         # G46: the soft flanks after Loose Cannon
 		if kind != "dot":
 			crit = force_crit or rng.randf() < CRIT + src.add("crit")
 			if crit:
@@ -861,7 +881,7 @@ func _pull() -> void:
 	next_spell_at = time + FIRST_SPELL
 	next_brand_at = time + MmoTune.value("brand_first")
 	_emit({ "type": "pull" })
-	_emit({ "type": "warn", "text": "The Giant wakes!", "col": "#ff4a3a" })
+	_emit({ "type": "warn", "text": "The engine coughs into life!" if tank else "The Giant wakes!", "col": "#ff4a3a" })
 
 
 func _tick_boss() -> void:
@@ -873,6 +893,9 @@ func _tick_boss() -> void:
 		for u: MmoUnit in living():
 			if u.pos.distance_to(b.pos) < PULL_R:
 				_pull()
+		return
+	if tank:
+		tank.tick()
 		return
 	_tick_scorch(b)
 	# G35: at half health the warnings stop; at a quarter the rotation doubles
@@ -1349,11 +1372,16 @@ func _tick_areas() -> void:
 					_emit({ "type": "explode", "pos": a.pos, "r": float(a.r), "what": "meteor" })
 				"gather":
 					_gather_fire(a)
+				_:
+					if tank and a.has("on_fire"):
+						tank.area_fired(a)
 			_emit({ "type": "area_end", "id": int(a.id) })
 
 
 ## Is `p` inside a live hazard (the bots dodge with this)?
-func danger_at(p: Vector2, pad := 0.6) -> bool:
+func danger_at(p: Vector2, pad := 0.6, who := "") -> bool:
+	if tank and tank.danger_at(p, pad, who):
+		return true
 	for a: Dictionary in areas:
 		if str(a.kind) == "ground" and str(a.get("owner", "")) == "boss" and p.distance_to(a.pos as Vector2) <= float(a.r) + pad:
 			return true

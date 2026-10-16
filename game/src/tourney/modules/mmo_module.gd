@@ -30,10 +30,15 @@ static func info() -> Dictionary:
 
 
 static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	return run(m, rng, "giant")
+
+
+## The whole raid with bots in every seat; `enc` the boss ("giant", or "tank": Planet of Tanks, G46).
+static func run(m: Dictionary, rng: RandomNumberGenerator, enc: String) -> Dictionary:
 	rng.seed = int(m.seed)
 	var a := str(MmoClasses.ORDER[rng.randi() % MmoClasses.ORDER.size()])
 	var b := str(MmoClasses.ORDER[rng.randi() % MmoClasses.ORDER.size()])
-	var s := build_raid(int(m.seed), a, str(m.players[0].name), b, str(m.players[1].name))
+	var s := build_raid(int(m.seed), a, str(m.players[0].name), b, str(m.players[1].name), enc)
 	var bots := {}
 	var k := 0
 	for p: MmoUnit in s.players():
@@ -55,17 +60,20 @@ static func simulate(m: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 ## The raid (G39): the two contestants first (seats 0 and 1, any classes,
 ## the same one allowed), then one bot of every class, eight in all. The
 ## Giant scales with the raid's size.
-static func build_raid(seed: int, cls_a: String, name_a: String, cls_b: String, name_b: String) -> MmoSim:
-	return build_seats(seed, [[cls_a, name_a], [cls_b, name_b]])
+static func build_raid(seed: int, cls_a: String, name_a: String, cls_b: String, name_b: String, enc := "giant") -> MmoSim:
+	return build_seats(seed, [[cls_a, name_a], [cls_b, name_b]], RAID_SIZE, enc)
 
 
 ## Any raid of up to 8: `seats` is [[class, name], ...] for the people; the
 ## rest of the eight are bots, one of each class, then repeats. Every seat
 ## takes orders the same way (MmoSim.step), human or bot, so the same raid
 ## runs online in lockstep with eight people (stage 3).
-static func build_seats(seed: int, seats: Array, size := RAID_SIZE) -> MmoSim:
+static func build_seats(seed: int, seats: Array, size := RAID_SIZE, enc := "giant") -> MmoSim:
 	var s := MmoSim.new(seed)
-	s.add_boss()
+	if enc == "tank":
+		s.add_tank()
+	else:
+		s.add_boss()
 	for seat: Array in seats.slice(0, size):
 		s.add_player(str(seat[0]), str(seat[1]))
 	var k := 0
@@ -79,7 +87,8 @@ static func build_seats(seed: int, seats: Array, size := RAID_SIZE) -> MmoSim:
 
 
 static func _summary(s: MmoSim, pa: Dictionary, ua: MmoUnit, ga: Dictionary, pb: Dictionary, ub: MmoUnit, gb: Dictionary) -> String:
-	var how := "killed the Giant in %d s" % int(s.time - s.pull_time) if s.winner == "raid" else "wiped on the Giant"
+	var who := "the Tank" if s.tank else "the Giant"
+	var how := ("killed %s in %d s" % [who, int(s.time - s.pull_time)]) if s.winner == "raid" else "wiped on " + who
 	return "The raid %s. %s (%s) graded %s (%d), %s (%s) %s (%d)." % [how, pa.name, MmoClasses.CLASSES[ua.cls].name, ga.letter, int(ga.score),
 		pb.name, MmoClasses.CLASSES[ub.cls].name, gb.letter, int(gb.score)]
 
@@ -100,6 +109,16 @@ func setup(m: Dictionary) -> void:
 
 
 # -------------------------------------------------------------- class pick
+
+## Extra dressing on the class pick (Planet of Tanks puts its logo up).
+func _dress_pick(_root: Control) -> void:
+	pass
+
+
+## Which boss: the Giant here; Planet of Tanks (MmoTanksModule) says "tank".
+func encounter() -> String:
+	return "giant"
+
 
 func _build_pick() -> void:
 	_pick_root = TourneyUI.root(self)
@@ -148,6 +167,7 @@ func _build_pick() -> void:
 		b.add_theme_font_size_override("font_size", BWStyle.F_SUB)
 		i += 1
 	_hidden_tank()
+	_dress_pick(_pick_root)
 	TourneyUI.after(self, _rng.randf_range(2.0, 6.0), func() -> void:
 		if not _picks.has(_other.id):
 			_lock(_other.id, _bot_pick()))
@@ -267,7 +287,7 @@ func _start() -> void:
 		return
 	(_pick_root.get_parent() as CanvasLayer).queue_free()
 	var seed := int(match_cfg.seed)
-	var s := build_raid(seed, _picks[_human.id], str(_human.name), _picks[_other.id], str(_other.name))
+	var s := build_raid(seed, _picks[_human.id], str(_human.name), _picks[_other.id], str(_other.name), encounter())
 	var me: MmoUnit = s.players()[0]
 	var bots := {}
 	var k := 0

@@ -50,3 +50,4 @@ Last reviewed: 2026-10-15 (playtest rulings, the tournament look, FPS bullets an
 | L-5 | Temu's stealth: move-only. | 2026-10-15 | The author confirmed the literal reading (G5, G31). |
 | L-7 | The Chris loops' roles. | 2026-10-15 | Fine as they are; more audio later (G31). |
 | L-9 | G10 build order. | 2026-10-15 | More modules first, online last (G32). |
+| L-19 | Planet of Tanks (G46): the tank's numbers and pacing (all Claude's, on F1), the telegraphs' read, the vague texts, the smoke, the ram, the light tanks, the announcer; the logo. | AWAITING PLAY | Quick play "Planet of Tanks", or `--module mmo_tanks`. |

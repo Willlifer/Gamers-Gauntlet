@@ -15,7 +15,7 @@ signal quick_play(module_id: String)
 ## Muted tints and the big faded tag per game (restrained: the streaks move, the colour stays quiet).
 const LOOKS := {
 	"bw_twins": ["#3b3656", "B|W"], "aram": ["#25415e", "ARAM"], "pit": ["#2b4a3c", "PIT"],
-	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "fps_campus": ["#6a3c22", "PAINT"], "mmo_raid": ["#4c2f3d", "RAID"], "osrs_raid": ["#4e3d26", "OSRS"],
+	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "fps_campus": ["#6a3c22", "PAINT"], "mmo_raid": ["#4c2f3d", "RAID"], "mmo_tanks": ["#3a4428", "TANKS", MmoTanksModule.LOGO], "osrs_raid": ["#4e3d26", "OSRS"],
 }
 const CARD := Rect2(1200, 90, 380, 736)     ## the creator: 19% of 1600x900
 
@@ -73,6 +73,15 @@ func _build_tiles() -> void:
 		var id := str(info.id)
 		t.pressed.connect(func(): quick_play.emit(id))
 		_hook(t)
+		if look.size() > 2 and ResourceLoader.exists(str(look[2])):
+			var logo := TextureRect.new()                   # a game with a logo of its own wears it (G46)
+			logo.texture = load(str(look[2]))
+			logo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			logo.position = Vector2(150, 8)
+			logo.size = Vector2(118, 54)
+			logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			t.add_child(logo)
 
 
 func _hook(t: TourneyTile) -> void:

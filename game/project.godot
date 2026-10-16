@@ -16,6 +16,10 @@ config/version="0.1.0"
 run/main_scene="res://scenes/tourney.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
+[audio]
+
+general/text_to_speech=true
+
 [display]
 
 window/size/viewport_width=1600

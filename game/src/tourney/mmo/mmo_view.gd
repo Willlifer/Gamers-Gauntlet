@@ -59,6 +59,7 @@ var _mouse_restore := Vector2.ZERO
 var input_on := true
 var cam_hold := false                      ## tools: the camera is placed by hand
 var audio: MmoAudio
+var tank_view: MmoTankView                 ## Planet of Tanks (G46): the tank's own drawing
 
 
 func setup(p_sim: MmoSim, p_me: String, p_bots: Dictionary, p_names: Dictionary = {}) -> void:
@@ -71,9 +72,14 @@ func setup(p_sim: MmoSim, p_me: String, p_bots: Dictionary, p_names: Dictionary 
 func _ready() -> void:
 	cam_pitch = MmoTune.value("cam_pitch")
 	cam_dist = MmoTune.value("cam_dist")
-	var stage := GKStage.outdoor(MmoArena.lights())
+	var stage := GKStage.outdoor(MmoTankArena.lights() if sim.tank else MmoArena.lights())
 	add_child(stage)
-	MmoArena.build(self)
+	if sim.tank:
+		MmoTankArena.build(self)
+		tank_view = MmoTankView.new(self)
+		add_child(tank_view)
+	else:
+		MmoArena.build(self)
 	BWVfxCasts.tint_over = { "water": Color("#b47cff") }
 	_fx = BWVfxCasts.new()
 	add_child(_fx)
@@ -102,7 +108,7 @@ func _ready() -> void:
 	var me := sim.unit(me_id)
 	if me:
 		_hud.log_line("You join the raid as a %s." % MmoClasses.CLASSES[me.cls].name, Color("#ffd100"))
-		_hud.log_line("Tab targets the Giant; 1-8 and Shift+1-8 use your abilities.", Color("#ffff80"))
+		_hud.log_line("Tab targets " + ("the Tank" if sim.tank else "the Giant") + "; 1-8 and Shift+1-8 use your abilities.", Color("#ffff80"))
 		_hud.log_line("WASD move, Q/E strafe, hold right mouse to steer, wheel zooms, F1 tunes.", Color("#ffff80"))
 
 
@@ -170,6 +176,9 @@ static func _tint_class(n: Node, col: Color, hair: Color) -> void:
 func _add_unit(u: MmoUnit) -> void:
 	var root := Node3D.new()
 	add_child(root)
+	if tank_view and u.kind != "player":
+		_add_vehicle(u, root)
+		return
 	var ch := dress(u)
 	root.add_child(ch)
 	var vehicle := ""
@@ -196,6 +205,28 @@ func _add_unit(u: MmoUnit) -> void:
 	_views[u.id] = { "root": root, "char": ch, "pose": "", "cast": u.cast_serial, "strike": u.strike_serial, "hit": u.hit_serial,
 		"anim_t": 0.0, "name": name_l, "move": "", "move_t": 0.0, "glow": null }
 	ch.pose("idle")
+
+
+## Planet of Tanks (G46): the boss tank or a light tank, no character inside.
+func _add_vehicle(u: MmoUnit, root: Node3D) -> void:
+	var name_l := Label3D.new()
+	name_l.text = u.name
+	name_l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	name_l.fixed_size = true
+	name_l.pixel_size = 0.0009
+	name_l.font_size = 22
+	name_l.outline_size = 8
+	name_l.no_depth_test = true
+	name_l.modulate = Color("#ff3a2a")
+	name_l.outline_modulate = Color(0, 0, 0, 0.9)
+	name_l.font = MmoHud._font(["Friz Quadrata TT", "Palatino Linotype", "Georgia"], 600)
+	root.add_child(name_l)
+	var v := { "root": root, "char": null, "pose": "", "cast": u.cast_serial, "strike": u.strike_serial, "hit": u.hit_serial,
+		"anim_t": 0.0, "name": name_l, "move": "", "move_t": 0.0, "glow": null }
+	tank_view.build_unit(u, root, v)
+	name_l.position = Vector3(0, float(v.plate_h) + 0.4, 0)
+	_views[u.id] = v
+	_prev[u.id] = [u.pos, u.h, u.yaw]
 
 
 ## A hidden class's vehicle (G44): the kit model shrunk to raid size around
@@ -239,14 +270,22 @@ func _portraits() -> void:
 		l.rotation_degrees = Vector3(-30, 30, 0)
 		l.light_energy = 1.2
 		vp.add_child(l)
-		var ch := dress(u)
-		vp.add_child(ch)
 		var cam := Camera3D.new()
 		cam.fov = 30.0
-		vp.add_child(cam)
-		var head_y := 1.86
-		cam.position = Vector3(0.25, head_y + 0.08, 1.25)
-		cam.look_at(Vector3(0, head_y - 0.02, 0))
+		if tank_view and u.kind != "player":
+			var tk := GKRegistry.build("tank").instantiate(false)
+			tk.rotation.y = 0.5
+			vp.add_child(tk)
+			vp.add_child(cam)
+			cam.position = Vector3(1.0, 4.2, 9.5)
+			cam.look_at(Vector3(0, 2.2, 0))
+		else:
+			var ch := dress(u)
+			vp.add_child(ch)
+			vp.add_child(cam)
+			var head_y := 1.86
+			cam.position = Vector3(0.25, head_y + 0.08, 1.25)
+			cam.look_at(Vector3(0, head_y - 0.02, 0))
 		cam.make_current()
 		_hud.portraits[u.id] = vp.get_texture()
 		var v := vp
@@ -488,6 +527,8 @@ func _process(delta: float) -> void:
 	_sync_shots(delta)
 	_sync_areas(delta)
 	_sync_scorch(delta)
+	if tank_view:
+		tank_view.sync(delta)
 	_tick_floaters(delta)
 	audio.update(delta)
 	_place_camera(delta)
@@ -604,7 +645,15 @@ func _on_event(e: Dictionary) -> void:
 			var u := sim.unit(str(e.id))
 			_fx.release_at("ice", _v3(u.pos) + Vector3(0, 1.2, 0), 0.6)
 		"taunt":
-			_hud.log_line("%s taunts the Giant!" % sim.unit(str(e.id)).name, Color("#ff9040"))
+			_hud.log_line("%s taunts %s!" % [sim.unit(str(e.id)).name, sim.boss.name], Color("#ff9040"))
+		"spawn":
+			var su := sim.unit(str(e.id))
+			if su and not _views.has(su.id):
+				_add_unit(su)
+		"announce":
+			if tank_view:
+				tank_view.announce(str(e.text), str(e.get("sub", "")))
+			_hud.log_line("[Announcer]: %s %s" % [str(e.text), str(e.get("sub", ""))], Color("#ffd040"))
 		"area":
 			_add_area(e.area as Dictionary)
 		"area_end":
@@ -616,8 +665,8 @@ func _on_event(e: Dictionary) -> void:
 		"win":
 			_over_t = 0.0
 			if str(e.winner) == "raid":
-				_hud.center("The Giant has been defeated!", 6.0)
-				_hud.log_line("The Giant has been defeated! %d s." % int(sim.time - sim.pull_time), Color("#ffd100"))
+				_hud.center("%s has been defeated!" % sim.boss.name, 6.0)
+				_hud.log_line("%s has been defeated! %d s." % [sim.boss.name, int(sim.time - sim.pull_time)], Color("#ffd100"))
 				for u: MmoUnit in sim.living():
 					if _views.has(u.id):
 						(_views[u.id].char as BWCharacter).pose("cheer")
@@ -629,6 +678,14 @@ func _on_event(e: Dictionary) -> void:
 
 
 func _boss_spell(e: Dictionary) -> void:
+	if tank_view:
+		if str(e.stage) == "cast" and str(e.spell) != "cannon":
+			_hud.log_line("The Tank: %s..." % sim.spell_name(str(e.spell)).to_lower(), Color("#ff9040"))
+		if str(e.spell) == "loose" and str(e.stage) == "volley":
+			_shake = maxf(_shake, 0.35)
+		if str(e.spell) == "ram" and str(e.stage) == "hit_edge":
+			_shake = maxf(_shake, 0.9)
+		return
 	var v: Dictionary = _views.get("boss", {})
 	match str(e.stage):
 		"cast":
@@ -670,6 +727,11 @@ func _draw_units(alpha: float, delta: float) -> void:
 		var hh := lerpf(float(pv[1]), u.h, alpha)
 		root.position = Vector3(p.x, hh, p.y)
 		var yaw := lerp_angle(float(pv[2]), u.yaw, alpha)
+		if v.get("vehicle", false):
+			root.rotation.y = yaw
+			tank_view.pose(u, v, delta)
+			(v.name as Label3D).visible = u.kind == "add" and u.alive
+			continue
 		# strafing: turn the body toward the run; backpedal: walk the clip backwards
 		var mv := u.move
 		var off := 0.0
@@ -929,7 +991,7 @@ func _place_camera(delta: float) -> void:
 	var want := pivot + back * cos(pr) * cam_dist + Vector3(0, sin(pr) * cam_dist, 0)
 	if want.y < 0.35:
 		want.y = 0.35
-	var lim := MmoArena.WALL_R - 1.0
+	var lim := (MmoTankArena.WALL_R if tank_view else MmoArena.WALL_R) - 1.0
 	var flat := Vector2(want.x, want.z)
 	if flat.length() > lim:                                   # don't back into the wall
 		flat = flat.normalized() * lim
@@ -938,7 +1000,7 @@ func _place_camera(delta: float) -> void:
 	if b and b.alive and _views.has("boss"):
 		var bc := _v3(b.pos)
 		var br := b.radius * 1.25
-		var bh := 2.3 * MmoTune.value("boss_scale")
+		var bh := 3.2 if tank_view else 2.3 * MmoTune.value("boss_scale")
 		var d := want - pivot
 		var hit := 1.0
 		for k in 24:                                          # march out from the head: the first step inside the Giant stops it
@@ -1241,10 +1303,24 @@ shader_type spatial;
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled;
 uniform vec4 col : source_color = vec4(1.0, 0.25, 0.1, 1.0);
 uniform float fill = 0.0;
-uniform int shape = 0;          // 0 disc, 1 strip, 2 ring (safe zone), 3 soft (players' ground spells)
+uniform int shape = 0;          // 0 disc, 1 strip, 2 ring (safe zone), 3 soft (players' ground spells), 4 sector (G46)
 uniform float pulse = 0.0;
+uniform float half = 1.0;       // the sector's half angle (rad)
 void fragment() {
 	vec2 p = UV * 2.0 - 1.0;
+	if (shape == 4) {
+		// a wedge from the centre along +Z, filling outward as it nears
+		float d4 = length(p);
+		float ang = abs(atan(p.x, p.y));
+		float inside4 = step(ang, half) * (1.0 - smoothstep(0.985, 1.0, d4));
+		float side = (half - ang) * max(d4, 0.05) * 30.0;
+		float rim4 = (1.0 - smoothstep(0.0, 0.25, side)) * inside4;
+		float grow4 = 1.0 - smoothstep(fill - 0.02, fill, d4);
+		float stripes = step(0.5, fract(d4 * 18.0 - TIME * 1.5));
+		float a4 = rim4 * 0.95 + inside4 * (0.16 + 0.06 * stripes) + grow4 * inside4 * 0.34;
+		ALBEDO = col.rgb * (1.0 + rim4 * 0.6);
+		ALPHA = clamp(a4 * col.a, 0.0, 1.0);
+	} else {
 	float d = shape == 1 ? max(abs(p.x), 0.0) : length(p);
 	float edge = shape == 1 ? abs(p.x) : d;
 	float rim = smoothstep(0.86, 0.94, edge) * (1.0 - smoothstep(0.97, 1.0, edge));
@@ -1259,6 +1335,7 @@ void fragment() {
 	}
 	ALBEDO = col.rgb * (1.0 + rim * 0.6);
 	ALPHA = clamp(a * col.a, 0.0, 1.0);
+	}
 }
 """
 static var _tele_shader: Shader
@@ -1344,6 +1421,15 @@ func _add_area(a: Dictionary) -> void:
 			var dir := a.dir as Vector2
 			root.rotation.y = atan2(dir.x, dir.y)
 			q.position = Vector3(0, 0.05, float(a.len) * 0.5)
+		"sector":
+			pm.size = Vector2.ONE * float(a.r) * 2.0
+			q.mesh = pm
+			var sm := _tele_mat(MmoTankView.sector_col(str(a.look)), 4)
+			sm.set_shader_parameter("half", float(a.half))
+			q.material_override = sm
+			var sd := a.dir as Vector2
+			root.rotation.y = atan2(sd.x, sd.y)
+			q.position.y = 0.07 if str(a.look) != "dust" else 0.06
 		"circle", "bomb", "ground":
 			pm.size = Vector2.ONE * float(a.r) * 2.0
 			q.mesh = pm
@@ -1441,6 +1527,8 @@ func _add_area(a: Dictionary) -> void:
 		cnt.position.y = 3.7
 		root.add_child(cnt)
 		root.set_meta("count", cnt)
+	if tank_view:
+		tank_view.decorate(a, root)
 	_areas[int(a.id)] = { "node": root, "a": a }
 
 
@@ -1500,6 +1588,9 @@ func _spikes(a: Dictionary) -> void:
 
 
 func _explode(e: Dictionary) -> void:
+	if tank_view and str(e.what) in ["shell", "cannon", "arc", "tread"]:
+		tank_view.explode(e)
+		return
 	var at := _v3(e.pos as Vector2)
 	var me := sim.unit(me_id)
 	match str(e.what):
@@ -1588,7 +1679,7 @@ class BossPlate extends Control:
 		if b == null or not b.alive or not view._views.has("boss"):
 			return
 		var root: Node3D = view._views["boss"].root
-		var wp := root.global_position + Vector3(0, 2.45 * root.scale.y, 0)
+		var wp := root.global_position + Vector3(0, float(view._views["boss"].get("plate_h", 2.45 * root.scale.y)), 0)
 		var cam := view.camera()
 		if cam.is_position_behind(wp):
 			return

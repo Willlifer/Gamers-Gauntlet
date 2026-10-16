@@ -131,6 +131,49 @@ A WoW Classic raid against the Giant in a round courtyard (G22).
   letter wins, then the higher score. The report card shows the parts.
 - **Numbers:** `MmoTune` (F1).
 
+## mmo_tanks: Planet of Tanks (raid night 2, G46)
+The same raid of eight, classes, controls, HUD and grade as Raid night,
+against the kit tank parked in a round clearing cut out of the forest
+campus (`MmoTankArena`). The boss's brain is `MmoTankFight`; its view
+`MmoTankView`; numbers on F1 (`MmoTune`, section "Planet of Tanks"); the
+logo `art/ui/planet_of_tanks_logo*.png` (made by `tools/logo/planet_of_tanks_logo.py`)
+on the lobby tile, the load-in and the class pick. Every attack is
+telegraphed on the ground with a vague line of text ("The turret climbs
+skyward…").
+- **Main cycle, the cannon blast:** every `cannon_every` s a 120° wedge from
+  the tank to the edge (`cannon_warn` s of telegraph) at the closest warrior
+  or paladin (else the closest anyone). Each extra body caught raises
+  everyone's damage by `cannon_stack` (x1.75, x2.5…); the announcer calls
+  DOUBLE / TRIPLE / QUAD / MEGA HIT in big gold letters (and out loud when the
+  OS has a voice and `audio/general/text_to_speech` is on). A warrior or
+  paladin drags it away from the raid. Paused during barrage, Loose Cannon
+  and the ram.
+- **Specials** (one at a time, `spell_gap` between, like the Giant):
+  - *Barrage:* the gun climbs; 10 rounds land at random (every third on
+    someone), each leaving a burning crater until 1 s after the next special
+    is announced.
+  - *Smokescreen:* fired ahead of the tank, it spreads (`smoke_speed`) over
+    the whole map, thick at its front (`smoke_band`), thin behind it
+    (`smoke_core`); it poisons, slows and cuts damage; then thins out as
+    slowly. Keep away, then rush through the front.
+  - *Treadburn* (from 75%): one tread or both rev red to bright red, dust
+    fills that side (all but 10° fore and aft) over `tread_warn` s, then
+    explodes. Both at once (`tread_both` chance): only the 20° wedges fore
+    and aft are safe.
+- **75%:** the treads glow red; **Loose Cannon:** bright red treads, a 3 s
+  side-to-side wobble, then it spins and sprays the middle 75% of the
+  clearing for 4 s. Then the treads cool to orange and its **flanks** take
+  `flank_mult` (x1.5) damage for the rest of the fight.
+- **50%: the ram**, twice: it turns, rocks fore and aft (`ram_rock`), charges
+  to the edge (flattening anyone in its path), then fires a huge 110° arc back
+  across the clearing (hug the wall beside it). Then it drives home.
+- **25%:** two light tanks roll out and chase people (`add_*`); bots focus
+  them. All specials (Loose Cannon and the ram included) in the mix.
+- **10%:** everything `tank_rush_rate` (x2) faster.
+- **Bots:** the first warrior (else paladin) holds the gun north, close in;
+  the other warriors and paladins stand farther out; the raid south;
+  telegraphs: the nearest safe spot (`MmoTankFight.safe_spots`).
+
 ## osrs_raid: OSRS Warden's Trial
 After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
 - **You:** 99 HP, 99 prayer; protect from magic / missiles / melee (1 2 3 or

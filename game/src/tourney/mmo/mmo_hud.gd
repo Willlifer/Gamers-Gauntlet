@@ -138,7 +138,7 @@ func _build() -> void:
 	zs.set_corner_radius_all(3)
 	zone.add_theme_stylebox_override("panel", zs)
 	_root.add_child(zone)
-	_label(zone, "Giant's Courtyard", Vector2(0, 0), 14, GOLD, serif, HORIZONTAL_ALIGNMENT_CENTER, 200)
+	_label(zone, "Campus Clearing" if sim and sim.tank else "Giant's Courtyard", Vector2(0, 0), 14, GOLD, serif, HORIZONTAL_ALIGNMENT_CENTER, 200)
 	_clock = _label(_root, "", Vector2(W - 54, 168), 13, Color(0.9, 0.9, 0.9), sans)
 	_buffs = Control.new()
 	_buffs.position = Vector2(W - 200, 8)
@@ -454,8 +454,9 @@ func _tracker_text() -> String:
 	var alive := sim.living().size()
 	var b := sim.boss
 	var dead := 0 if b.alive else 1
-	var t := "[color=#ffd100][60+] The Giant's Courtyard[/color] [color=#%s](%d%%)[/color]\n" % [("40ff40" if dead else "ff4040"), int(100.0 - b.hp_pct() * 100.0)]
-	t += "[color=#e0e0e0] - The Giant slain: %d/1[/color]\n" % dead
+	var zone := "Planet of Tanks: the Campus Clearing" if sim.tank else "The Giant's Courtyard"
+	var t := "[color=#ffd100][60+] %s[/color] [color=#%s](%d%%)[/color]\n" % [zone, ("40ff40" if dead else "ff4040"), int(100.0 - b.hp_pct() * 100.0)]
+	t += "[color=#e0e0e0] - %s destroyed: %d/1[/color]\n" % [b.name, dead] if sim.tank else "[color=#e0e0e0] - The Giant slain: %d/1[/color]\n" % dead
 	t += "[color=#e0e0e0] - Raid standing: %d/%d[/color]" % [alive, sim.players().size()]
 	return t
 
@@ -470,18 +471,19 @@ func _timers_update() -> void:
 		if sim.spell.is_empty():
 			var left := sim.next_spell_at - sim.time
 			if left > 0.0 and left < 60.0:
-				var nxt := str(sim._bag[0]) if not sim._bag.is_empty() else "?"
-				rows.append(["Next: " + (MmoSim.SPELL_NAMES.get(nxt, "a spell") if nxt != "?" else "a spell"), left, MmoTune.value("spell_gap") + 2.0, Color("#c06030")])
+				var nxt := str(sim._bag[0]) if not sim._bag.is_empty() and sim.tank == null else "?"
+				rows.append(["Next: " + (sim.spell_name(nxt) if nxt != "?" else ("something" if sim.tank else "a spell")), left, MmoTune.value("spell_gap") + 2.0, Color("#c06030")])
 		else:
-			rows.append([str(MmoSim.SPELL_NAMES.get(str(sim.spell.id), "")), maxf(0.0, float(sim.spell.total) - float(sim.spell.t)), float(sim.spell.total), Color("#c02020")])
+			if str(sim.spell.stage) == "cast":
+				rows.append([sim.spell_name(str(sim.spell.id)), maxf(0.0, float(sim.spell.total) - float(sim.spell.t)), float(sim.spell.total), Color("#c02020")])
 		var enr := MmoTune.value("enrage") - (sim.time - sim.pull_time)
 		if enr > 0.0:
 			rows.append(["Enrage", enr, MmoTune.value("enrage"), Color("#802020")])
 		var el := sim.time - sim.pull_time
-		var sc_at := MmoTune.value("scorch_at")
+		var sc_at := MmoTune.value("scorch_at") if sim.tank == null else INF
 		if el < sc_at and el >= sc_at - MmoTune.value("scorch_warn") - 6.0:
 			rows.append(["Scorched Earth", sc_at - el, MmoTune.value("scorch_warn") + 6.0, Color("#d04010")])
-		elif el < MmoTune.value("scorch_spin_at") and el >= MmoTune.value("scorch_spin_at") - 10.0:
+		elif sim.tank == null and el < MmoTune.value("scorch_spin_at") and el >= MmoTune.value("scorch_spin_at") - 10.0:
 			rows.append(["The fire turns", MmoTune.value("scorch_spin_at") - el, 10.0, Color("#d04010")])
 	for a: Dictionary in sim.areas:
 		if str(a.kind) == "ring":
@@ -644,7 +646,7 @@ class CastBar extends Control:
 			f = 1.0 - f
 		var nm := ""
 		if unit.kind == "boss":
-			nm = "" if hud and hud.quiet() else str(MmoSim.SPELL_NAMES.get(str(unit.cast.ab), ""))
+			nm = "" if hud and hud.quiet() else (hud.sim.spell_name(str(unit.cast.ab)) if hud else "")
 		else:
 			nm = str(MmoClasses.ability(unit.cls, str(unit.cast.ab)).get("name", ""))
 		draw_rect(Rect2(Vector2(-2, -2), size + Vector2(4, 4)), Color(0, 0, 0, 0.8))
@@ -765,6 +767,17 @@ class Minimap extends Control:
 			_ring(pc, rr * k, Color(0.25, 0.22, 0.18, 0.9), c, r)
 		for a: Dictionary in sim.areas:
 			var ac: Vector2 = to.call(a.pos as Vector2)
+			if str(a.kind) == "sector":                  # G46: the tank's wedges, drawn as wedges
+				var pts := PackedVector2Array([to.call(a.pos as Vector2)])
+				for i in 13:
+					var dd := (a.dir as Vector2).rotated(lerpf(-float(a.half), float(a.half), i / 12.0))
+					var wp := (a.pos as Vector2) + dd * float(a.r)
+					var sp: Vector2 = to.call(wp)
+					if (sp - c).length() > r:
+						sp = c + (sp - c).normalized() * r
+					pts.append(sp)
+				draw_colored_polygon(pts, Color(1, 0.35, 0.1, 0.35))
+				continue
 			if (ac - c).length() < r:
 				var col := Color(1, 0.2, 0.1, 0.5) if str(a.kind) != "ring" else Color(1, 0.85, 0.2, 0.6)
 				draw_circle(ac, maxf(2.0, float(a.get("r", 2.0)) * k), col)
@@ -772,9 +785,12 @@ class Minimap extends Control:
 			var p: Vector2 = to.call(u.pos)
 			if (p - c).length() > r - 3:
 				continue
-			if u.kind == "boss":
-				draw_circle(p, 6, Color(0, 0, 0))
-				draw_circle(p, 5, Color("#d42a20"))
+			if u.kind != "player":
+				if not u.alive:
+					continue
+				var big := 6.0 if u.kind == "boss" else 4.5
+				draw_circle(p, big, Color(0, 0, 0))
+				draw_circle(p, big - 1.0, Color("#d42a20"))
 			elif u.id != hud.me_id:
 				draw_circle(p, 4, Color(0, 0, 0))
 				draw_circle(p, 3, MmoClasses.color(u.cls) if u.alive else Color(0.4, 0.4, 0.4))
