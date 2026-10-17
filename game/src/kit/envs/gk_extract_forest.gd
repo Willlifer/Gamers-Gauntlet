@@ -418,9 +418,12 @@ func _build(p: Dictionary) -> GKAsset:
 		"hide_volumes": hide, "cars": car_list, "lake": { "center": M * Vector3(lake_c.x, lake.level, lake_c.z), "level": lake.level * s },
 		"mast": M * mast_at, "ref_cam_fov": 60.0, "pois": poi_meta,
 		"notes": "Extraction forest (seed %d): %d buildings, %d chests, %d guard posts, %d roads. spawn_a* = spawn_b* are the eight edge pockets; extract0..3 the pads; height_at(meta, x, z) is the ground." % [int(p.seed), buildings.size(), chests.size(), guards.size(), roads.size()] }
-	a.lights = { "sun_dir": [0.609, -0.426, -0.669], "sun_col": "#ffe4c0", "sun_energy": 1.8, "sky_top": "#6a9ad0", "sky_horizon": "#dfe6ea",
-		"ground": "#6a6a4a", "ambient": 0.7, "ambient_col": "#c8bfa8", "sky_share": 0.35, "ssao": 2.0, "fog_col": "#d8dfe4",
-		"fog_density": 0.0016, "saturation": 1.08, "contrast": 1.05, "shadow_dist": 160.0 * s }
+	# G65: dusk. A low orange sun, a deep blue-violet sky, cool dim ambient and
+	# a blue haze that swallows the far woods; shadows out to 100 m (the
+	# low sun's long ones; 160 m drew every tree chunk into four splits).
+	a.lights = { "sun_dir": [0.700, -0.200, -0.685], "sun_col": "#ffa26a", "sun_energy": 1.05, "sky_top": "#121a30", "sky_horizon": "#6b5266",
+		"ground": "#24241e", "ambient": 0.95, "ambient_col": "#8090b4", "sky_share": 0.35, "ssao": 1.6, "fog_col": "#2b3247",
+		"fog_density": 0.006, "exposure": 1.3, "sun_angle": 6.0, "saturation": 0.9, "contrast": 1.08, "shadow_dist": 100.0 * s }
 	return a
 
 

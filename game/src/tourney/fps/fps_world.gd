@@ -172,16 +172,57 @@ func in_bush(p: Vector3) -> bool:
 	return false
 
 
-## How many metres of bush the segment runs through (sampled every 0.5 m).
+## How many metres of bush the segment runs through. Exact: each hide
+## volume near the segment clips it (a slab test in the box's frame), and the
+## overlapping pieces are merged. G65: it was sampled every 0.5 m against
+## every bush, which on Extraction's 110 bushes and guards looking 150 m cost
+## ~40k box tests a guard a tick (the frame rate fell to 3-5).
 func bush_between(a: Vector3, b: Vector3) -> float:
 	if hide_volumes.is_empty():
 		return 0.0
-	var n := maxi(1, int(a.distance_to(b) / 0.5))
-	var inside := 0.0
-	for k in n:
-		if in_bush(a.lerp(b, (k + 0.5) / n)):
-			inside += a.distance_to(b) / n
-	return inside
+	var seg := b - a
+	var ln := seg.length()
+	if ln < 0.001:
+		return 0.0
+	var spans: Array[Vector2] = []
+	for h: Dictionary in hide_volumes:
+		var c: Vector3 = h.center
+		var hf: Vector3 = h.half
+		if Geometry3D.get_closest_point_to_segment(c, a, b).distance_squared_to(c) > hf.length_squared():
+			continue
+		var bt := (h.basis as Basis).transposed()
+		var la := bt * (a - c)
+		var ld := bt * seg
+		var t0 := 0.0
+		var t1 := 1.0
+		for k in 3:
+			if absf(ld[k]) < 1e-6:
+				if absf(la[k]) > hf[k]:
+					t1 = -1.0
+					break
+				continue
+			var u := (-hf[k] - la[k]) / ld[k]
+			var v := (hf[k] - la[k]) / ld[k]
+			t0 = maxf(t0, minf(u, v))
+			t1 = minf(t1, maxf(u, v))
+			if t1 <= t0:
+				break
+		if t1 > t0:
+			spans.append(Vector2(t0, t1))
+	if spans.is_empty():
+		return 0.0
+	spans.sort_custom(func(p: Vector2, q: Vector2) -> bool: return p.x < q.x)
+	var total := 0.0
+	var cur := spans[0]
+	for i in range(1, spans.size()):
+		var s := spans[i]
+		if s.x <= cur.y:
+			cur.y = maxf(cur.y, s.y)
+		else:
+			total += cur.y - cur.x
+			cur = s
+	total += cur.y - cur.x
+	return total * ln
 
 
 func _exit_tree() -> void:

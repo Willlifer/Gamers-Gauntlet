@@ -7,6 +7,10 @@ extends SceneTree
 ## F and yields; a reload spends a mag and refuses at zero; the pouch caps at
 ## mag_cap; a guard barks (the HUD "!" only within guard_hear_range), reacts
 ## guard_reaction_x slower, walks its patrol, drops a loot bag that F takes;
+## G65's aggro rule: a calm guard ignores you in plain sight past
+## guard_aggro_range, turns on you inside it, on your shot within
+## guard_shot_alert, on a hit, and on a miss landing by it, not on a far shot;
+
 ## guns go to slots by calibre and the old one drops; medkit heals and a shot
 ## stops it; armour cuts and breaks; dying ends the run; the flare picks the
 ## far pad and 3 s on it extracts; the clock ends a run; the verdict orders
@@ -48,6 +52,7 @@ func _run() -> void:
 	await _start(w)
 	await _chest(w)
 	await _mags(w)
+	await _aggro(w)
 	await _guard(w)
 	await _guns(w)
 	await _kit(w)
@@ -164,6 +169,65 @@ func _mags(w: ExtractWorld) -> void:
 	p._reload()
 	_ok(int(m.shotgun) == 0 and int(p.ammo.shotgun) == 3 and p._shells == int(ExtractLoot.spec("shotgun").mag) - 1, "a shotgun reload spends one mag for a tube's worth of shells (%d in, %d shells left of the mag)" % [p.ammo.shotgun, p._shells])
 	await _frames(60)
+
+
+## G65: calm until you come within 50 ft, shoot near it, or hit it.
+func _aggro(w: ExtractWorld) -> void:
+	var p := w.player
+	if w.guards.size() < 4:
+		_ok(false, "aggro: needs 4 guards")
+		return
+	var aggro := FpsTune.value("guard_aggro_range")
+	var pad: Vector3 = w.pad_pos[0]
+	p.global_position = pad + Vector3(0, 0.3, 0)
+	p.velocity = Vector3.ZERO
+	var g: ExtractGuard = w.guards[1]
+	_ok(not g.alerted, "aggro: guards start calm")
+	# in the open at 25 m, facing you: calm, it neither looks nor fights
+	var spot := Vector3.INF
+	for k in 12:
+		var q := w.ground(pad + Vector3(0, 1, 0) + Vector3(25.0, 0, 0).rotated(Vector3.UP, k * TAU / 12.0))
+		if q != Vector3.INF and w.trace(q + Vector3(0, 1.9, 0), p.cam.global_position, [], 1).is_empty():
+			spot = q
+			break
+	if spot == Vector3.INF:
+		spot = w.ground(pad + Vector3(25.0, 1.0, 0))
+	g.global_position = spot + Vector3(0, 0.2, 0)
+	g.velocity = Vector3.ZERO
+	g._set_state("hold")
+	g._hold_for = 99.0
+	g.patrol = [g.global_position]
+	g.set_physics_process(true)
+	var b0 := w._bullets.size()
+	await _frames(90)
+	var d := g.global_position.distance_to(p.global_position)
+	_ok(not g.alerted and g._state != "engage" and g._seen == 0.0 and w._bullets.size() == b0,
+		"aggro: a calm guard %.0f m off in the open ignores you (no sight, no shots)" % d)
+	# walk inside 50 ft: hostile
+	p.global_position = g.global_position + (p.global_position - g.global_position).normalized() * (aggro - 1.0)
+	await _frames(3)
+	_ok(g.alerted, "aggro: within %.2f m (50 ft) it turns hostile" % aggro)
+	g.set_physics_process(false)
+	# a shot: the guard within guard_shot_alert hears it, the far one doesn't
+	var near: ExtractGuard = w.guards[2]
+	var far: ExtractGuard = w.guards[3]
+	var hear := FpsTune.value("guard_shot_alert")
+	p.global_position = pad + Vector3(0, 0.3, 0)
+	near.global_position = pad + Vector3(hear - 5.0, 0.2, 0)
+	far.global_position = pad + Vector3(0, 0.2, hear + 20.0)
+	p.fired.emit(p.cam.global_position, [])
+	_ok(near.alerted and not far.alerted, "aggro: your shot alerts the guard %d m off, not the one %d m off" % [int(hear - 5.0), int(hear + 20.0)])
+	# a hit alerts the guard hit wherever it stands; a miss landing by a guard alerts that one
+	far.alerted = false
+	w.on_hit(p, { "collider": far, "shape": 0, "position": far.global_position + Vector3(0, 1, 0), "normal": Vector3.UP }, 5.0, 2.0)
+	_ok(far.alerted and far.alive, "aggro: the guard you hit turns hostile (%.0f m off)" % far.global_position.distance_to(p.global_position))
+	far.alerted = false
+	w.on_hit(p, { "collider": w, "shape": 0, "position": far.global_position + Vector3(3.0, 0.2, 0), "normal": Vector3.UP }, 5.0, 2.0)
+	_ok(far.alerted, "aggro: a miss landing within %.0f m of a guard alerts it" % ExtractWorld.SHOT_LANDS_NEAR)
+	far.alerted = false
+	w.on_hit(p, { "collider": w, "shape": 0, "position": far.global_position + Vector3(20.0, 0.2, 0), "normal": Vector3.UP }, 5.0, 2.0)
+	_ok(not far.alerted, "aggro: a miss 20 m from it doesn't")
+	far.hp = 100.0
 
 
 func _guard(w: ExtractWorld) -> void:

@@ -7,6 +7,12 @@ extends FpsBot
 ## world puts a "!" on the HUD edge toward it), takes guard_reaction_x times
 ## the bot's reaction to open fire and shoots at guard_accuracy_x of its
 ## accuracy. The world turns its death into a loot bag (ExtractLoot.guard_drop).
+## G65: it starts calm. A calm guard patrols and never fights: it doesn't
+## look for you at all (no sight ray, so it's cheap too). It turns hostile,
+## for the rest of the run, when you come within guard_aggro_range (50 ft,
+## 15.24 m; seen or not), when you hurt it, or when you fire within
+## guard_shot_alert of it or land a shot near it (ExtractWorld.on_player_shot).
+## Hostile, it is the old guard: sees you at any range and hunts.
 
 signal barked(guard: ExtractGuard)
 
@@ -18,6 +24,7 @@ var post := 0                          ## index into meta.guards
 var _leg := 0
 var _bark_t := 1.0
 var _voice: AudioStreamPlayer3D
+var alerted := false                   ## G65: hostile (see the header); calm until then
 
 
 func _ready() -> void:
@@ -52,7 +59,11 @@ func _unit() -> BWUnit:
 
 
 ## Slow to react: the time it has seen you grows at 1 / guard_reaction_x.
+## Calm, it checks only how close you are.
 func _physics_process(delta: float) -> void:
+	if alive and not alerted and target and target.alive and not drill:
+		if global_position.distance_squared_to(target.global_position) <= pow(FpsTune.value("guard_aggro_range"), 2.0):
+			alert()
 	var saw := _seen
 	super._physics_process(delta)
 	if not alive:
@@ -63,6 +74,27 @@ func _physics_process(delta: float) -> void:
 	if _bark_t <= 0.0:
 		_bark_t = FpsTune.value("guard_bark_gap") * _rng.randf_range(0.75, 1.3)
 		bark()
+
+
+## Turn hostile (G65): it knows where you are now and faces that way.
+func alert() -> void:
+	if alerted or not alive:
+		return
+	alerted = true
+	if target:
+		_known = target.global_position
+		_known_t = 0.0
+
+
+## Calm guards don't look (G65).
+func _can_see() -> bool:
+	return alerted and super._can_see()
+
+
+## Shot: hostile at once, then the bot's reaction (turn, cover, peek).
+func hurt(d: float, head: bool) -> void:
+	alert()
+	super.hurt(d, head)
 
 
 ## The loud bark: the clip to guard_hear_range, and the world's "!".

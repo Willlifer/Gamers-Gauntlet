@@ -21,6 +21,7 @@ signal run_over(result: Dictionary)
 static var STUB := false
 const PAD_RADIUS := 3.0
 const EXTRACT_HOLD := 3.0
+const SHOT_LANDS_NEAR := 6.0           ## G65: a bullet of yours landing this close to a guard alerts it
 const GUARD_GUNS := ["pistol", "carbine", "shotgun", "auto_rifle", "pistol", "carbine"]
 
 var stubbed := false                   ## the campus stand-in is in use
@@ -81,7 +82,8 @@ func _ready() -> void:
 	player.global_transform = _spawn("a")
 	spawn_pos = player.global_position
 	player.died.connect(_on_player_died)
-	player.fired.connect(func(_from: Vector3, _hits: Array) -> void:
+	player.fired.connect(func(from: Vector3, _hits: Array) -> void:
+		on_player_shot(from)
 		if heal_t >= 0.0:
 			heal_t = -1.0
 			hud.note("Healing interrupted"))
@@ -462,6 +464,8 @@ func _on_player_died() -> void:
 ## Guards take your bullets (and their own friendly fire is ignored); your
 ## hits come through the armour first.
 func on_hit(shooter: Node, hit: Dictionary, damage: float, head_mult: float) -> void:
+	if shooter == player:
+		alert_near(hit.position, SHOT_LANDS_NEAR)        # G65: a miss that lands by a guard alerts it
 	if hit.collider is ExtractGuard:
 		var g := hit.collider as ExtractGuard
 		if shooter == player and g.alive:
@@ -497,6 +501,22 @@ func player_hit(head: bool) -> void:
 
 
 # ----------------------------------------------------------------- guards
+
+## G65, the aggro rule's shot half: your shot alerts every calm guard within
+## guard_shot_alert of where you fired (it heard it); the guard you hit and
+## any within SHOT_LANDS_NEAR of where the bullet landed are alerted in
+## on_hit / ExtractGuard.hurt. Guards farther off stay calm.
+func on_player_shot(from: Vector3) -> void:
+	alert_near(from, FpsTune.value("guard_shot_alert"))
+
+
+func alert_near(at: Vector3, r: float) -> void:
+	if r <= 0.0:
+		return
+	for g: ExtractGuard in guards:
+		if is_instance_valid(g) and g.alive and not g.alerted and g.global_position.distance_to(at) <= r:
+			g.alert()
+
 
 func _on_guard_bark(g: ExtractGuard) -> void:
 	if ended or not player.alive:

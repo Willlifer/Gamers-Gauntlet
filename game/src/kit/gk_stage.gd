@@ -55,7 +55,8 @@ static func studio(bg := Color("#ececec")) -> Node3D:
 
 ## lights: { sun_dir: [x,y,z] (pointing from the sun), sun_col, sun_energy,
 ##   sky_top, sky_horizon, ground, ambient, ambient_col, sky_share (0-1),
-##   fog_col, fog_density, exposure, saturation, contrast, shadow_dist, ssil }
+##   fog_col, fog_density, exposure, saturation, contrast, shadow_dist, ssil,
+##   sun_angle (the sky's sun disc and glow, degrees; 20) }
 static func outdoor(lights: Dictionary) -> Node3D:
 	var root := Node3D.new()
 	root.name = "GKOutdoor"
@@ -67,7 +68,7 @@ static func outdoor(lights: Dictionary) -> Node3D:
 	sm.sky_horizon_color = Color(str(lights.get("sky_horizon", "#b9cfe0")))
 	sm.ground_horizon_color = Color(str(lights.get("sky_horizon", "#b9cfe0")))
 	sm.ground_bottom_color = Color(str(lights.get("ground", "#5a5040")))
-	sm.sun_angle_max = 20.0
+	sm.sun_angle_max = float(lights.get("sun_angle", 20.0))
 	sky.sky_material = sm
 	env.sky = sky
 	env.background_mode = Environment.BG_SKY

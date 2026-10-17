@@ -170,6 +170,9 @@ same seed; the module plays the human's run and rolls the bot's (`simulate()`).
   fire lookout, hunting stands, a wreck, a camp, field walls, a power-line
   clearing). Landmarks: the chapel tower, the water tower, the barn silo, the
   radio mast, the fire lookout. Eight edge spawns in thickets no window sees.
+  **Dusk** (G65): a low orange sun, a deep blue-violet sky, cool dim ambient
+  and a blue haze (fog 0.006); shadows to 100 m. The lights block in
+  `GKExtractForest` (`a.lights`).
 - **Start:** one life, the pistol and one spare mag (`FpsPlayer.scarce`).
 - **Chests** (36, `meta.chests`): F within `chest_range`; tiered (tier 3 deep
   inside buildings). 1-3 of: a gun (variants included), a mag (most common), a
@@ -182,6 +185,13 @@ same seed; the module plays the human's run and rolls the bot's (`simulate()`).
   `guard_bark_gap` s, heard to `guard_hear_range` m with a "!" at the screen
   edge; reaction x`guard_reaction_x`, accuracy x`guard_accuracy_x`; walk their
   patrol loop; a bag on death (their gun half-full, 0-1 mags).
+- **Aggro** (G65): every guard starts **calm**: it patrols and never looks
+  for or shoots at you, even in plain sight. It turns **hostile** for the
+  rest of the run when (a) you come within `guard_aggro_range` (15.24 m, 50
+  ft; seen or not), (b) you fire any shot within `guard_shot_alert` (40 m) of
+  it (it heard it), (c) you hit it, or (d) your bullet lands within 6 m of it
+  (`ExtractWorld.SHOT_LANDS_NEAR`). Other guards stay calm; a far shot alerts
+  nobody. Hostile, it is the old guard (sees you at any range, hunts).
 - **Extract:** at `extract_reveal` s left a flare rises over the pad farthest
   from your spawn and the compass shows it; hold the pad 3 s. The clock is
   `extract_time` (300 s).

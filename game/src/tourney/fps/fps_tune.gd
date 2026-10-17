@@ -54,6 +54,8 @@ const ENTRIES := {
 	"guard_bark_gap": ["Guard bark gap (s)", 3.0, 0.5, 10.0, 0.1, "Extract"],
 	"guard_hear_range": ["Guard bark heard to (m)", 40.0, 5.0, 150.0, 1.0, "Extract"],
 	"guard_reaction_x": ["Guard reaction (x bot_reaction)", 3.0, 0.5, 8.0, 0.1, "Extract"],
+	"guard_aggro_range": ["Guard turns hostile within (m; 15.24 = 50 ft)", 15.24, 3.0, 60.0, 0.5, "Extract"],
+	"guard_shot_alert": ["Your shot alerts guards within (m)", 40.0, 0.0, 150.0, 1.0, "Extract"],
 	"guard_accuracy_x": ["Guard accuracy (x bot_accuracy)", 0.5, 0.0, 1.5, 0.05, "Extract"],
 	"armour_cut": ["Armour damage cut (0-1)", 0.35, 0.0, 0.9, 0.05, "Extract"],
 	"medkit_heal": ["Medkit heal (HP over 4 s)", 60.0, 10.0, 100.0, 5.0, "Extract"],
