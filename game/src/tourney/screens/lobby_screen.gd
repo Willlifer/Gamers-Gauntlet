@@ -12,6 +12,7 @@ signal start
 signal quick_play(module_id: String)
 
 ## Muted tints and the big faded tag per game (restrained: the streaks move, the colour stays quiet).
+## aram / pit stay listed though shelved (G60): no tile is made for a game outside the pool.
 const LOOKS := {
 	"bw_twins": ["#3b3656", "B|W"], "aram": ["#25415e", "ARAM"], "pit": ["#2b4a3c", "PIT"],
 	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "fps_campus": ["#6a3c22", "PAINT"], "mmo_raid_easy": ["#3d2f4c", "EASY"], "mmo_raid": ["#4c2f3d", "HARD"], "mmo_tanks": ["#3a4428", "TANKS", MmoTanksModule.LOGO], "osrs_easy": ["#3f4426", "EASY"], "osrs_raid": ["#4e3d26", "HARD"],

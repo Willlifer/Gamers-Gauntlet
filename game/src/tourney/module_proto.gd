@@ -1,8 +1,10 @@
 extends Node
 ## Any tournament game on its own, you against a bot, no lobby or bracket:
 ##   godot --path . res://scenes/module.tscn -- --module pit
-## Ids: bw_twins, aram, pit, fps_roof, mmo_raid (TourneyModules). When the
-## game ends its result prints and the same game starts again.
+## Ids: any in TourneyModules.POOL (bw_twins, fps_roof, fps_mid, fps_campus,
+## mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid) or SHELVED (aram,
+## pit: out of the roll since G60, still playable here). When the game ends
+## its result prints and the same game starts again.
 
 var _mod: TourneyModule
 var _round := 0

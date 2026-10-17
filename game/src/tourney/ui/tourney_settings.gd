@@ -170,6 +170,7 @@ func _build() -> void:
 # ---------------------------------------------------------------- the tabs
 
 func _build_moba() -> void:
+	_note("The MOBA games (ARAM duel, Objective take) are out of the tournament roll and Quick play for now (the author's 10-16 verdict, G60); `--module aram` / `pit` still play them, with these settings.")
 	_section("Cast mode  (Q W E R; flash and the second summoner always cast at once)")
 	var cur := MobaOptions.load_cast_mode()
 	var r := TourneyUI.row(_body, 6)
