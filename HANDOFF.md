@@ -13,17 +13,17 @@
 
 ## Three agents in this tree tonight
 - **This one:** G57 committed (`2ead7c2`; the probe hang fixed), the MOBA pulled (`8232709`), the docs (this commit).
-- **Gun models** (`tools/blender/gauntlet/*`, `art/gauntlet/*.glb`, `src/kit/*` materials): **in flight**, results unknown here (L-18).
-- **FPS polish** (`src/tourney/fps/*`, `fps_probe`, `fps_shots`, audio): **in flight**, results unknown here (L-12).
-- Elsewhere, the author's own agent builds a **procedural forest / Tarkov-style extraction** (`src/tourney/extract/`, `design/extract/`, untracked here): not ours; register it when its commits land (L-20).
+- **Gun models** (G61, `3495bce` `d24bb75` `6dfadda`): kit shader relief/checker/speckle, a see-through variant (the carbine's mag), the muzzle-flash flipbook, three glb rebuilds. Blind scores 28 → 29/50; the rest is sculpt/painted art (L-18, the author decides from `design/shots/kit/final_<id>_before_after.png`).
+- **FPS polish** (G62, `17ebb66`): `FpsNav` + a bot that paths, peeks and retreats; `FpsAudio` (36 synthesized sounds + B/W's pool); `FpsMapPolish` (spawn screens, a Dust stack, campus walls). L-12 settled. Sheets `design/shots/fps/polish/<map>_before_after.png`.
+- The author's session **ferth-7c** builds **FPS: Extraction** (G63–G64, `src/tourney/extract/`, `FpsVariants`, uncommitted as of this commit; its rows in DECISIONS/LEDGER/GAMES/PLAYTEST/CLAUDE.md are in the working tree, unstaged). It commits after G62; it also owns the unstaged spec()/variants hunks in `fps_bot.gd`, `fps_probe.gd`, `fps_player.gd`, `fps_tune.gd`, `fps_shots.gd` and all of `fps_weapons.gd`, `fps_viewmodel.gd`, `gk_asset.gd`, `gk_registry.gd`. Session **ferth-af** does the one push after the author plays.
 
 ## Do this first
-1. **Look at what the other agents committed** (`git log`, `git status`): register the FPS polish and the gun models in LEDGER (L-12, L-18), GAMES.md and the history; then the forest (L-20) if it landed.
-2. **The author plays the FPS** when the polish is in (`design/PLAYTEST.md`); nothing else is owed on the frozen games.
+1. **The author plays the FPS** (`design/PLAYTEST.md`: the bot's push, the sounds, the three spawn fixes, the guns) and looks at the gun sheets; nothing is owed on the frozen games.
+2. **Register the extraction** (L-20) once ferth-7c commits: run `fps_probe` again (shared files), `tourney_probe`, `tourney_shots`.
 3. **Next push, when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys). Check the build compiles headless first (the POOL names only committed modules).
 
 ## Run
 - Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_easy` (bw_twins, fps_roof, fps_mid, fps_campus, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid; shelved: aram, pit). `-- --fresh` shows the first-time cards again.
 
-**Green (this evening, after G57 and the pull):** osrs_probe (102 ok, 4 s), tourney_probe (twice, ~5 min), tourney_shots (twice), moba_probe, aram_shots.
-**Not rerun:** fps_probe, kit_probe, mmo_probe, mmo_tanks_probe, the input checks, twins_probe, osrs_input, osrs_shots, the B/W self-test (none of their code changed from here; the FPS and kit files are mid-edit by the other agents).
+**Green (this evening):** osrs_probe (102 ok, 4 s), tourney_probe (twice, ~5 min), tourney_shots (twice), moba_probe, aram_shots; kit_probe (G61), fps_probe (G61 in a scratch copy; G62 in the tree with ferth-7c's hunks present), fps_audio_check, fps_shots on all three maps.
+**Not rerun:** mmo_probe, mmo_tanks_probe, the input checks, twins_probe, osrs_input, osrs_shots, the B/W self-test (none of their code changed from here). `game/tools/_tmp/p.gd` is a stray nobody claims.
