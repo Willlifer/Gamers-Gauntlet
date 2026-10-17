@@ -7,7 +7,11 @@ row is newer; then fix this doc.
 
 ## The tournament (shell)
 - 4–8 players, double elimination; each match's game is rolled from the
-  enabled modules (`TourneyModules.POOL`). The rolls are slot reels: games,
+  enabled modules (`TourneyModules.POOL`: nine games since G60: Twins, the
+  three FPS duels, Raid night Easy and Hard, Planet of Tanks, Warden's Trial
+  Easy and Hard). `TourneyModules.SHELVED` holds games pulled from the roll
+  (the MOBA pair, G60): playable by id, never rolled, no Quick play tile.
+  The rolls are slot reels: games,
   then first-round players, stopping in a cascade, the last pick rolling in
   over 0.5 s. The top ready match (layout order) plays next: no vote (G27).
 - Lobby: Smash-style tiles. Tournament and **Quick play**: any game at once
@@ -48,7 +52,13 @@ thunder with bow / daggers (G50, `BWFightModule.KITS`). Fire is the fastest
 unit on the court, so it opens every cycle. Noon and Dusk move with the godly
 float (G55). Check: `tools/twins_probe.gd`.
 
-## aram: MOBA ARAM duel
+## aram: MOBA ARAM duel (out of the roll since G60)
+**Not in the pool.** The author's 10-16 verdict: 3/10, "feel is off, only
+feels losing, skills aren't interesting, combat isn't fun". Pulled from the
+tournament roll and Quick play; the code, tools and `--module aram` stay as
+written below, frozen, until the author asks for a new combat pitch (L-6).
+The settings' MOBA tab still works for it.
+
 Merr (fire mage), Temu (the kit slingshot, poison, stealth when still),
 Braves (shotgun pistols). One lane with minion waves; first to 3 kills; HP
 returns only on death. League's camera and HUD (G3, G14, G15).
@@ -70,8 +80,11 @@ shape, read by casts, the indicator, tooltips and bots), live in `MobaTune` (F1)
   strap); Braves cool-walks in pauldron, plated legs and a shell bandolier,
   gun steel grey along his leg. Every Q/W/E/R plays a cast gesture timed to
   the stop. Hidden Temu: invisible to the opponent, 75% transparent to his own side.
+- **Braves' Smoke Bomb (G58):** a grey canister lobs from Braves (16 u/s,
+  arcing) over units and rocks and bursts into the smoke where it lands.
 
-## pit: MOBA Objective take
+## pit: MOBA Objective take (out of the roll since G60)
+**Not in the pool** (with ARAM, G60); `--module pit` still plays it.
 Each player leads three (themself + the two champions they didn't pick)
 around the Giant (27,000 HP) in its pit. Slam every 8 s, nova every 12 s.
 Smite: 600 true damage, the boss only. The last hit wins (G12).

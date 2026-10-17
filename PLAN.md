@@ -10,17 +10,18 @@ file is the working summary and the status. The quality bar is "the spirit,
 not the letter" (G9): fun and polished enough to enjoy, with commercial polish
 later on the games that prove fun. Decisions go in `DECISIONS.md`.
 
-## Status (2026-10-15)
+## Status (2026-10-16, evening)
 
 | Stage | State |
 |---|---|
-| 1 The shell (offline, bots) | done: lobby (Smash-style tiles, Quick play), creator, ranges, slot-reel bracket, bets, results, champion; the map backdrop (G27) |
-| 2 Modules | six playable offline: Twins, ARAM, Objective take, FPS Rooftop duel and Mid duel (bullets fly, G28-G29), MMO Raid night. **More modules come next (G32).** |
-| 2b The Gauntlet Kit | first five assets done (G17); more on demand per module |
-| 2c Feel and sound | live F1 tuning everywhere real-time (G19); the Chris loops as the music (G25); raid SFX |
-| 3 Online | last (G32): lockstep over WebRTC for the MOBA and raid games, then the shooter model (G7, G8; L-8) |
-| 4 Character package, map maker | not started (G10; L-9) |
-| 5 Art | parked lists in LEDGER L-10, L-11 |
+| 1 The shell (offline, bots) | done: lobby (tiles, Quick play, Randomize), creator, slot-reel bracket, bets, load-in, results, champion; the map backdrop (G27); one settings panel (G56) |
+| 2 Modules | eleven built, **nine in the pool** (G60): Twins 9/10 (frozen); FPS Rooftop, Mid, Campus 7/10; Raid night Easy + Hard and Planet of Tanks 10/10 (frozen); OSRS Easy + Hard 9/10 (frozen). ARAM and Objective take 3/10, **out of the pool** (code kept, `--module aram` / `pit`). |
+| 2a FPS polish + forest | **now:** map polish, bot pathing and sounds (L-12), gun models (L-18), both by their own agents; the procedural forest / Tarkov-style extraction by the author's other agent (L-20) |
+| 2b The Gauntlet Kit | assets on demand per module (G17, G43) |
+| 2c Feel and sound | live F1 tuning everywhere (G19); the Chris loops (G25); raid SFX; FPS sounds owed (L-12) |
+| 3 Online | last (G32): lockstep over WebRTC for the raids, OSRS and Twins, then the shooter model (G7, G8; L-8) |
+| 4 Character package, map maker | not started (G10's items 2 and 3; nothing owed until the author asks) |
+| 5 Art | parked lists in LEDGER L-10, L-11; gun art moved to L-18 (owed) |
 
 ## How a module is built
 
@@ -36,13 +37,16 @@ later on the games that prove fun. Decisions go in `DECISIONS.md`.
    (`reference-gauntlet` skill): shoot, blind-review, fix, repeat; finish
    with before/after composites.
 7. Register in `TourneyModules.POOL`; log the rulings; update `design/GAMES.md`.
+   A game the author pulls goes to `TourneyModules.SHELVED` (G60): playable by
+   id, never rolled.
 
 ## Gates
 
 The author plays, then says go, change or stop. Each module stays a
 plug-in: `setup(match)`, `finished(result)`, `info()`, `simulate()`.
+Frozen games (G60) take no changes until the author asks.
 
 ## Waiting on the author
-- Which module next (G32: modules before online).
-- The raid's burn in play, then its verdict (L-3); MOBA polish (L-6).
-- A verdict on the new tournament look (L-14).
+- The FPS after the polish lands (maps, bot, sounds, gun models): a replay (L-16).
+- The forest / extraction sim: when and how it joins the pool (L-20).
+- A new combat pitch, if the MOBA is ever to come back (L-6).

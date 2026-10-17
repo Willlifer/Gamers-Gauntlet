@@ -1,9 +1,9 @@
 class_name MmoModule
 extends TourneyModule
-## MMO: Raid night (G22). WoW Classic in miniature: a raid of six (warrior,
-## paladin, priest, mage, hunter, rogue) against the Giant in its courtyard.
-## Both contestants are in the same raid, each on a class of their own; the
-## other four seats are bots. The higher grade wins (MmoGrade, G33): output
+## MMO: Raid night (G22). WoW Classic in miniature: a raid of eight (G39;
+## the six classes warrior, paladin, priest, mage, hunter, rogue) against the
+## Giant in its courtyard. Both contestants are in the same raid, each on a
+## class of their own; the other six seats are bots, one of every class. The higher grade wins (MmoGrade, G33): output
 ## against a bot of your class, mechanics performed, AoEs avoided, survival
 ## and activity, weighted into a score and a letter; the same letter goes to
 ## the higher score. A priest can beat a hunter.

@@ -50,20 +50,23 @@ a `history/` summary when the session was long.
   - `bw_twins`: the Black | White Twins fight (thunder, fire, wind vs Noon and
     Dusk). Fewest turns to win takes it (author 10-13); wanted later: the room
     votes the winner.
-  - `aram`: MOBA, the ARAM duel (`src/tourney/moba/`). Merr, Temu, Braves;
-    first to 3 kills; HP back only on death; minion waves that fight each
-    other, then you. League's locked camera, click to move/attack, QWER,
+  - `aram` (**out of the pool**, G60; `TourneyModules.SHELVED`, still
+    `--module aram`): MOBA, the ARAM duel (`src/tourney/moba/`). Merr, Temu,
+    Braves; first to 3 kills; HP back only on death; minion waves that fight
+    each other, then you. League's locked camera, click to move/attack, QWER,
     flash + ignite. 1 world unit = 100 League units. Unset numbers are
     League-ish defaults marked OPEN in `moba_champs.gd`.
   - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops; bullets fly (G28).
   - `fps_mid`: FPS: Mid duel (`FpsMidModule`, G29), the same duel on the kit's Dust2-mid hallway.
   - `fps_campus`: FPS: Campus paintball (`FpsCampusModule`, G43), the duel on the Blender-built campus; paint, walk-through bushes. Every FPS life starts on the radial loadout (G43).
-  - `mmo_raid`: MMO: Raid night (`src/tourney/mmo/`, G22-G23): a WoW Classic raid of six on the Giant, WoW controls and HUD; contestants compared by rating.
+  - `mmo_raid_easy`: MMO: Raid night (Easy) (`MmoRaidEasyModule`, G59): the Giant as pushed before G52 (`MmoSim.easy`); the player's side shared with Hard.
+  - `mmo_raid`: MMO: Raid night (Hard) (`src/tourney/mmo/`, G22-G23, G52): a WoW Classic raid of eight on the Giant, WoW controls and HUD; contestants compared by grade (G33).
   - `mmo_tanks`: Planet of Tanks (`MmoTanksModule`, G46): raid night 2, the same raid against the kit tank in a campus clearing (`MmoTankFight`, `MmoTankView`, `MmoTankArena`).
-  - `osrs_raid`: OSRS: Warden's Trial (`src/tourney/osrs/`, G34): an OSRS raid boss on game squares and 0.6 s ticks; fastest kill wins.
-  - `pit`: MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
+  - `osrs_easy`: OSRS: Warden's Trial (Easy) (`OsrsEasyModule`, `src/tourney/osrs/easy/`, G57): the trial as pushed before G53, a frozen copy under `OsrsEasySim/View/Bot/Hud`.
+  - `osrs_raid`: OSRS: Warden's Trial (Hard) (`src/tourney/osrs/`, G34, G53, G57): an OSRS raid boss on game squares and 0.6 s ticks; skulls, shields, the dagger skate, half-field fist slams; fastest kill wins.
+  - `pit` (**out of the pool**, G60; still `--module pit`): MOBA, Objective take (`PitModule`, sim mode "pit"). 3v3 (each player
     plus 2 bot allies) around the Giant; smite (spell2 bind) for the last hit.
-- **Scope:** more modules first, online last (G32).
+- **Scope:** more modules first, online last (G32). Verdicts (G60): OSRS, the raids and the Twins are **frozen** (9/10/9); the FPS (7) gets map and gun-model polish; the MOBA (3) is shelved.
 - **The look** (G27, `src/tourney/ui/`): `TourneyTile` (menu tiles), `SlotReel` (the rolls), `TourneyBackdrop` (a game's map circling behind every screen), `TourneyPortraits` (plate portraits); palette and builders in `TourneyUI`.
 - **The range** (`RangeScreen`): no longer in the lobby (G50); kept for `aram_shots`.
 - **Local only (gitignored, on disk):** reference images `design/ref/`, art sources `game/art/source/` and every `.blend`, the untrimmed takes `game/audio/source/`, the author's `.docx`/`.mp4` requests. Nothing the export ships; a fresh clone lacks them, so ask the author for refs before a reference review.
@@ -85,15 +88,15 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `[TAG=r6] --path . --script res://tools/moba_ref_shots.gd`: the reference-review frames (duel wave, duel fight, red side, pit) at fixed seeded moments, to `design/shots/ref/<tag>_*.png`; compare against `design/ref/league_aram_hud.jpg` (G15).
   The review loop itself is the `reference-gauntlet` skill (G16): shoot, score, fix, repeat.
 - `--headless --path . --script res://tools/fps_probe.gd`: FPS bullets (speed, flight, hits both ways, walls) on both maps; exit 0.
-- `--headless --path . --script res://tools/osrs_probe.gd`: the OSRS raid (squares, run/walk, prayer, every hazard, the sigil, good and careless bot runs, replay); exit 0. Frames: `[TAG=r1] --path . --script res://tools/osrs_shots.gd` to `design/shots/osrs/`.
+- `--headless --path . --script res://tools/osrs_probe.gd`: the OSRS raid, Hard then Easy (squares, run/walk, prayer, every hazard, the half-field slams, the dagger, skulls, shields, the sigil, good and careless bot runs, replay); 102 checks, ~4 s; exit 0. Frames: `[TAG=r1] --path . --script res://tools/osrs_shots.gd` to `design/shots/osrs/`.
 - `--headless --path . --script res://tools/kit_probe.gd`: the Gauntlet kit (G17): every asset at defaults, presets and parameter extremes; inverted/inward faces; determinism; export round trip; the bench's undo/redo; exit 0.
 - `[ASSETS=sniper,rooftop] [TAG=r5] [FULL=1] --path . --script res://tools/kit_ref_shots.gd`: kit review sheets beside `design/ref/kit/*` to `design/shots/kit/`.
 - `--path . res://scenes/kit_bench.tscn`: the kit bench (shape assets, presets, export .glb).
 - Blender kit assets (G43): `"C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" -b --factory-startup --python game/tools/blender/gauntlet/gg_<id>.py -- --views --tag r1` rebuilds `game/art/gauntlet/<id>.glb` (pistol, deagle, marksman, carbine, auto_rifle, tank, campus); `python game/tools/blender/gauntlet/sheet.py <id> r1` makes the review sheet beside `design/ref/kit/<id>.jpg`. The contract is the docstring of `gg_common.py`; then `--headless --path . --import` and the kit probe.
 - `--path . res://scenes/fps_proto.tscn`: the FPS prototype alone (G20); `[MAP=campus] --path . --script res://tools/fps_shots.gd` shoots its frames (the radial and the Dual Berettas' trick reload included) to `design/shots/fps/[map]/`.
-- `--path . res://scenes/module.tscn -- --module pit` (or aram, fps_roof, fps_mid, mmo_raid, osrs_raid, bw_twins): any tournament game alone vs a bot. Music everywhere in the tournament is the author's Chris loops (`TourneyMusic`, G25).
+- `--path . res://scenes/module.tscn -- --module osrs_easy` (or bw_twins, fps_roof, fps_mid, fps_campus, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_raid; shelved: aram, pit): any tournament game alone vs a bot. Music everywhere in the tournament is the author's Chris loops (`TourneyMusic`, G25).
 - Planet of Tanks (G46): `[RUNS=6] --headless --path . --script res://tools/mmo_tanks_probe.gd` (the cannon's stacking and the announcer, both treads' safe wedges, the smoke's profile, Loose Cannon, the flanks, bot raids, replay); frames `[TAG=r2] [CLASS=mage] --path . --script res://tools/mmo_tanks_shots.gd` to `design/shots/mmo/<tag>_tanks_*.png`; the arena alone `tools/mmo_tank_arena_shots.gd`.
-- `--path . res://scenes/mmo_proto.tscn`: the MMO raid alone (class pick, then the fight). Checks: `--headless --path . --script res://tools/mmo_probe.gd` (all 96 abilities, the mechanics, the 5 s spell gap, bot raids, replay), `--headless ... tools/mmo_input.gd` (the WoW controls through real input events); frames: `[TAG=r4] [CLASS=priest] --path . --script res://tools/mmo_shots.gd` and `tools/mmo_moves_sheet.gd` (the Giant's poses) to `design/shots/mmo/`. Audio: `--headless ... tools/mmo_audio_check.gd`; re-trim the author's takes with `python tools/audio/trim_chris.py` (G24).
+- `--path . res://scenes/mmo_proto.tscn`: the MMO raid alone (class pick, then the fight). Checks: `[MODE=easy] --headless --path . --script res://tools/mmo_probe.gd` (all 96 abilities, the mechanics, the 5 s spell gap, bot raids, replay; G59's easy rules), `--headless ... tools/mmo_input.gd` (the WoW controls through real input events); frames: `[TAG=r4] [CLASS=priest] --path . --script res://tools/mmo_shots.gd` and `tools/mmo_moves_sheet.gd` (the Giant's poses) to `design/shots/mmo/`. Audio: `--headless ... tools/mmo_audio_check.gd`; re-trim the author's takes with `python tools/audio/trim_chris.py` (G24).
 - F1 in a MOBA match / the range / the FPS / the raid: the live feel-number panels (G19), saved to `user://moba_tune.cfg` / `user://fps_tune.cfg` / `user://mmo_tune.cfg`.
 - Black | White's self-test still runs and must stay green: `--headless --path . res://scenes/main.tscn -- --self-test` (the main scene is the tournament now, so name Black | White's; ~8 min).
 

@@ -1,26 +1,29 @@
-# Handoff — 2026-10-16
+# Handoff — 2026-10-16 (evening)
 
-**Where:** `C:\Users\ferth\Documents\Gamers Gauntlet` (renamed 10-16); game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
+**Where:** `C:\Users\ferth\Documents\Gamers Gauntlet`; game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
 
-**Git:** branch `main`, ~30 local commits since `1f1a933` (origin/main), **not pushed**: the author says when. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers. The web build (`web/`) predates this batch.
+**Git:** branch `main`, ~37 local commits since `1f1a933` (origin/main), **not pushed**: the author says when. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only (other agents share the tree). The web build (`web/`) predates all of this.
 
-## This session (G50–G56, `history/2026-10-16_session.md`)
-The author's notes doc `“The Gamer”.docx` (text: `design/requests/2026-10-16_the_gamer.md`), worked by six parallel agents, then the author's follow-ups:
-- **Lobby/Twins (G50):** every tile shows, Randomize, ranges gone; your three Twins fighters get two elements + two weapons, fire first.
-- **FPS (G51, G51c):** recoil, scopes, reticle, sway, optics, trail, muzzle flash; Dust spawns; rooftop rebuilt (shots now cross the court, walkable bridge, the floor below). Author: "guns look great, physics feel good".
-- **Raids (G52):** consumables bar, faster spins, combo at 75%, burning Cinderbrand; tanks without the announcer, parked light tanks, x1.5 at 15%; first-time cards; callouts as visuals.
-- **OSRS (G53 a–d):** phantoms (mage/ranger) fire, shields, the lightning dagger and the skate, skull phases after the author's video, pose-read middle-column slam.
-- **MOBA (G54):** left move / right attack, cast modes, tooltips, +25% reaches, 0.3 s cast root, lower camera, pit pings and rocks.
-- **Look (G55):** skipping, godly float, cool walk, cast gestures; champions dressed.
-- **Settings (G56):** one tabbed panel opened from every game.
+## The verdicts (G60, `history/2026-10-16_session.md` "Evening")
+- **OSRS Warden's Trial** Easy / Hard (G57): 9/10, "genuinely fun". **Frozen.**
+- **Raids** (Raid night Easy / Hard G59, Planet of Tanks): 10/10. **Frozen.**
+- **Twins:** 9/10. **Frozen.**
+- **FPS:** 7/10, "super fun"; polish the maps and the gun models (open).
+- **MOBA:** 3/10; **pulled from the pool** (`TourneyModules.SHELVED`; code, tools and `--module aram` / `pit` stay). Back only on a new combat pitch from the author (L-6).
+
+## Three agents in this tree tonight
+- **This one:** G57 committed (`2ead7c2`; the probe hang fixed), the MOBA pulled (`8232709`), the docs (this commit).
+- **Gun models** (`tools/blender/gauntlet/*`, `art/gauntlet/*.glb`, `src/kit/*` materials): **in flight**, results unknown here (L-18).
+- **FPS polish** (`src/tourney/fps/*`, `fps_probe`, `fps_shots`, audio): **in flight**, results unknown here (L-12).
+- Elsewhere, the author's own agent builds a **procedural forest / Tarkov-style extraction** (`src/tourney/extract/`, `design/extract/`, untracked here): not ours; register it when its commits land (L-20).
 
 ## Do this first
-1. **The author plays** with `design/PLAYTEST.md` (look-outs, nothing owed) and sends notes.
-2. **Push when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys). Check the PiP scopes, the transparency and the flash in the browser.
+1. **Look at what the other agents committed** (`git log`, `git status`): register the FPS polish and the gun models in LEDGER (L-12, L-18), GAMES.md and the history; then the forest (L-20) if it landed.
+2. **The author plays the FPS** when the polish is in (`design/PLAYTEST.md`); nothing else is owed on the frozen games.
+3. **Push when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys).
 
 ## Run
-- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_raid` (aram, pit, fps_roof, fps_mid, fps_campus, mmo_raid, mmo_tanks, osrs_raid, bw_twins). `-- --fresh` shows the first-time cards again.
+- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_easy` (bw_twins, fps_roof, fps_mid, fps_campus, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid; shelved: aram, pit). `-- --fresh` shows the first-time cards again.
 
-**Green (2026-10-16):** tourney_probe (needs a >600 s timeout now), tourney_shots, moba_probe, moba_input, fps_probe, kit_probe 1210/1210, mmo_probe RUNS=20, mmo_tanks_probe, mmo_input, mmo_audio_check, osrs_probe, osrs_input (windowed), twins_probe.
-**Not green:** mmo_probe at its default 6 raids: bot grade spread 9.9 vs the 8 limit (was 15.3 before this batch; passes at RUNS=20).
-**Not rerun:** the B/W self-test (no `src/game`/`src/core` edits), moba_ref_shots.
+**Green (this evening, after G57 and the pull):** osrs_probe (102 ok, 4 s), tourney_probe (twice, ~5 min), tourney_shots (twice), moba_probe, aram_shots.
+**Not rerun:** fps_probe, kit_probe, mmo_probe, mmo_tanks_probe, the input checks, twins_probe, osrs_input, osrs_shots, the B/W self-test (none of their code changed from here; the FPS and kit files are mid-edit by the other agents).
