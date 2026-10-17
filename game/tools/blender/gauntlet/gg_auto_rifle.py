@@ -244,19 +244,19 @@ def stock():
     # Magpul-style stock: side profile, tall butt, slanted underside, toe step
     prof = [(-0.248, 0.120), (-0.118, 0.120), (-0.104, 0.117), (-0.100, 0.110), (-0.100, 0.086),
             (-0.134, 0.084), (-0.168, 0.066), (-0.196, 0.044), (-0.206, 0.040), (-0.222, 0.040),
-            (-0.228, 0.026), (-0.248, 0.026)]
-    side_prism(prof, -0.0205, 0.0205, PB, bevel=0.003, angle=25)
+            (-0.228, 0.034), (-0.248, 0.034)]
+    side_prism(prof, -0.0175, 0.0175, PB, bevel=0.003, angle=25)      # G61: slimmer (35 mm, the photo's SL-K)
     # cheek riser ramp on top
-    side_prism([(-0.248, 0.119), (-0.150, 0.119), (-0.168, 0.1255), (-0.248, 0.1255)], -0.0175, 0.0175, PB, bevel=0.002)
+    side_prism([(-0.248, 0.119), (-0.150, 0.119), (-0.168, 0.1255), (-0.248, 0.1255)], -0.015, 0.015, PB, bevel=0.002)
     # sling cut on the side: dark inset standing proud
     for s in (-1, 1):   # QD sling cup at the rear of the stock
         cyl_x(s * 0.0220, s * 0.0255, -0.232, 0.060, 0.0055, "alloy_black", segs=12)
     # thick butt pad
-    side_prism([(-0.262, 0.127), (-0.247, 0.127), (-0.247, 0.025), (-0.262, 0.025)], -0.0225, 0.0225, "rubber", bevel=0.004)
+    side_prism([(-0.262, 0.127), (-0.247, 0.127), (-0.247, 0.033), (-0.262, 0.033)], -0.0195, 0.0195, "rubber", bevel=0.004)
     # adjustment lever under the front of the stock
     for s in (-1, 1):   # raised side panel (stepped sides like the photo)
         side_prism([(-0.240, 0.040), (-0.212, 0.044), (-0.180, 0.064), (-0.150, 0.082), (-0.118, 0.090),
-                    (-0.118, 0.110), (-0.240, 0.110)], s * 0.0203, s * 0.0222, PB, bevel=0.0012)
+                    (-0.118, 0.110), (-0.240, 0.110)], s * 0.0173, s * 0.0192, PB, bevel=0.0012)
 
 
 def pistol_grip():
@@ -268,10 +268,10 @@ def pistol_grip():
          (-0.034, 0.033)]
     # slim it fore-aft toward the front edge (photo: ~45% of its length at the top)
     g = [(f + (0.026 - 0.4 * z - f) * 0.18 if f < 0 else f, z) for f, z in g]
-    side_prism(g, -0.0128, 0.0128, "polymer_black", bevel=0.004, angle=25)
+    side_prism(g, -0.0148, 0.0148, "polymer_black", bevel=0.004, angle=25)   # G61: a 30 mm grip, not a blade
     # bottom cap
     side_prism([(-0.009, -0.060), (-0.002, -0.060), (-0.008, -0.069), (-0.026, -0.069), (-0.030, -0.060)],
-               -0.012, 0.012, "polymer_black", bevel=0.002)
+               -0.0135, 0.0135, "polymer_black", bevel=0.002)
 
 
 def foregrip():
@@ -293,11 +293,11 @@ def foregrip():
 
 def optic():
     AB = "alloy_black"
-    zc = 0.171
-    r = 0.0158
+    zc = 0.163              # G61: a lower, slimmer tube (the photo's dot sits just over the rail)
+    r = 0.0135
     f0, f1 = 0.100, 0.160
     # riser mount
-    side_prism([(0.100, RAIL_TOP), (0.160, RAIL_TOP), (0.150, 0.158), (0.110, 0.158)], -0.0095, 0.0095, AB, part="optic", bevel=0.002)
+    side_prism([(0.100, RAIL_TOP), (0.160, RAIL_TOP), (0.150, 0.150), (0.110, 0.150)], -0.0095, 0.0095, AB, part="optic", bevel=0.002)
     box(0.100, 0.160, -0.0135, 0.0135, RAIL_TOP - 0.004, RAIL_TOP + 0.006, AB, part="optic", bevel=0.0012)   # rail clamp
     cyl_x(-0.0135, -0.0215, 0.130, 0.128, 0.0062, AB, part="optic", segs=12)      # clamp knob (right)
     cyl_x(0.0135, 0.0165, 0.130, 0.128, 0.004, AB, part="optic", segs=8)          # bolt head (left)
@@ -313,7 +313,7 @@ def optic():
     cyl_x(-(r - 0.002), -(r + 0.0085), 0.131, zc, 0.0075, AB, part="optic", segs=12)
     cyl_x(r - 0.002, r + 0.0065, 0.128, zc, 0.0095, AB, part="optic", segs=12)
     # turret housing block
-    box(0.120, 0.142, -0.0172, 0.0172, zc - 0.010, zc + 0.0172, AB, part="optic", bevel=0.002)
+    box(0.120, 0.142, -0.0150, 0.0150, zc - 0.010, zc + 0.0150, AB, part="optic", bevel=0.002)
 
 
 def sights():
@@ -332,12 +332,13 @@ def magazine():
     prof = [(0.112, 0.068), (0.186, 0.068), (0.186, 0.010), (0.189, -0.018), (0.194, -0.046),
             (0.205, -0.074), (0.216, -0.098), (0.153, -0.104), (0.145, -0.082), (0.138, -0.054),
             (0.128, -0.026), (0.119, 0.000), (0.112, 0.020)]
+    prof = [(f, z if z >= 0.010 else 0.010 + (z - 0.010) * 0.9) for f, z in prof]   # G61: 10% shorter below the well
     side_prism(prof, -0.0135, 0.0135, PB, part="mag", bevel=0.0018)
     # floor plate (wider, with lip), tilted with the curve
-    side_prism([(0.150, -0.100), (0.218, -0.094), (0.223, -0.104), (0.218, -0.112), (0.154, -0.117), (0.146, -0.109)],
+    side_prism([(f, 0.010 + (z - 0.010) * 0.9) for f, z in [(0.150, -0.100), (0.218, -0.094), (0.223, -0.104), (0.218, -0.112), (0.154, -0.117), (0.146, -0.109)]],
                -0.0155, 0.0155, PB, part="mag", bevel=0.002)
     # grip ribs near the bottom (stand proud)
-    for z, fa, fb in ((-0.052, 0.136, 0.197), (-0.064, 0.140, 0.200), (-0.076, 0.143, 0.203)):
+    for z, fa, fb in ((-0.046, 0.136, 0.197), (-0.057, 0.140, 0.200), (-0.068, 0.143, 0.203)):
         side_prism([(fa, z), (fb, z), (fb + 0.002, z + 0.0045), (fa + 0.002, z + 0.0045)], -0.0145, 0.0145, PB, part="mag")
     # dot-matrix panel (raised frame) high on each side
     for s in (-1, 1):
@@ -368,7 +369,7 @@ def build():
         gg.join(name, objs)
     gg.marker("grip", (0, 0, 0))
     gg.marker("muzzle", V(MUZZLE, 0, BORE))
-    gg.marker("eye", V(0.100 - 0.08, 0, 0.171))
+    gg.marker("eye", V(0.100 - 0.08, 0, 0.163))
     gg.marker("support", V(0.405, 0, 0.026))
     gg.marker("butt", V(-0.262, 0, 0.076))
     gg.marker("mag_pivot", V(0.186, 0, 0.068))

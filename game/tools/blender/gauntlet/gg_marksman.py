@@ -16,7 +16,7 @@ import bpy
 from mathutils import Matrix, Vector
 
 # material slots shared by every part (index -> kit role)
-ROLES = ["polymer_speckle:#454b56", "gunmetal:#90949a", "alloy_black", "glass_lens", "rubber",
+ROLES = ["polymer_speckle:#454b56", "gunmetal:#7c8086", "alloy_black", "glass_lens", "rubber",
          "steel", "polymer_black", "brass", "blued", "rubber:#4a4d52", "gunmetal:#686c72"]
 STOCK, METAL, ALLOY, GLASS, RUBBER, STEEL, POLY, BRASS, BLUED, LATT, FLUTE = range(11)
 

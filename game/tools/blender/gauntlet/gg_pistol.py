@@ -172,7 +172,7 @@ def torus_x(part, role, f, z, R, r, nu=10, nv=6, x=0.0):
 
 # ------------------------------------------------------------------ the pistol
 
-RAKE, RAKE_Z = 9.0, 78.0                 # the grip rakes back: f shifts -RAKE*(RAKE_Z - z)/66 below RAKE_Z
+RAKE, RAKE_Z = 13.0, 78.0          # G61: the 92's backstrap leans ~11 degrees, not 8                 # the grip rakes back: f shifts -RAKE*(RAKE_Z - z)/66 below RAKE_Z
 
 
 def rake(pts):
@@ -271,7 +271,7 @@ def build_body():
     # barrel: chamber block, tube, and a dark bore at the crown
     barrel = [(98, circle(0, BORE_Z, 7.6, 16)), (118, circle(0, BORE_Z, 7.6, 16)), (122, circle(0, BORE_Z, 7.0, 16)),
               (214.2, circle(0, BORE_Z, 7.0, 16)), (215, circle(0, BORE_Z, 6.3, 16))]
-    loft("body", "steel:#55595e", barrel)
+    loft("body", "steel:#7a7e84", barrel)      # G61: a lighter barrel, so it reads through the open slide
     disk_y("body", "rubber", BORE_Z, 4.4, 214.6, 215.25, 16)
     # recoil-spring guide rod end under the barrel, in the nose
     disk_y("body", "rubber", 110.5, 3.4, 211.4, 212.3)

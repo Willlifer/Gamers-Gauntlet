@@ -4,9 +4,13 @@ extends Node3D
 ## white-hot core just ahead of the muzzle, a ragged, fibrous cloud thrown
 ## forward and out, a warm orange glow round it. Built as three crossed planes
 ## along the barrel (the plume, seen from the side) and one plane across it
-## (the burst, seen down the barrel from first person), additive, on
-## procedural textures (VARIANTS seeded sets, so shots differ but frames
-## repeat). A plane fades as it turns edge-on, so no bright seam shows.
+## (the burst, seen down the barrel from first person), additive, on a
+## hand-built flipbook (G61: art/fx/muzzle_flash_side.png and _star.png from
+## tools/fx_flash_flipbook.py, VARIANTS frames each, drawn tongues and
+## fibres after the reference; the procedural textures below are the
+## fallback when the sheets are missing). Shots pick a frame from a seed, so
+## they differ but review frames repeat. A plane fades as it turns edge-on,
+## so no bright seam shows.
 ## No black: the textures' darkness is their transparency (luminance keyed
 ## to alpha), so no dark quad shows over the sky or inside the view model's
 ## transparent viewport (the author, 10-16).
@@ -15,9 +19,11 @@ extends Node3D
 ## Review frames: tools/fps_flash_shots.gd (the reference-gauntlet loop).
 
 const VARIANTS := 4
-const LIFE := 0.06
-const PLUME := Vector2(0.30, 0.15)           ## plume length ahead, half height (m at size 1)
-const STAR := 0.12                          ## the burst's half size (m at size 1)
+const LIFE := 0.07
+const PLUME := Vector2(0.36, 0.18)           ## plume length ahead, half height (m at size 1)
+const STAR := 0.15                          ## the burst's half size (m at size 1)
+const SHEET_SIDE := "res://art/fx/muzzle_flash_side.png"
+const SHEET_STAR := "res://art/fx/muzzle_flash_star.png"
 
 var size := 1.0
 var layer := 1
@@ -31,6 +37,7 @@ var _rng := RandomNumberGenerator.new()
 
 static var _side_tex: Array[Texture2D] = []
 static var _star_tex: Array[Texture2D] = []
+static var _sheet := false                  ## the flipbook sheets loaded (frames side by side)
 static var _shaders: Array[Shader] = []
 
 
@@ -70,6 +77,7 @@ func _mat(tex: Texture2D) -> ShaderMaterial:
 	# barrel would hide the root of it); in the world it depth-tests
 	m.shader = _shaders[1 if layer != 1 else 0]
 	m.set_shader_parameter("tex", tex)
+	m.set_shader_parameter("frame", Vector2(0.0, 1.0 / VARIANTS if _sheet else 1.0))
 	m.render_priority = 1
 	return m
 
@@ -77,6 +85,7 @@ func _mat(tex: Texture2D) -> ShaderMaterial:
 const SHADER := """shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, shadows_disabled, depth_draw_never%s;
 uniform sampler2D tex : source_color, filter_linear, repeat_disable;
+uniform vec2 frame = vec2(0.0, 1.0);   // this shot's frame on the sheet: u offset, u width
 uniform float alpha = 1.0;
 // The textures are light on black. Black must be see-through everywhere,
 // also in the view model's transparent viewport, where an additive quad
@@ -84,7 +93,7 @@ uniform float alpha = 1.0;
 // the alpha and the colour is un-premultiplied, a mix blend that adds light.
 void fragment() {
 	float facing = smoothstep(0.08, 0.55, abs(dot(NORMAL, VIEW)));
-	vec3 c = texture(tex, UV).rgb;
+	vec3 c = texture(tex, vec2(frame.x + UV.x * frame.y, UV.y)).rgb;
 	float a = clamp(max(c.r, max(c.g, c.b)), 0.0, 1.0);
 	ALBEDO = min(c / max(a, 0.001) * 1.15, vec3(1.0));
 	ALPHA = min(1.0, pow(a, 0.5) * 1.2) * alpha * facing;
@@ -118,8 +127,11 @@ func pop(seed_ := -1) -> void:
 	visible = true
 	var v := _rng.randi() % VARIANTS
 	for k in _mats_side.size():
-		_mats_side[k].set_shader_parameter("tex", _side_tex[(v + k) % VARIANTS])
-	_mat_star.set_shader_parameter("tex", _star_tex[v])
+		var f := (v + k) % VARIANTS
+		_mats_side[k].set_shader_parameter("tex", _side_tex[0 if _sheet else f])
+		_mats_side[k].set_shader_parameter("frame", Vector2(float(f) / VARIANTS if _sheet else 0.0, 1.0 / VARIANTS if _sheet else 1.0))
+	_mat_star.set_shader_parameter("tex", _star_tex[0 if _sheet else v])
+	_mat_star.set_shader_parameter("frame", Vector2(float(v) / VARIANTS if _sheet else 0.0, 1.0 / VARIANTS if _sheet else 1.0))
 	roll = _rng.randf() * TAU
 	rotation.z = roll
 	_shape(0.0)
@@ -157,6 +169,14 @@ static func warm() -> void:
 static func _textures() -> void:
 	if not _side_tex.is_empty():
 		return
+	if ResourceLoader.exists(SHEET_SIDE) and ResourceLoader.exists(SHEET_STAR):
+		var a := load(SHEET_SIDE) as Texture2D
+		var b := load(SHEET_STAR) as Texture2D
+		if a and b:
+			_side_tex.append(a)
+			_star_tex.append(b)
+			_sheet = true
+			return
 	for k in VARIANTS:
 		_side_tex.append(ImageTexture.create_from_image(_plume_image(101 + k * 17)))
 		_star_tex.append(ImageTexture.create_from_image(_star_image(303 + k * 29)))

@@ -96,6 +96,7 @@ ROLES = {
     "stone_grey": ("#a8a59c", 0.92, 0.0), "path_concrete": ("#bdb8ad", 0.92, 0.0), "foliage_autumn": ("#c8761e", 1.0, 0.0),
     "foliage_red": ("#a8381e", 1.0, 0.0), "foliage_gold": ("#d0a020", 1.0, 0.0), "bark": ("#4a3a2c", 0.95, 0.0),
     "paint_splat": ("#e0308a", 0.5, 0.0), "net": ("#2a2a2a", 0.9, 0.0),
+    "polymer_checker": ("#151515", 0.7, 0.0),   # G61: diamond-checkered grip panels (the kit shader draws the diamonds)
 }
 
 

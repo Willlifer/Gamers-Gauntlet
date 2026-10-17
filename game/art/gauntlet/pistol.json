@@ -18,10 +18,10 @@
   "socket": "hand_r"
  },
  "parts": {
-  "body": 6408,
+  "body": 6312,
   "mag": 88,
   "slide": 1724
  },
- "tris": 8220,
+ "tris": 8124,
  "version": 1
 }

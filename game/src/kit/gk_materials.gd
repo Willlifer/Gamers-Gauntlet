@@ -8,22 +8,26 @@ extends RefCounted
 ##
 ## Role entry: a, b, c = colours (hex), rough, metal, spec, pat (see the
 ## shader), scale, amt, wear, world (environment roles: patterns in world
-## space so neighbouring pieces line up), axis (grain / brushing direction).
+## space so neighbouring pieces line up), axis (grain / brushing direction),
+## relief (G61: the pattern's height in metres, bent into the normal: grit on
+## polymer, checkering, flecks), alpha (G61: a see-through role, drawn by
+## gk_surface_clear.gdshader; the edges stay opaque).
 
 const SHADER := "res://shaders/gk_surface.gdshader"
+const SHADER_CLEAR := "res://shaders/gk_surface_clear.gdshader"   ## roles with `alpha` (G61): see-through polymer
 const PAT := { "plain": 0, "grain": 1, "plaster": 2, "blocks": 3, "cobble": 4, "siding": 5, "membrane": 6,
-	"stipple": 7, "brushed": 8, "asphalt": 9, "grass": 10, "concrete": 11, "pavers": 12 }
+	"stipple": 7, "brushed": 8, "asphalt": 9, "grass": 10, "concrete": 11, "pavers": 12, "checker": 13, "speckle": 14 }
 
 const ROLES := {
 	# ---- items (object space)
-	"gunmetal": { "a": "#26292d", "b": "#1b1d20", "rough": 0.3, "metal": 0.85, "pat": "brushed", "scale": 260.0, "amt": 0.18 },
-	"blued": { "a": "#1a1d22", "b": "#121418", "rough": 0.22, "metal": 0.9, "pat": "brushed", "scale": 300.0, "amt": 0.15 },
-	"steel": { "a": "#8a8d90", "b": "#6c6f73", "rough": 0.35, "metal": 1.0, "pat": "brushed", "scale": 300.0, "amt": 0.2 },
-	"alloy_black": { "a": "#18191b", "b": "#121314", "rough": 0.42, "metal": 0.65, "pat": "stipple", "scale": 400.0, "amt": 0.1 },
-	"polymer_black": { "a": "#111213", "b": "#0d0e0f", "rough": 0.62, "metal": 0.0, "pat": "stipple", "scale": 700.0, "amt": 0.15 },
-	"polymer_olive": { "a": "#4a5536", "b": "#455033", "rough": 0.6, "metal": 0.0, "pat": "stipple", "scale": 700.0, "amt": 0.12, "wear": 0.2 },
-	"rubber": { "a": "#19191a", "b": "#121213", "rough": 0.92, "metal": 0.0, "pat": "stipple", "scale": 900.0, "amt": 0.2 },
-	"glass_lens": { "a": "#1c3440", "b": "#0d1a22", "rough": 0.05, "metal": 0.0, "spec": 1.0, "pat": "plain", "scale": 30.0, "amt": 0.2 },
+	"gunmetal": { "a": "#2a2b2d", "b": "#1e1f21", "rough": 0.38, "metal": 0.7, "pat": "brushed", "scale": 260.0, "amt": 0.16, "wear": 0.25 },
+	"blued": { "a": "#1d1e21", "b": "#141517", "rough": 0.3, "metal": 0.75, "pat": "brushed", "scale": 300.0, "amt": 0.14, "wear": 0.25 },
+	"steel": { "a": "#85888b", "b": "#6a6d70", "rough": 0.4, "metal": 1.0, "pat": "brushed", "scale": 300.0, "amt": 0.18 },
+	"alloy_black": { "a": "#1b1b1c", "b": "#141415", "rough": 0.5, "metal": 0.5, "pat": "stipple", "scale": 500.0, "amt": 0.1, "relief": 0.00012, "wear": 0.3 },
+	"polymer_black": { "a": "#151515", "b": "#101010", "rough": 0.66, "metal": 0.0, "pat": "stipple", "scale": 800.0, "amt": 0.15, "relief": 0.00022, "wear": 0.3 },
+	"polymer_olive": { "a": "#525c3a", "b": "#485235", "rough": 0.62, "metal": 0.0, "pat": "stipple", "scale": 800.0, "amt": 0.12, "relief": 0.00022, "wear": 0.3 },
+	"rubber": { "a": "#1a1a1a", "b": "#121212", "rough": 0.9, "metal": 0.0, "pat": "stipple", "scale": 1100.0, "amt": 0.2, "relief": 0.00055, "wear": 0.2 },
+	"glass_lens": { "a": "#0c161c", "b": "#06100f", "rough": 0.04, "metal": 0.0, "spec": 1.0, "pat": "plain", "scale": 30.0, "amt": 0.2 },
 	"brass": { "a": "#b08d4a", "b": "#8a6a32", "rough": 0.3, "metal": 1.0, "pat": "brushed", "scale": 200.0, "amt": 0.2 },
 	"orange_tip": { "a": "#e0601c", "b": "#c4521a", "rough": 0.6, "pat": "plain", "scale": 50.0, "amt": 0.1 },
 	"wood_branch": { "a": "#6f5a44", "b": "#3a2b1d", "c": "#251c13", "rough": 0.62, "pat": "grain", "scale": 30.0, "amt": 0.95, "axis": [0, 1, 0] },
@@ -70,11 +74,12 @@ const ROLES := {
 	"car_paint": { "a": "#2a2d33", "b": "#202328", "rough": 0.25, "metal": 0.6, "pat": "plain", "scale": 2.0, "amt": 0.1, "world": true },
 	"tyre": { "a": "#1a1a1b", "b": "#141415", "rough": 0.9, "pat": "plain", "scale": 4.0, "amt": 0.1, "world": true },
 	# Gauntlet kit, Blender models (G43); gg_common.py ROLES carries the same names
-	"steel_bright": { "a": "#c8cbce", "b": "#aeb2b6", "rough": 0.18, "metal": 1.0, "pat": "brushed", "scale": 300.0, "amt": 0.15 },
-	"polymer_fde": { "a": "#a08a66", "b": "#937e5c", "rough": 0.6, "metal": 0.0, "pat": "stipple", "scale": 700.0, "amt": 0.12 },
-	"anodized_fde": { "a": "#9c8562", "b": "#8e7856", "rough": 0.45, "metal": 0.4, "pat": "brushed", "scale": 300.0, "amt": 0.12 },
-	"polymer_speckle": { "a": "#5a5e66", "b": "#2a2c30", "c": "#9a9ea6", "rough": 0.75, "metal": 0.0, "pat": "stipple", "scale": 350.0, "amt": 0.6 },
-	"polymer_clear": { "a": "#3a3026", "b": "#2a221a", "rough": 0.25, "metal": 0.0, "spec": 0.8, "pat": "plain", "scale": 40.0, "amt": 0.2 },
+	"steel_bright": { "a": "#b2b6ba", "b": "#8e9296", "rough": 0.3, "metal": 1.0, "pat": "brushed", "scale": 400.0, "amt": 0.22, "wear": 0.2 },
+	"polymer_fde": { "a": "#a08a66", "b": "#937e5c", "rough": 0.62, "metal": 0.0, "pat": "stipple", "scale": 800.0, "amt": 0.12, "relief": 0.00022, "wear": 0.3 },
+	"anodized_fde": { "a": "#9c8562", "b": "#8a7654", "rough": 0.42, "metal": 0.45, "pat": "brushed", "scale": 300.0, "amt": 0.14, "wear": 0.25 },
+	"polymer_speckle": { "a": "#4a4e55", "b": "#2c2f35", "c": "#b4b8bc", "rough": 0.72, "metal": 0.0, "pat": "speckle", "scale": 900.0, "amt": 0.85, "relief": 0.00025, "wear": 0.3 },
+	"polymer_clear": { "a": "#3a3026", "b": "#2a221a", "rough": 0.12, "metal": 0.0, "spec": 0.9, "pat": "plain", "scale": 40.0, "amt": 0.1, "alpha": 0.42 },
+	"polymer_checker": { "a": "#151515", "b": "#101010", "rough": 0.7, "metal": 0.0, "pat": "checker", "scale": 820.0, "amt": 0.1, "relief": 0.0005, "wear": 0.3 },
 	"paint_army": { "a": "#4d5a3c", "b": "#465236", "rough": 0.7, "metal": 0.1, "pat": "stipple", "scale": 60.0, "amt": 0.12 },
 	"track_rubber": { "a": "#1c1d1e", "b": "#141516", "rough": 0.9, "pat": "stipple", "scale": 80.0, "amt": 0.2 },
 	"roof_slate": { "a": "#5a5f66", "b": "#4c5158", "c": "#666b72", "rough": 0.85, "pat": "siding", "scale": 0.25, "amt": 0.35, "world": true },
@@ -127,7 +132,7 @@ static func get_material(role: String) -> Material:
 		return _cache[role]
 	var s := _spec(role)
 	var m := ShaderMaterial.new()
-	m.shader = load(SHADER)
+	m.shader = load(SHADER_CLEAR if s.has("alpha") else SHADER)
 	m.set_shader_parameter("col_a", Color(str(s.a)))
 	m.set_shader_parameter("col_b", Color(str(s.get("b", s.a))))
 	m.set_shader_parameter("col_c", Color(str(s.get("c", s.get("b", s.a)))))
@@ -138,6 +143,8 @@ static func get_material(role: String) -> Material:
 	m.set_shader_parameter("scale", float(s.get("scale", 1.0)))
 	m.set_shader_parameter("amt", float(s.get("amt", 0.2)))
 	m.set_shader_parameter("wear", float(s.get("wear", 0.0)))
+	m.set_shader_parameter("relief", float(s.get("relief", 0.0)))
+	m.set_shader_parameter("alpha", float(s.get("alpha", 1.0)))
 	m.set_shader_parameter("world", bool(s.get("world", false)))
 	var ax: Array = s.get("axis", [0, 0, 1])
 	m.set_shader_parameter("axis", Vector3(float(ax[0]), float(ax[1]), float(ax[2])))
@@ -157,6 +164,9 @@ static func standard(role: String) -> StandardMaterial3D:
 	m.roughness = float(s.get("rough", 0.8))
 	m.metallic = float(s.get("metal", 0.0))
 	m.vertex_color_use_as_albedo = true
+	if s.has("alpha"):
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color.a = float(s.alpha)
 	_std[role] = m
 	return m
 

@@ -22,6 +22,12 @@ const ITEM_REF := {
 	"sniper": { "img": "sniper.jpg", "side": 1.0, "tilt": 27.0, "elev": 10.0, "yaw": 8.0 },
 	"shotgun": { "img": "shotgun.jpg", "side": -1.0, "tilt": 50.0, "elev": 6.0, "yaw": 0.0 },
 	"slingshot": { "img": "slingshot.jpg", "front": true, "tilt": 0.0, "elev": 4.0, "yaw": 0.0 },
+	# the Blender guns (G43), from their photos' sides
+	"pistol": { "img": "pistol.jpg", "side": -1.0, "tilt": 28.0, "elev": 12.0, "yaw": -20.0 },
+	"deagle": { "img": "deagle.jpg", "side": 1.0, "tilt": 0.0, "elev": 2.0, "yaw": 0.0 },
+	"marksman": { "img": "marksman.jpg", "side": -1.0, "tilt": 33.0, "elev": 40.0, "yaw": 0.0 },
+	"carbine": { "img": "carbine.jpg", "side": -1.0, "tilt": 0.0, "elev": 2.0, "yaw": 0.0 },
+	"auto_rifle": { "img": "auto_rifle.jpg", "side": -1.0, "tilt": 12.0, "elev": 8.0, "yaw": 25.0 },
 }
 const ENV_REF := { "dust_mid": "dust_mid.jpg", "rooftop": "rooftop.png" }
 
