@@ -156,6 +156,50 @@ colour (you blue, the bot pink). **Bushes:** walk through them; past 3 m,
 more than a metre of leaves between hides you from the bot (and the bot
 likes to wait in them).
 
+## fps_extract: FPS Extraction (G63, G64)
+A Tarkov-style extract run alone on a forest campus generated from the match
+seed (`GKExtractForest`, `src/kit/envs/gk_extract_forest.gd` + `gk_forest_lots.gd`;
+the plan and its contracts: `design/extract/PLAN.md`). Both contestants run the
+same seed; the module plays the human's run and rolls the bot's (`simulate()`).
+- **The map:** 300 x 300 m; hills and valleys (`meta.height`,
+  `GKExtractForest.height_at`); 11-14 lots (hall, house, lodge, chapel with
+  its tower, barn + silo, water tower, ruins), some on hilltops, some in a
+  valley, one cut into a hillside, two out in the woods; disrepair knocks out
+  roof panels and wall bays, scorches, boards windows. Roads (an MST plus one
+  loop) with parked cars; trails; a lake; varied forest; POIs (`meta.pois`:
+  fire lookout, hunting stands, a wreck, a camp, field walls, a power-line
+  clearing). Landmarks: the chapel tower, the water tower, the barn silo, the
+  radio mast, the fire lookout. Eight edge spawns in thickets no window sees.
+- **Start:** one life, the pistol and one spare mag (`FpsPlayer.scarce`).
+- **Chests** (36, `meta.chests`): F within `chest_range`; tiered (tier 3 deep
+  inside buildings). 1-3 of: a gun (variants included), a mag (most common), a
+  medkit (one carried; 4 or hold F: +60 over 4 s, firing interrupts), armour
+  (35% off until it soaks 100), money. A gun goes in the primary (rifle,
+  shotgun) or sidearm (pistol calibre) slot; the old one drops as a pickup.
+- **Ammo:** a mag pouch per calibre (rifle, shotgun, pistol), cap `mag_cap` 3;
+  a reload spends one; a shotgun mag is one tube of shells.
+- **Guards** (`ExtractGuard`, one post per building): green; "hey" every
+  `guard_bark_gap` s, heard to `guard_hear_range` m with a "!" at the screen
+  edge; reaction x`guard_reaction_x`, accuracy x`guard_accuracy_x`; walk their
+  patrol loop; a bag on death (their gun half-full, 0-1 mags).
+- **Extract:** at `extract_reveal` s left a flare rises over the pad farthest
+  from your spawn and the compass shows it; hold the pad 3 s. The clock is
+  `extract_time` (300 s).
+- **Verdict:** extracted beats died, then more $, then the faster. "Ferth
+  extracted with $1,250 at 4:50" / "Ferth died in the lodge with $400".
+- **Guns (G64):** two variants per gun, Extraction loot only (the duel radial
+  is unchanged); numbers in `FpsWeapons.SPECS`, dressing in `FpsVariants`.
+  | Base | Variants |
+  |---|---|
+  | Bolt rifle | Scout (short, red dot, 65, fast bolt) · SD (suppressed, 78) |
+  | Marksman | Anti-materiel (90, 3 rounds, 3x) · Ranch (50, 8 rounds) |
+  | Shotgun | Slug (one 70 slug, 2.5x) · Riot (12 pellets, 8 shells) |
+  | Carbine | Buckshot (6 pellets, 12 rounds) · SD (suppressed, red dot) |
+  | Auto rifle | Drum (60 rounds) · Battle (semi, 34, 2.5x) |
+  | Pistol | Compact (10, fast, light) · Match (17, red dot) |
+  | Desert Eagle | Brass (8) · Snub (5, 62, biggest kick) |
+- Numbers: `FpsTune` section "Extract" (F1).
+
 ## mmo_raid: MMO Raid night
 A WoW Classic raid against the Giant in a round courtyard (G22).
 - **Two builds, two modules** (G59): `mmo_raid` "MMO: Raid night (Hard)",

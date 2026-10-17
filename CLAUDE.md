@@ -59,6 +59,7 @@ a `history/` summary when the session was long.
   - `fps_roof`: FPS: Rooftop duel (`src/tourney/fps/`, G20), first person vs a bot on the kit rooftops; bullets fly (G28).
   - `fps_mid`: FPS: Mid duel (`FpsMidModule`, G29), the same duel on the kit's Dust2-mid hallway.
   - `fps_campus`: FPS: Campus paintball (`FpsCampusModule`, G43), the duel on the Blender-built campus; paint, walk-through bushes. Every FPS life starts on the radial loadout (G43).
+  - `fps_extract`: FPS: Extraction (`FpsExtractModule`, `src/tourney/extract/`, G63-G64): a Tarkov-style extract run on a forest campus generated from the seed (`GKExtractForest`); chests, green guards, scarce mags, a flare marks the extract; 14 gun variants as loot (`FpsVariants`). Plan: `design/extract/PLAN.md`.
   - `mmo_raid_easy`: MMO: Raid night (Easy) (`MmoRaidEasyModule`, G59): the Giant as pushed before G52 (`MmoSim.easy`); the player's side shared with Hard.
   - `mmo_raid`: MMO: Raid night (Hard) (`src/tourney/mmo/`, G22-G23, G52): a WoW Classic raid of eight on the Giant, WoW controls and HUD; contestants compared by grade (G33).
   - `mmo_tanks`: Planet of Tanks (`MmoTanksModule`, G46): raid night 2, the same raid against the kit tank in a campus clearing (`MmoTankFight`, `MmoTankView`, `MmoTankArena`).
@@ -88,6 +89,7 @@ Console binary: `C:\Users\ferth\Downloads\Godot_v4.7-stable_win64.exe\Godot_v4.7
 - `[TAG=r6] --path . --script res://tools/moba_ref_shots.gd`: the reference-review frames (duel wave, duel fight, red side, pit) at fixed seeded moments, to `design/shots/ref/<tag>_*.png`; compare against `design/ref/league_aram_hud.jpg` (G15).
   The review loop itself is the `reference-gauntlet` skill (G16): shoot, score, fix, repeat.
 - `--headless --path . --script res://tools/fps_probe.gd`: FPS bullets (speed, flight, hits both ways, walls) on both maps; exit 0.
+- Extraction (G63): `--headless --path . --script res://tools/extract_map_probe.gd` (6 seeds: budgets, lots, chests where they claim, guard legs clear, spawns hidden, landmark coverage, hills, determinism); `tools/extract_probe.gd` (the run: chests, mags, guards, medkit, armour, the flare, the pad, the verdict); frames `[SEED=7] [TAG=r5] --path . --script res://tools/extract_map_shots.gd` to `design/shots/extract/map/` and `tools/extract_shots.gd` to `design/shots/extract/`; the gun variants `VARIANTS=1 ... tools/fps_shots.gd` to `design/shots/fps/variants/`.
 - `--headless --path . --script res://tools/osrs_probe.gd`: the OSRS raid, Hard then Easy (squares, run/walk, prayer, every hazard, the half-field slams, the dagger, skulls, shields, the sigil, good and careless bot runs, replay); 102 checks, ~4 s; exit 0. Frames: `[TAG=r1] --path . --script res://tools/osrs_shots.gd` to `design/shots/osrs/`.
 - `--headless --path . --script res://tools/kit_probe.gd`: the Gauntlet kit (G17): every asset at defaults, presets and parameter extremes; inverted/inward faces; determinism; export round trip; the bench's undo/redo; exit 0.
 - `[ASSETS=sniper,rooftop] [TAG=r5] [FULL=1] --path . --script res://tools/kit_ref_shots.gd`: kit review sheets beside `design/ref/kit/*` to `design/shots/kit/`.
