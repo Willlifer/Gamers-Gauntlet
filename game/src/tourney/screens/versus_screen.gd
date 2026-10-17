@@ -105,7 +105,7 @@ func _challenge() -> Control:
 	frame.add_theme_stylebox_override("panel", sb)
 	frame.clip_contents = true
 	c.add_child(frame)
-	var look: Array = LobbyScreen.LOOKS.get(game_id, ["#2c3546", ""])
+	var look: Array = TourneyModules.look_of(game_id)
 	if map_tex:
 		var m := TextureRect.new()
 		m.expand_mode = TextureRect.EXPAND_IGNORE_SIZE

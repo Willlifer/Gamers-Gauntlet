@@ -254,7 +254,7 @@ const BLANK_TINT := Color(1.6, 1.6, 1.6)
 func _encounter_look() -> void:
 	var kind := str(look.get("encounter", ""))
 	if kind == "twin":
-		BWTwinsLook.apply(self)                      # D260: Noon and Dusk
+		load("res://src/game/character/twins_look.gd").apply(self)   # D260: Noon and Dusk (BWTwinsLook; by path, G66: it pulls the obelisk view)
 		return
 	if kind != "blank" and kind != "being":
 		return

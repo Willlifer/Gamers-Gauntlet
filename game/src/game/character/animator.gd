@@ -591,7 +591,7 @@ func plan_move(distance: float, hexes: int) -> Dictionary:
 		# D220: a Being glides (no steps); D298: so do the Twins: a trapezoid at the glide speed
 		var gd := distance / GLIDE_SPEED + 0.3
 		var gs := func(t: float) -> float:
-			return BWCombatScreen._trapezoid(t, gd, 0.3) * distance
+			return BWAnimator._trapezoid(t, gd, 0.3) * distance
 		return { "gait": "glide", "pose": "walk", "dur": gd, "stop_at": -1.0, "s": gs, "rate": -1.0 }
 	if encounter == "colossus" and character and character.is_inside_tree():
 		body_scale = character.global_basis.get_scale().y
@@ -633,7 +633,7 @@ func plan_move(distance: float, hexes: int) -> Dictionary:
 		return {}
 	var dur2 := distance / sp2 + ramp
 	var s2 := func(t: float) -> float:
-		return BWCombatScreen._trapezoid(t, dur2, ramp) * distance
+		return BWAnimator._trapezoid(t, dur2, ramp) * distance
 	return { "gait": "limp" if clip == "limp" else "walk", "pose": "walk", "dur": dur2, "stop_at": -1.0, "s": s2, "rate": -1.0 }
 
 
@@ -1414,3 +1414,22 @@ func dispose() -> void:
 	_swoosh = null
 	if _hair_sk and is_instance_valid(_hair_sk) and character and character.hair:
 		character.hair.reset_pose()
+
+
+## Distance fraction travelled at time t for a trapezoid speed profile
+## (linear ramp up over `ramp` s, cruise, ramp down), total time `dur`.
+## A copy of BWCombatScreen._trapezoid (G66, Gamers Gauntlet): calling the
+## combat screen's made every character compile the whole combat UI.
+static func _trapezoid(t: float, dur: float, ramp: float) -> float:
+	var r := minf(ramp, dur * 0.5)
+	var cruise := dur - r                 # area = v * (dur - r)
+	t = clampf(t, 0.0, dur)
+	var d := 0.0
+	if t < r:
+		d = 0.5 * t * t / r
+	elif t > dur - r:
+		var u := dur - t
+		d = cruise - 0.5 * u * u / r
+	else:
+		d = 0.5 * r + (t - r)
+	return clampf(d / cruise, 0.0, 1.0)

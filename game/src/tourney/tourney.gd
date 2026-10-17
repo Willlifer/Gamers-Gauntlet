@@ -26,13 +26,11 @@ func _ready() -> void:
 	BWEsc.ensure(self)
 	BWSettings.apply_all()
 	TourneySettings.apply_audio()                                          # G56: the settings' volumes ([audio] in tourney.cfg)
-	BWShaderWarm.start(self)
 	for n in [BWMusic._inst, BWSfx._inst]:
 		if n and is_instance_valid(n):
 			n.process_mode = Node.PROCESS_MODE_ALWAYS
 	backdrop = TourneyBackdrop.new()
 	add_child(backdrop)
-	backdrop.show_map()
 	TourneyPortraits.ensure(self)
 	state = TourneyState.new()
 	state.add_local(TourneyState.load_profile())
@@ -42,6 +40,29 @@ func _ready() -> void:
 	if "--autostart" in args:
 		state.me().ready = true
 	go_lobby("--autostart" in args)
+	_after_first_frame("--boot-time" in args or OS.is_stdout_verbose())
+
+
+## G66: the lobby paints first; the backdrop's map (its builders, ~0.8 s) is
+## built a frame later, so the page shows something before the heavy work.
+func _after_first_frame(report: bool) -> void:
+	await RenderingServer.frame_post_draw
+	if report:
+		print("[boot] first lobby frame at %d ms" % Time.get_ticks_msec())
+	await get_tree().process_frame
+	if backdrop.current == "":
+		backdrop.show_map()
+	if report:
+		await RenderingServer.frame_post_draw
+		print("[boot] backdrop up at %d ms" % Time.get_ticks_msec())
+
+
+## The shader warm-up (BWShaderWarm, D232) for a game that draws Black |
+## White's VFX, as it loads (G66: at startup it compiled B|W's combat views).
+## Once per run; by path, so the lobby never compiles it.
+func _warm_for(module_id: String) -> void:
+	if TourneyModules.entry(module_id).get("warm", false):
+		load("res://src/game/shader_warm.gd").start(self)
 
 
 func _arg(args: PackedStringArray, flag: String, fallback: String) -> String:
@@ -100,6 +121,7 @@ func go_quick(module_id: String) -> void:
 			break
 	if rival.is_empty():
 		rival = { "id": "rival", "name": "Rival", "bot": true }
+	_warm_for(module_id)
 	var mod: TourneyModule = script.new()
 	mod.finished.connect(func(_r):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -176,7 +198,9 @@ func go_versus(match_id: String, cfg: Dictionary) -> void:
 
 
 func _launch(match_id: String, cfg: Dictionary) -> void:
-	var script := TourneyModules.script_for(state.bracket.get_match(match_id).game)
+	var game := str(state.bracket.get_match(match_id).game)
+	var script := TourneyModules.script_for(game)
+	_warm_for(game)
 	var mod: TourneyModule = script.new()
 	mod.finished.connect(func(r):
 		if _game_match == match_id:

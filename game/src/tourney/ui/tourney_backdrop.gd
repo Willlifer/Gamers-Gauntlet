@@ -9,6 +9,10 @@ extends CanvasLayer
 
 const MAPS := ["rooftop", "dust_mid", "courtyard"]
 const SPEED := TAU / 160.0                  ## one lap in ~2.7 minutes
+## G66: the map builders by path, loaded when a map is first built (after the
+## lobby's first frame): naming them compiled the kit and the MMO at startup.
+const GK_REGISTRY := "res://src/kit/gk_registry.gd"     # GKRegistry
+const MMO_ARENA := "res://src/tourney/mmo/mmo_arena.gd"  # MmoArena
 ## Which backdrop each game's matchup shows (games without a kit map keep the current one).
 const FOR_GAME := { "fps_roof": "rooftop", "fps_mid": "dust_mid", "fps_campus": "campus", "mmo_raid": "courtyard", "mmo_raid_easy": "courtyard", "mmo_tanks": "campus" }
 
@@ -89,28 +93,29 @@ func _build(id: String) -> Dictionary:
 	root.name = "Backdrop_" + id
 	match id:
 		"rooftop":
-			var a := GKRegistry.build("rooftop")
+			var a: Variant = load(GK_REGISTRY).build("rooftop")
 			root.add_child(GKStage.outdoor(a.lights))
 			root.add_child(a.instantiate(false))
 			var h := float(a.meta.get("roof_height", 20.0))
 			return { "node": root, "focus": Vector3(0, h, -12.0), "radius": 78.0, "height": 34.0 }
 		"dust_mid":
-			var a := GKRegistry.build("dust_mid")
+			var a: Variant = load(GK_REGISTRY).build("dust_mid")
 			root.add_child(GKStage.outdoor(a.lights))
 			root.add_child(a.instantiate(false))
 			var pa: Array = a.meta.play_area
 			var c := Vector3((float(pa[0]) + float(pa[2])) * 0.5, 0.0, (float(pa[1]) + float(pa[3])) * 0.5)
 			return { "node": root, "focus": c + Vector3(0, 3.0, 0), "radius": 34.0, "height": 22.0 }
 		"campus":
-			var a := GKRegistry.build("campus")
+			var a: Variant = load(GK_REGISTRY).build("campus")
 			root.add_child(GKStage.outdoor(a.lights))
 			root.add_child(a.instantiate(false))
 			var pa: Array = a.meta.play_area
 			var c := Vector3((float(pa[0]) + float(pa[2])) * 0.5, 0.0, (float(pa[1]) + float(pa[3])) * 0.5)
 			return { "node": root, "focus": c + Vector3(0, 4.0, 0), "radius": 75.0, "height": 38.0 }
 		_:
-			root.add_child(GKStage.outdoor(MmoArena.lights()))
-			MmoArena.build(root)
+			var arena: Variant = load(MMO_ARENA)
+			root.add_child(GKStage.outdoor(arena.lights()))
+			arena.build(root)
 			return { "node": root, "focus": Vector3(0, 2.0, 0), "radius": 34.0, "height": 15.0 }
 
 

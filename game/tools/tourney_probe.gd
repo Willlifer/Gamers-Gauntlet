@@ -14,10 +14,28 @@ func _ok(c: bool, what: String) -> void:
 
 
 func _initialize() -> void:
+	_registry()
 	for n in [4, 5, 8]:
 		_evening(n)
 	print("tourney probe: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
 	quit(0 if fails == 0 else 1)
+
+
+## G66: the lazy table agrees with every module's info(), every row loads,
+## ids are unique, and naming the shell's scripts compiles no game.
+func _registry() -> void:
+	var bad := TourneyModules.check()
+	_ok(bad == "", "TourneyModules rows match info(): " + bad)
+	var ids := {}
+	for e: Dictionary in TourneyModules.POOL + TourneyModules.SHELVED:
+		_ok(not ids.has(e.id), "id %s once" % e.id)
+		ids[e.id] = true
+		_ok(TourneyModules.script_for(str(e.id)) is GDScript, "%s loads" % e.id)
+		var look: Array = TourneyModules.look_of(str(e.id))
+		_ok(look.size() < 3 or ResourceLoader.exists(str(look[2])), "%s logo exists" % e.id)
+	_ok(TourneyModules.infos().size() == TourneyModules.POOL.size(), "infos() is the pool")
+	_ok(TourneyModules.script_for("nope") == null and TourneyModules.name_of("nope") == "nope", "unknown id")
+	_ok(TourneyModules.look_of("mmo_tanks")[2] == MmoTanksModule.LOGO, "the tanks tile wears the module's logo")
 
 
 func _evening(n: int) -> void:

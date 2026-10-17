@@ -18,6 +18,10 @@ const CONFIRM_WORDS: PackedStringArray = ["begin", "confirm", "lock", "progress"
 const CANCEL_WORDS: PackedStringArray = ["back", "cancel", "clear", "undo", "close", "remove", "unequip", "wait", "end turn"]
 const HOVER_GAP := 0.05
 
+const COMBAT_AUDIO := "res://src/game/audio/combat_audio.gd"     # BWCombatAudio
+const SCREEN_AUDIO := "res://src/game/audio/screen_audio.gd"     # BWScreenAudio
+const SCREENS: Array = [&"BWTitleScreen", &"BWRosterScreen", &"BWDowntimeScreen", &"BWResultsScreen", &"BWPrebattleScreen", &"BWRoomScreen"]
+
 static var _inst: BWAudioDirector
 var _last_hover := -1.0
 
@@ -47,14 +51,26 @@ func _on_node(n: Node) -> void:
 		_hook_button(n as BaseButton)
 	elif n is BWUnitView:
 		_attach(n, func(): return BWUnitAudio.new(), BWUnitAudio)
-	elif n is BWCombatScreen:
-		_attach(n, func(): return BWCombatAudio.new(), BWCombatAudio)
-	elif n is BWTitleScreen or n is BWRosterScreen or n is BWDowntimeScreen or n is BWResultsScreen 			or n is BWPrebattleScreen or n is BWRoomScreen:
-		_attach(n, func(): return BWScreenAudio.new(), BWScreenAudio)
-	elif n is BWPicker:
-		_hook_picker(n as BWPicker)
-	elif n is BWShopPanel or n is BWGearPanel:
+	elif _is_a(n, [&"BWCombatScreen"]):
+		_attach(n, func(): return load(COMBAT_AUDIO).new(), null)
+	elif _is_a(n, SCREENS):
+		_attach(n, func(): return load(SCREEN_AUDIO).new(), null)
+	elif _is_a(n, [&"BWPicker"]):
+		_hook_picker(n)
+	elif _is_a(n, [&"BWShopPanel", &"BWGearPanel"]):
 		_hook_gear(n)
+
+
+## G66 (Gamers Gauntlet): the screens are matched by class name, not `is`, and
+## their audio is loaded by path, so the director (made at every startup)
+## doesn't compile Black | White's screens and their whole web of scripts.
+static func _is_a(n: Node, names: Array) -> bool:
+	var s: Script = n.get_script()
+	while s != null:
+		if s.get_global_name() in names:
+			return true
+		s = s.get_base_script()
+	return false
 
 
 func _attach(n: Node, make: Callable, cls: Variant) -> void:
@@ -97,7 +113,7 @@ func _press(b: BaseButton) -> void:
 
 ## D240: a picker opening plays the pick-reveal sting; it fades out when the
 ## pick is taken or the picker goes (the sting is longer than most picks).
-func _hook_picker(p: BWPicker) -> void:
+func _hook_picker(p: Node) -> void:
 	if p.has_meta("bw_audio"):
 		return
 	p.set_meta("bw_audio", true)
@@ -114,7 +130,7 @@ func _hook_gear(panel: Node) -> void:
 		return
 	panel.set_meta("bw_audio", true)
 	var state := { "cursed": worn_cursed(panel.get("run")) }
-	var shop := panel is BWShopPanel
+	var shop := _is_a(panel, [&"BWShopPanel"])
 	panel.connect("changed", func():
 		var n := worn_cursed(panel.get("run"))
 		if n > int(state.cursed):

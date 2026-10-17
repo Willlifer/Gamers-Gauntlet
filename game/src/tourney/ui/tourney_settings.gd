@@ -26,6 +26,8 @@ signal closed
 
 const MobaOptions := preload("res://src/tourney/moba/moba_options.gd")
 const CFG := TourneyState.CFG
+## G66: by path, loaded when the Shooter tab opens (FpsTune pulls in the gun specs and the kit).
+const FPS_TUNE := "res://src/tourney/fps/fps_tune.gd"
 const TABS := ["moba", "shooter", "raid", "osrs", "general"]
 const TAB_NAMES := { "moba": "MOBA", "shooter": "Shooter", "raid": "Raid", "osrs": "OSRS", "general": "General" }
 const TAB_GAMES := { "moba": "ARAM duel and Objective take", "shooter": "Rooftop, Mid and Campus paintball",
@@ -199,10 +201,11 @@ func _build_moba() -> void:
 
 func _build_shooter() -> void:
 	_section("Aim")
+	var tune: Variant = load(FPS_TUNE)                  # FpsTune
 	for key: String in FPS_SLIDERS:
-		var e: Array = FpsTune.ENTRIES[key]
+		var e: Array = tune.ENTRIES[key]
 		var fmt := "%.0f" if key == "fov" else "%.2f"
-		_slider(str(e[0]), float(e[2]), float(e[3]), float(e[4]), FpsTune.value(key), fmt, func(x: float) -> void: FpsTune.set_value(key, x))
+		_slider(str(e[0]), float(e[2]), float(e[3]), float(e[4]), float(tune.value(key)), fmt, func(x: float) -> void: tune.set_value(key, x))
 	_section("Keys")
 	_note("Click one, then press the key you want (Esc cancels). Left mouse fires, right mouse aims.")
 	for a: String in FpsBinds.ORDER:

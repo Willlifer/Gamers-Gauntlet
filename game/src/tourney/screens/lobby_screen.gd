@@ -11,12 +11,6 @@ extends Node
 signal start
 signal quick_play(module_id: String)
 
-## Muted tints and the big faded tag per game (restrained: the streaks move, the colour stays quiet).
-## aram / pit stay listed though shelved (G60): no tile is made for a game outside the pool.
-const LOOKS := {
-	"bw_twins": ["#3b3656", "B|W"], "aram": ["#25415e", "ARAM"], "pit": ["#2b4a3c", "PIT"],
-	"fps_roof": ["#57452f", "FPS"], "fps_mid": ["#5e4b2a", "MID"], "fps_campus": ["#6a3c22", "PAINT"], "mmo_raid_easy": ["#3d2f4c", "EASY"], "mmo_raid": ["#4c2f3d", "HARD"], "mmo_tanks": ["#3a4428", "TANKS", MmoTanksModule.LOGO], "osrs_easy": ["#3f4426", "EASY"], "osrs_raid": ["#4e3d26", "HARD"],
-}
 const CARD := Rect2(1200, 90, 380, 736)     ## the creator: 19% of 1600x900
 const QUICK_AREA := Rect2(20, 380, 1150, 336)  ## the Quick play tiles, above the players strip (y 728)
 const QUICK_COLS := 4
@@ -64,7 +58,7 @@ func _build_tiles() -> void:
 	var tile_h := minf(126.0, (QUICK_AREA.size.y - (rows - 1) * 12.0) / rows)
 	for i in infos.size():
 		var info: Dictionary = infos[i]
-		var look: Array = LOOKS.get(str(info.id), ["#2c3546", ""])
+		var look: Array = TourneyModules.look_of(str(info.id))      # G66: the tint, tag and logo live in the table
 		var col := i % QUICK_COLS
 		var row := i / QUICK_COLS
 		var t := TourneyTile.make(_root, Rect2(QUICK_AREA.position.x + col * 288, QUICK_AREA.position.y + row * (tile_h + 12.0), 276, tile_h), str(info.name), "", Color(look[0]), str(look[1]))

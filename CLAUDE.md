@@ -45,7 +45,16 @@ a `history/` summary when the session was long.
   stage 3 (deterministic lockstep over WebRTC, see the plan).
 - **Modules** (`game/src/tourney/modules/`): one game each, behind
   `TourneyModule` (`setup(match)`, `finished(result)`, `info()`, `simulate()`).
-  Register in `TourneyModules.POOL`. A game's sim should be pure state on a
+  Register with a row in `TourneyModules.POOL` (G66): id, name, players and
+  blurb as the module's `info()` says (`tourney_probe` checks they agree), the
+  lobby tile's `look`, the module's `script` path, `warm` if it draws Black |
+  White's VFX. The module is `load()`ed only when its game starts: never name a
+  module class (or anything a game pulls in) from the shell's startup path
+  (`tourney.gd`, the screens, `TourneyUI`/`Backdrop`/`Portraits`/`Settings`),
+  or the whole game compiles before the lobby shows; use a path and `load()`.
+  The main scene is `scenes/boot.tscn` ("Starting…", then the shell compiled a
+  step per frame); `-- --boot-time` prints the steps, `tools/load_time.gd`
+  times a script's compile. A game's sim should be pure state on a
   fixed tick with a seeded rng, so lockstep works later.
   - `bw_twins`: the Black | White Twins fight (thunder, fire, wind vs Noon and
     Dusk). Fewest turns to win takes it (author 10-13); wanted later: the room
