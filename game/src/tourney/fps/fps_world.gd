@@ -36,6 +36,12 @@ static var ask_loadout := true
 var paintball := false
 var hide_volumes: Array = []                ## [{ center, half, basis }] from the map
 const PAINT := { "player": Color("#2a7ad8"), "bot": Color("#e0308a") }
+var nav: FpsNav                             ## G62: the map's baked NavigationMesh (the bot's paths)
+var audio: FpsAudio                         ## G62: the duel's sounds
+## Tools: skip the bake (the bot falls back to its straight-line walk).
+static var bake_nav := true
+## Tools: the G62 map polish pieces (FpsMapPolish); off for "before" frames.
+static var polish := true
 
 
 func _ready() -> void:
@@ -52,7 +58,17 @@ func _ready() -> void:
 	var sun := stage.get_node_or_null("Sun") as DirectionalLight3D
 	if sun:
 		sun.light_cull_mask = 1                 # the world; the gun has its own light (FpsHud)
-	add_child(map.instantiate(true))
+	var level := map.instantiate(true)
+	add_child(level)
+	if polish:
+		FpsMapPolish.apply(map_id, level)       # G62: one play fix per map, before the bake
+	nav = FpsNav.new()
+	add_child(nav)
+	if bake_nav:
+		nav.bake(map, level)
+	audio = FpsAudio.new()
+	audio.world = self
+	add_child(audio)
 	player = FpsPlayer.new()
 	player.world = self
 	if paintball:
@@ -224,10 +240,20 @@ func on_hit(_shooter: Node, hit: Dictionary, damage: float, head_mult: float) ->
 		puff(hit.position, Color(0.75, 0.2, 0.15))
 		if head:
 			hud.note("Headshot")
+		if audio:
+			audio.ui("headshot" if head else "hitmark")
+			if not bot.alive:
+				audio.ui("kill", { "delay": 0.08 })
+		BWSfx.play("hit_flesh", hit.position, { "gain_db": -2.0 })
 	elif hit.collider == player and player.alive:
 		var head: bool = hit.position.y > player.cam.global_position.y - 0.25
+		var was := player.alive
 		player.take_damage(damage * (head_mult if head else 1.0))
 		player_hit(head)
+		if not player.shielded:
+			BWSfx.ui("hit_flesh", { "gain_db": 2.0 })
+			if was and not player.alive:
+				BWSfx.ui("ko_thud", { "gain_db": 0.0 })
 	else:
 		impact(hit.position, hit.normal)
 		if paintball:
@@ -276,6 +302,13 @@ func _fly_bullets(delta: float) -> void:
 			to = hit.position
 			b.dead = true
 			on_hit(b.shooter, hit, float(b.damage), float(b.head))
+		# G62: the bot's bullet passing within WHIZZ_M of your head, once per bullet
+		if b.shooter == bot and not b.get("whizzed", false) and player and player.alive and audio:
+			var head: Vector3 = player.cam.global_position
+			var near := Geometry3D.get_closest_point_to_segment(head, from, to)
+			if near.distance_to(head) < WHIZZ_M and float(b.went) > 2.0:
+				b.whizzed = true
+				audio.play("whizz", near, { "unit": FpsAudio.UNIT_WHIZZ, "pitch": randf_range(0.9, 1.15) })
 		b.went += from.distance_to(to)
 		b.left -= step
 		b.pos = to
@@ -344,8 +377,13 @@ func loose_ball(at: Vector3, vel: Vector3, owner: Node, damage: float) -> void:
 	_balls.append({ "node": m, "vel": vel, "owner": owner, "damage": damage, "life": 4.0 })
 
 
+const WHIZZ_M := 2.2                        ## a bot bullet this close to your head whizzes (G62)
+
+
 func _physics_process(delta: float) -> void:
 	_fly_bullets(delta)
+	if audio:
+		audio.update(delta)
 	for b in _balls.duplicate():
 		var n: Node3D = b.node
 		var from := n.global_position
@@ -528,6 +566,7 @@ func _check() -> bool:
 	_over = true
 	var won := score.x >= goal
 	hud.note("You win %d – %d" % [score.x, score.y] if won else "The bot wins %d – %d" % [score.y, score.x])
+	BWSfx.ui("sting_victory" if won else "sting_defeat", { "delay": 0.6 })
 	get_tree().create_timer(3.0).timeout.connect(func() -> void:
 		match_over.emit(won, "%s, %d – %d." % [{ "rooftop": "Rooftop duel", "dust_mid": "Mid duel", "campus": "Campus paintball" }.get(map_id, "Duel"), score.x, score.y]))
 	return true

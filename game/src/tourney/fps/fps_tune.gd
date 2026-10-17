@@ -44,6 +44,9 @@ const ENTRIES := {
 	"bot_reaction": ["Bot reaction time (s)", 0.6, 0.1, 2.0, 0.05, "Bot"],
 	"bot_accuracy": ["Bot accuracy (0-1)", 0.5, 0.0, 1.0, 0.05, "Bot"],
 	"bot_speed": ["Bot run speed (m/s)", 4.6, 1.0, 10.0, 0.1, "Bot"],
+	"bot_push": ["Bot pushes toward you (0 camps, 1 hunts; G62)", 0.6, 0.0, 1.0, 0.05, "Bot"],
+	"bot_peek": ["Bot peek time out of cover (s)", 1.4, 0.3, 4.0, 0.1, "Bot"],
+	"bot_retreat_hp": ["Bot falls back to cover under this HP", 45.0, 0.0, 100.0, 5.0, "Bot"],
 	"kills_to_win": ["Kills to win", 5.0, 1.0, 20.0, 1.0, "Match"],
 }
 

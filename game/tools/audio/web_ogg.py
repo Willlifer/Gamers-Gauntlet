@@ -15,7 +15,7 @@ import soundfile as sf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GAME = os.path.normpath(os.path.join(HERE, "..", ".."))
-DIRS = ["audio/sfx", "audio/barks"]
+DIRS = ["audio/sfx", "audio/barks", "audio/sfx/fps"]      # G62: the FPS's own sounds (FpsAudio)
 QUALITY = 0.45          # libsndfile's Vorbis quality, 0..1 (compression_level = 1 - quality)
 
 

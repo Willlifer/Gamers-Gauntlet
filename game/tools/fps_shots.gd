@@ -16,6 +16,8 @@ func _initialize() -> void:
 	FpsTune.use_defaults()
 	FpsBinds.defaults_only = true
 	FpsWorld.ask_loadout = false
+	if OS.get_environment("POLISH") == "0":
+		FpsWorld.polish = false                 # G62: the maps as they were, for the before frames
 	out = ProjectSettings.globalize_path("res://").path_join("../design/shots/fps").simplify_path()
 	if OS.get_environment("MAP") != "":
 		out = out.path_join(OS.get_environment("MAP"))         # MAP=campus: that map's frames in their own folder
@@ -44,6 +46,123 @@ func _look_at(p: Vector3) -> void:
 	var d := p - pl.cam.global_position
 	pl.rotation.y = atan2(-d.x, -d.z)
 	pl._pitch = atan2(d.y, Vector2(d.x, d.z).length())
+
+
+## G62: the map survey. s1/s2: the view from spawn A and spawn B along the
+## spawn's facing (what each side sees at its first step); s3: the map from
+## above (A blue, B pink); s4: the same with the bot's route over 40 s of a
+## seeded hunt (red dots every half second, you hidden at spawn A). With
+## TAG=before|after the survey frames also go to design/shots/fps/polish/
+## as <map>_<tag>_*.png and, on "after", a before/after sheet per map.
+func _survey() -> void:
+	var pl := w.player
+	var bot := w.bot
+	var tag := OS.get_environment("TAG")
+	var polish := out.get_base_dir().path_join("polish") if OS.get_environment("MAP") != "" else out.path_join("polish")
+	var survey: Array = []
+	bot.set_physics_process(false)
+	pl.shielded = true
+	pl.stance = "stand"
+	pl.set_loadout("auto_rifle" if FpsWeapons.available("auto_rifle") else "sniper", "pistol")
+	for side in ["a", "b"]:
+		var m := w.map.marker("spawn_%s0" % side)
+		pl.global_transform = Transform3D(m.basis, m.origin + Vector3(0, 0.2, 0))
+		pl.velocity = Vector3.ZERO
+		pl._pitch = 0.0
+		bot.global_position = w.map.marker("spawn_%s0" % ("b" if side == "a" else "a")).origin + Vector3(0, 0.2, 0)
+		await _wait(0.7)
+		var name := "s1_survey_spawn_%s_view" % side
+		await _shot(name)
+		survey.append(name)
+	# from above: an orthographic camera over the play volume
+	var box := FpsNav.bounds(w.map)
+	var top := Camera3D.new()
+	top.projection = Camera3D.PROJECTION_ORTHOGONAL
+	var aspect := 1600.0 / 900.0
+	top.size = maxf(box.size.z, box.size.x / aspect) * 1.06
+	top.far = 400.0
+	top.cull_mask = 1
+	w.add_child(top)
+	top.global_transform = Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), box.get_center() + Vector3(0, box.size.y + 60.0, 0))
+	var marks: Array = []
+	for side in [["a", Color("#2a7ad8")], ["b", Color("#e0308a")]]:
+		marks.append(_dot(w.map.marker("spawn_%s0" % side[0]).origin + Vector3(0, 1.5, 0), side[1], 1.6))
+	top.make_current()
+	w.hud.visible = false
+	await _wait(0.5)
+	var name3 := "s3_survey_overhead"
+	await _shot(name3)
+	survey.append(name3)
+	# the bot's route: a seeded hunt, you hidden at spawn A
+	pl.global_transform = w.map.marker("spawn_a0")
+	pl.global_position += Vector3(0, 0.2, 0)
+	bot.respawn(w.map.marker("spawn_b0"))
+	bot.set_physics_process(true)
+	Engine.physics_ticks_per_second = 360
+	Engine.max_physics_steps_per_frame = 48
+	var trail: Array = []
+	for i in 40 * 360:
+		await physics_frame
+		if i % 180 == 0:
+			trail.append(bot.global_position)
+	Engine.physics_ticks_per_second = 60
+	Engine.max_physics_steps_per_frame = 8
+	bot.set_physics_process(false)
+	for k in trail.size():
+		marks.append(_dot(trail[k] + Vector3(0, 1.0, 0), Color(1.0, 0.15 + 0.6 * k / maxf(1.0, trail.size() - 1), 0.1), 0.7))
+	await _wait(0.3)
+	var name4 := "s4_survey_bot_route_40s"
+	await _shot(name4)
+	survey.append(name4)
+	print("bot route: %d dots, crossings %d, ended %s" % [trail.size(), bot.crossings, bot.global_position])
+	w.hud.visible = true
+	pl.cam.make_current()
+	top.queue_free()
+	for d in marks:
+		(d as Node).queue_free()
+	if tag == "":
+		return
+	DirAccess.make_dir_recursive_absolute(polish)
+	var map_id := w.map_id
+	for s: String in survey:
+		var img := Image.load_from_file(out.path_join(s + ".png"))
+		img.save_png(polish.path_join("%s_%s_%s.png" % [map_id, tag, s.substr(s.find("_") + 1)]))
+	if tag != "after":
+		return
+	# the before/after sheet: a row per survey frame, before left, after right
+	var rows: Array = []
+	for s: String in survey:
+		var key := s.substr(s.find("_") + 1)
+		var b := polish.path_join("%s_before_%s.png" % [map_id, key])
+		if FileAccess.file_exists(b):
+			rows.append([Image.load_from_file(b), Image.load_from_file(polish.path_join("%s_after_%s.png" % [map_id, key]))])
+	if rows.is_empty():
+		return
+	var sheet := Image.create(1600, 450 * rows.size(), false, Image.FORMAT_RGB8)
+	for r in rows.size():
+		for c in 2:
+			var t := (rows[r][c] as Image).duplicate() as Image
+			t.convert(Image.FORMAT_RGB8)
+			t.resize(800, 450, Image.INTERPOLATE_LANCZOS)
+			sheet.blit_rect(t, Rect2i(0, 0, 800, 450), Vector2i(c * 800, r * 450))
+	sheet.save_png(polish.path_join("%s_before_after.png" % map_id))
+	print("polish sheet: ", polish.path_join("%s_before_after.png" % map_id))
+
+
+## A marker ball in the world (unshaded), for the overhead frames.
+func _dot(at: Vector3, col: Color, r: float) -> MeshInstance3D:
+	var m := MeshInstance3D.new()
+	var s := SphereMesh.new()
+	s.radius = r
+	s.height = r * 2.0
+	m.mesh = s
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.material_override = mat
+	w.add_child(m)
+	m.global_position = at
+	return m
 
 
 func _go() -> void:
@@ -240,6 +359,9 @@ func _go() -> void:
 		await _wait(0.4)
 		await _shot("%d_across_the_court_hit" % n)
 		n += 1
+	# G62: the map survey (the view from each spawn, the map from above, the
+	# bot's route in a seeded hunt), and the polish sheets for the author
+	await _survey()
 	# sheet: 5 across, as many rows as frames
 	var rows := ceili(shots.size() / 5.0)
 	var sheet := Image.create(1600, 180 * rows, false, Image.FORMAT_RGB8)

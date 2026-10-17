@@ -177,14 +177,26 @@ func _dust(w: FpsWorld) -> void:
 				long += 1
 				print("     open: plan x %.0f at z 3 to x %.0f at z 40" % [x, x2])
 	_ok(long == 0, "dust_mid: no open sight line from the T exits (3 m) to the tower passage end (40 m): %d / %d open" % [long, tried])
-	# the bot: every spot it picks is a straight, clear walk
+	# the bot (G62): every spot it picks is reachable on the mesh, and over a
+	# dozen picks it uses both halves of the lane (not just the tower end)
 	var bot := w.bot
+	await _nav_ready(w)
 	var bad := 0
-	for i in 12:
+	var near_z := 0
+	var far_z := 0
+	var zm := (float(pa[1]) + float(pa[3])) * 0.5
+	for i in 14:
 		var g := bot._pick_spot()
-		if g != bot.global_position and not w.walk_clear(bot.global_position, g):
+		if g == bot.global_position:
+			continue
+		if not w.nav.reachable(bot.global_position, g):
 			bad += 1
-	_ok(bad == 0, "dust_mid: the bot only picks spots it can walk to in a line (%d bad)" % bad)
+		if (g.z < zm) == (bot.global_position.z < zm):
+			near_z += 1
+		else:
+			far_z += 1
+	_ok(bad == 0, "dust_mid: the bot only picks spots it can path to on the mesh (%d bad)" % bad)
+	_ok(far_z > 0, "dust_mid: it leaves its half of the lane (%d own-half picks, %d far-half)" % [near_z, far_z])
 	var fresh := FpsWorld.new()
 	fresh.map_id = "dust_mid"
 	fresh.match_seed = 7
@@ -346,11 +358,13 @@ func _roofs(w: FpsWorld) -> void:
 	p.global_position = m.marker("floor_b").origin + Vector3(0, 0.1, 0)
 	p.shielded = true
 	var down := false
-	for i in 60 * 20:
+	_fast(6)                                       # G62: 60 s of sim; the bot hunts by spots now, so give it time
+	for i in 60 * 60 * 6:
 		await physics_frame
 		if b.global_position.y < H - 1.5:
 			down = true
 			break
+	_fast(1)
 	_ok(down, "rooftop: the bot takes the stairwell down after you (y %.2f; it stops to shoot once it sees you)" % b.global_position.y)
 	b.set_physics_process(false)
 	p.shielded = false
@@ -371,6 +385,80 @@ func _bushes(w: FpsWorld) -> void:
 	_ok(w.bush_between(c + Vector3(-hf.length() - 3.0, 0, 0).rotated(Vector3.UP, 0.0), c) > 0.5, "campus: a line into a bush runs through leaves")
 
 
+## G62, the bot's navigation: the map bakes a mesh; from either spawn the
+## bot walks to the far side's spawn within `limit` seconds of sim time (on
+## the rooftop that is over the bridge); on the rooftop a seeded hunt with
+## you hidden on the floor below roof A takes it across the court at least
+## once. Sim time runs at 6x wall time for the drills.
+## The server takes a baked mesh on a physics frame or two: wait for it.
+func _nav_ready(w: FpsWorld) -> bool:
+	for i in 120:
+		if w.nav and w.nav.ready():
+			return true
+		await physics_frame
+	return false
+
+
+## Sim time at `x` wall time: finer physics ticks, the same 1/60 s of play
+## per 60 ticks (the drills count ticks, so they stay deterministic).
+func _fast(x: int) -> void:
+	Engine.physics_ticks_per_second = 60 * x
+	Engine.max_physics_steps_per_frame = 8 * x
+
+
+func _nav(w: FpsWorld, map_id: String, limit: float) -> void:
+	var b := w.bot
+	var synced := await _nav_ready(w)
+	_ok(synced, "%s: the map baked a navigation mesh and the server took it (%d polygons)" % [map_id, w.nav.polygons if w.nav else 0])
+	var a0 := w.map.marker("spawn_a0").origin
+	var b0 := w.map.marker("spawn_b0").origin
+	_ok(w.nav.reachable(w.nav.snap(a0), w.nav.snap(b0)), "%s: a path joins the two spawns" % map_id)
+	var target := b.target
+	var player_at := w.player.global_position
+	b.target = null
+	b.set_physics_process(true)
+	w.player.shielded = true
+	const X := 6
+	_fast(X)
+	for leg in [[a0, b0, "A to B"], [b0, a0, "B to A"]]:
+		var from: Vector3 = leg[0]
+		var to: Vector3 = leg[1]
+		b.respawn(Transform3D(Basis.IDENTITY, from + Vector3(0, 0.2, 0)))
+		b.drill_to(w.nav.snap(to))
+		b.crossings = 0
+		var frames := int(limit * 60.0 * X)
+		var took := -1.0
+		for i in frames:
+			await physics_frame
+			if Vector2(b.global_position.x - to.x, b.global_position.z - to.z).length() < 2.5 and absf(b.global_position.y - to.y) < 1.5:
+				took = i / (60.0 * X)
+				break
+		_ok(took >= 0.0, "%s: the bot walks %s (%.0f m apart) in %s (limit %.0f s)" % [map_id, leg[2], Vector2(from.x - to.x, from.z - to.z).length(), ("%.1f s" % took) if took >= 0.0 else "never: at %s" % b.global_position, limit])
+		if map_id == "rooftop":
+			_ok(b.crossings >= 1, "rooftop: that walk crossed the court on the bridge (%d crossings)" % b.crossings)
+	b.drill = false
+	b.target = target
+	if map_id == "rooftop":
+		# the hunt: you hidden on the floor below roof A, the bot from its spawn
+		w.player.global_position = w.map.marker("floor_a").origin + Vector3(0, 0.2, 0)
+		w.player.velocity = Vector3.ZERO
+		b.respawn(w.map.marker("spawn_b0"))
+		b.crossings = 0
+		var when := -1.0
+		for i in int(90.0 * 60.0 * X):
+			await physics_frame
+			if b.crossings >= 1:
+				when = i / (60.0 * X)
+				break
+		_ok(when >= 0.0, "rooftop: hunting you on the far side's floor, the bot crosses the bridge (%s)" % (("after %.0f s" % when) if when >= 0.0 else "never in 90 s"))
+	_fast(1)
+	b.set_physics_process(false)
+	w.player.shielded = false
+	w.player.respawn(Transform3D(w.map.marker("spawn_a0").basis, player_at))
+	b.respawn(w.map.marker("spawn_b0"))
+	await _frames(3)
+
+
 func _map(map_id: String) -> void:
 	var w := FpsWorld.new()
 	w.map_id = map_id
@@ -381,6 +469,7 @@ func _map(map_id: String) -> void:
 		await _dust(w)
 	if map_id == "rooftop":
 		await _roofs(w)
+	await _nav(w, map_id, { "rooftop": 45.0, "dust_mid": 30.0, "campus": 45.0 }.get(map_id, 45.0))
 	_ok(not w.bot.roof.is_empty(), "%s: the bot has a walk area" % map_id)
 	var p := w.player
 	var b := w.bot
@@ -392,7 +481,8 @@ func _map(map_id: String) -> void:
 	b.velocity = Vector3.ZERO
 	await _frames(3)
 	# a clear line: on maps with cover ahead of the spawn, try other spots
-	for spot: Vector3 in [fwd * 20.0, fwd * 12.0, fwd * 8.0, fwd.rotated(Vector3.UP, 0.5) * 14.0, fwd.rotated(Vector3.UP, -0.5) * 14.0, fwd * 30.0]:
+	for spot: Vector3 in [fwd * 20.0, fwd * 12.0, fwd * 8.0, fwd.rotated(Vector3.UP, 0.5) * 14.0, fwd.rotated(Vector3.UP, -0.5) * 14.0, fwd * 30.0,
+			fwd.rotated(Vector3.UP, PI * 0.5) * 12.0, fwd.rotated(Vector3.UP, -PI * 0.5) * 12.0, fwd * 5.0]:   # G62: the rooftop's spawn screen sits 7 m ahead
 		b.global_position = p.global_position + spot
 		await _frames(2)
 		var look := w.trace(p.cam.global_position, b.global_position + Vector3(0, 1.1, 0), [p.get_rid()])

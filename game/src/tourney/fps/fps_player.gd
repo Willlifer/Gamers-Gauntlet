@@ -127,6 +127,9 @@ func _switch(id: String) -> void:
 	vm.equip(id)
 	_cool = 0.35
 	_drawing = false
+	_act_prev = -1.0
+	if world and world.audio and is_inside_tree():
+		BWSfx.ui("ph_swap_draw", { "gain_db": -4.0 })
 
 
 ## Full magazines for every gun (the duals: one per hand).
@@ -147,11 +150,15 @@ func _reload() -> void:
 		_cool_l = _cool
 		ammo.dual_l = int(sp.mag)
 		ammo.dual_r = int(sp.mag)
+		if world and world.audio:
+			world.audio.reload(weapon)
 		return
 	if int(sp.mag) <= 0 or ammo[weapon] >= int(sp.mag) or vm.reload_t >= 0.0:
 		return
 	vm.start_reload()
 	_cool = float(sp.reload)
+	if world and world.audio:
+		world.audio.reload(weapon)
 	if sp.get("shell_reload", false):
 		ammo[weapon] += 1                    # a shell at a time: R again (or it keeps going below)
 	else:
@@ -205,6 +212,30 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	speed01 = clampf(Vector2(velocity.x, velocity.z).length() / FpsTune.value(run_key), 0.0, 1.0)
 	_weapon(delta)
+	_action_sounds()
+
+
+var _act_prev := -1.0                       # the action's progress last tick (G62: the bolt and pump sounds)
+
+
+## G62: the bolt's lift / close and the pump's rack back / home, on the
+## view model's own timeline (FpsViewmodel._bolt, _pump segments).
+func _action_sounds() -> void:
+	var a := vm.action_t
+	if world == null or world.audio == null:
+		_act_prev = a
+		return
+	var sp := spec()
+	var cues: Array = []
+	if sp.action == "bolt":
+		cues = [[0.18, "bolt_open"], [0.52, "bolt_close"]]
+	elif sp.action == "pump":
+		cues = [[0.12, "pump_back"], [0.5, "pump_fwd"]]
+	if a >= 0.0 and _act_prev >= 0.0:
+		for c in cues:
+			if _act_prev < float(c[0]) and a >= float(c[0]):
+				world.audio.ui(str(c[1]))
+	_act_prev = a
 
 
 func _process(delta: float) -> void:
@@ -315,6 +346,8 @@ func _shoot(power: float, side := "") -> void:
 			if ammo[weapon] <= 0:
 				_reload_pending = true
 	vm.fire(side)
+	if world and world.audio:
+		world.audio.shot(weapon)
 	var rc := FpsTune.recoil(weapon)            # G51b: the gun's preset, trimmed in F1
 	_bloom += float(rc.bloom)
 	# the camera's kick (G51: the Desert Eagle's punch, scaled per gun); a
