@@ -276,6 +276,29 @@ pull line. (The text lines described below were removed; the visuals stay.)
 
 ## osrs_raid: OSRS Warden's Trial
 After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
+Two modes, two games in the pool (G57): **Easy** (`osrs_easy`, "OSRS:
+Warden's Trial (Easy)") and **Hard** (`osrs_raid`, "(Hard)"). Both share
+`OsrsTune` (F1; a label says when a number is one mode's only), the
+settings' OSRS tab and the first-time card (each mode its own lines and
+`[seen]` key).
+
+### Easy (`osrs_easy`, G57): the trial before G53
+A frozen copy of the trial as pushed at 1f1a933 (`src/tourney/osrs/easy/`,
+`OsrsEasySim/View/Bot/Hud`); keep its rules as they were.
+- **You:** as Hard, but the inventory is the other weapon, sharks and prayer
+  potions only (no dagger, no damage potion).
+- **The Warden (1,200 HP):** fires the prayable projectiles itself, every 5
+  ticks (4 in phase 3, plus a 35% twin volley of the other style a tick
+  behind), 3 s flight, judged on impact. Specials every 11 ticks (10 in
+  phase 3): lightning, boulders, slam.
+- **Slam:** the floor glows, then lands: east (columns 8-14), then west (0-6),
+  then both sides (0-5 and 9-14), 4 ticks apart; the centre is always safe.
+- **Rows:** in phase 3 the far row is torn out every 18 ticks (`rip_every`),
+  down to 5 rows.
+- No skulls, shields, phantoms' shots or pose-read slams. Sun Sigil and the
+  verdict as Hard.
+
+### Hard (`osrs_raid`): G53 with G57's changes
 - **You:** 99 HP, 99 prayer; protect from magic / missiles / melee (1 2 3 or
   the buttons beside the inventory) drain a point every 3 ticks. 12 sharks and
   4 prayer potions, 25% each; eating delays your next attack 3 ticks.
@@ -287,19 +310,20 @@ After Tombs of Amascut's Wardens, on game squares and 0.6 s ticks (G34).
   beside it and strikes on the tick you arrive (one command), so a chain of
   clicks **skates** up a line of targets, one per tick at most. Swapping
   weapons caps the wait at the new weapon's speed (min 1 tick).
-- **The Warden (1,200 HP):** prayable projectiles every 5 ticks (4 in phase
-  3), landing 3 s (5 ticks) after launch; the prayer is judged on impact;
-  they keep coming through the slams (G45). On screen, magic is cast by the
+- **The Warden (1,200 HP):** prayable projectiles every 5 ticks, landing 3 s (5 ticks) after launch; the prayer is judged on impact;
+  they keep coming through the slams (G45). **No enrage (G57):** the same
+  rate in every phase, no twin volleys, no faster specials. On screen, magic is cast by the
   **mage** phantom (west; robes, staff, the orb leaves the staff tip) and
   arrows loosed by the **ranger** phantom (east, bow), each winding up the
   tick before (G53d; visual only). The Warden does the specials and a melee
   smack next to it. Specials every 11 ticks: lightning; boulders (no shadow,
-  only the landing marker); slam; twin volleys in phase 3.
-- **Slam (G53d, after the author's reference video):** three hits 4 ticks
-  apart (2 below 50%). Only one of the middle three columns is safe per hit,
-  named by the pose: west fist raised → west-middle, both → centre, east →
-  east-middle; never the same twice running; each pose shows 4 ticks before
-  its hit. A three-square marker lights the spared square gold.
+  only the landing marker); slam.
+- **Slam (G57, after G53d's poses):** three hits 4 ticks apart at any HP.
+  A raised fist slams its own half: west fist columns 0-7, east fist 7-14
+  (the centre with either), so the other half is safe. The first two hits
+  are one fist each (seeded order), the third both fists: everything but the
+  centre column (7). Each pose shows 4 ticks before its hit; a marker along
+  the top row lights gold over the columns it spares, red over the rest.
 - **Rows:** the farthest row is torn out per 8% HP lost (`rip_pct`), down to 5 rows.
 - **Shields (G53b):** from tick 30, every 35 ticks, it shields against magic,
   then bowfire, by turns; that style does 0 (a blue or green bubble and an icon).
