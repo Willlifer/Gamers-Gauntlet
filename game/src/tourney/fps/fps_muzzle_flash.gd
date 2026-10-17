@@ -20,8 +20,8 @@ extends Node3D
 
 const VARIANTS := 4
 const LIFE := 0.07
-const PLUME := Vector2(0.36, 0.18)           ## plume length ahead, half height (m at size 1)
-const STAR := 0.15                          ## the burst's half size (m at size 1)
+const PLUME := Vector2(0.40, 0.18)           ## plume length ahead, half height (m at size 1)
+const STAR := 0.12                          ## the burst's half size (m at size 1)
 const SHEET_SIDE := "res://art/fx/muzzle_flash_side.png"
 const SHEET_STAR := "res://art/fx/muzzle_flash_star.png"
 
