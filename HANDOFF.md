@@ -2,7 +2,7 @@
 
 **Where:** `C:\Users\ferth\Documents\Gamers Gauntlet`; game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
 
-**Git:** branch `main`, pushed at `05e8497` (G50–G60 + web build); everything after it is committed locally and waits for the author's playtest, then one push (session ferth-af). The local commits are G61 gun polish, G62 FPS polish, and G63–G64 Extraction (`2553a2c`, docs `ab0fe6f`). The working tree is clean. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only.
+**Git:** branch `main`, pushed at `59e5f90` with a fresh web build (G50–G65), on the author's word. Build web from a clean worktree of HEAD, never the shared tree. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only.
 
 ## The verdicts (G60, `history/2026-10-16_session.md` "Evening")
 - **OSRS Warden's Trial** Easy / Hard (G57): 9/10, "genuinely fun". **Frozen.**
