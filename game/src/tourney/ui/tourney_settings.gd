@@ -29,12 +29,12 @@ const CFG := TourneyState.CFG
 const TABS := ["moba", "shooter", "raid", "osrs", "general"]
 const TAB_NAMES := { "moba": "MOBA", "shooter": "Shooter", "raid": "Raid", "osrs": "OSRS", "general": "General" }
 const TAB_GAMES := { "moba": "ARAM duel and Objective take", "shooter": "Rooftop, Mid and Campus paintball",
-	"raid": "Raid night and Planet of Tanks", "osrs": "Warden's Trial", "general": "Every game" }
+	"raid": "Raid night and Planet of Tanks", "osrs": "Warden's Trial, Easy and Hard", "general": "Every game" }
 const FPS_SLIDERS := ["mouse_sens", "ads_sens", "fov"]
 ## [key in [audio], label, the BWAudio buses it sets]
 const VOLUMES := [["master", "Master volume", ["Master"]], ["music", "Music", ["Music"]],
 	["sfx", "Sound effects and voices", ["SFX", "Voice", "UI"]]]
-const SEEN_NAMES := { "mmo_raid": "Raid night", "mmo_tanks": "Planet of Tanks", "osrs_raid": "Warden's Trial" }
+const SEEN_NAMES := { "mmo_raid": "Raid night (Hard)", "mmo_raid_easy": "Raid night (Easy)", "mmo_tanks": "Planet of Tanks", "osrs_easy": "Warden's Trial (Easy)", "osrs_raid": "Warden's Trial (Hard)" }
 ## The raid's keys (MmoView._unhandled_input, fixed: WoW's defaults).
 const RAID_KEYS := [["1 - 8", "Action bar"], ["Shift + 1 - 8", "Consumables"], ["W  /  S", "Run forward / back up"],
 	["A  /  D", "Turn (hold the right mouse button: strafe)"], ["Q  /  E", "Strafe left / right"], ["Space", "Jump"],

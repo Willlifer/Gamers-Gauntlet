@@ -59,7 +59,7 @@ var _mats := {}
 var _phantoms := {}                               # "mage" (west) / "ranger" (east) -> { node, light, label, orb, ... }
 var _skulls := {}                                 # skull id -> { node, pips, ring, head, light }
 var _fists := {}                                  # "west" / "east" -> Node3D: the Warden's slam fists (G53d)
-var _mid_marks := {}                              # middle column x -> MeshInstance3D: the three-square marker (G53d)
+var _mid_marks := {}                              # column x -> MeshInstance3D: the slam's top-row marker (G53d; G57 every column)
 var _shield: MeshInstance3D                       # the Warden's magic / bowfire shield bubble (G53b)
 var _shield_mark: Label3D
 
@@ -349,7 +349,7 @@ func _build_boss() -> void:
 	_shield_mark.position = Vector3(0, 9.2, 0)
 	_boss_root.add_child(_shield_mark)
 	# G53d: its two great stone fists, either side of it; the one it raises
-	# (or both) says which middle column the slam spares
+	# (or both) says which half it slams (G57; both: all but the centre)
 	for side in ["west", "east"]:
 		var fist := Node3D.new()
 		var stone := _mat("fist_stone", Color("#6e6250"))
@@ -366,8 +366,9 @@ func _build_boss() -> void:
 		add_child(fist)
 		fist.position = _fist_rest(side)
 		_fists[side] = fist
-	# the three middle columns marked at the top row, like a player's tile marker
-	for x in [OsrsSim.W / 2 - 1, OsrsSim.W / 2, OsrsSim.W / 2 + 1]:
+	# G57: every column marked at the top row while a slam is on, like a
+	# player's tile marker: gold where the posing hit spares, red where it lands
+	for x in OsrsSim.W:
 		var mk := MeshInstance3D.new()
 		mk.mesh = _square_outline(TILE - 0.14, 0.09)
 		var mm := StandardMaterial3D.new()
@@ -1320,7 +1321,7 @@ func _animate(delta: float) -> void:
 		_shield_mark.modulate = sc
 	# the slam (G53d): no floor glow. The pose tells it: the fist it raises
 	# (or both) climbs, glows and comes down on the hit; it leans that way;
-	# the matching square of the three-square marker lights gold
+	# the top-row marker lights gold over the columns it spares (G57)
 	var ps := _posing()
 	var pose := str(ps.get("side", ""))
 	var pk := 0.0
@@ -1340,9 +1341,9 @@ func _animate(delta: float) -> void:
 	var lean := { "west": 0.22, "east": -0.22 }.get(pose, 0.0) as float
 	_boss.rotation.z = lerpf(_boss.rotation.z, lean, minf(1.0, delta * 6.0))
 	for x in _mid_marks:
-		var on: bool = not ps.is_empty() and int(ps.safe) == int(x)
+		var on: bool = not ps.is_empty() and (ps.safe as Array).has(int(x))
 		(_mid_marks[x].material_override as StandardMaterial3D).albedo_color = Color("#ffd040") if on else Color("#d02020")
-		(_mid_marks[x] as MeshInstance3D).visible = not sim.gone.has(Vector2i(int(x), 0))
+		(_mid_marks[x] as MeshInstance3D).visible = not ps.is_empty() and not sim.gone.has(Vector2i(int(x), 0))
 	# the tear-out glow
 	var lit := {}
 	if not sim.rip.is_empty():

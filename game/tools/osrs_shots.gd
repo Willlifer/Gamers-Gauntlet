@@ -8,8 +8,13 @@ extends SceneTree
 ## winding up and firing; G53d: each slam pose (slam_west / slam_both /
 ## slam_east) just before it lands, both shields, the skulls
 ## charging, a skate mid-chain.
+## G57: Hard's slams are the fist's half (slam_west / slam_east, the top-row
+## marker gold over the other half) and both fists last (slam_both, gold only
+## on the centre); no fast slam any more. MODE=easy shoots the Easy mode
+## (OsrsEasySim, the 1f1a933 frames: start, lightning, boulders, slam, the
+## orb through a slam, sigil, tear-out, phase 3, end) as <TAG>_easy_<what>.
 ## Runs at 2x speed.
-##   [TAG=r1] godot --path . --script res://tools/osrs_shots.gd
+##   [TAG=r1] [MODE=easy] godot --path . --script res://tools/osrs_shots.gd
 
 var out := ""
 var tag := ""
@@ -29,6 +34,8 @@ func _shot(name: String) -> void:
 	if shots.has(name):
 		return
 	shots[name] = true
+	if OS.get_environment("MODE") == "easy":
+		name = "easy_" + name
 	await process_frame
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out.path_join("%s_%s.png" % [tag, name]))
@@ -38,6 +45,9 @@ func _shot(name: String) -> void:
 func _go() -> void:
 	OsrsTune.use_defaults()
 	BWSettings.init(true)
+	if OS.get_environment("MODE") == "easy":
+		await _go_easy()
+		return
 	var s := OsrsSim.new(31)
 	var v := OsrsView.new()
 	v.setup(s)
@@ -70,8 +80,6 @@ func _go() -> void:
 			await _shot("flank_shot")
 		if s.slams.size() == 1 and str(s.slams[0].side) == "both" and int(s.slams[0].t) == 1:
 			await _shot("slam_third")
-		if s.slams.size() == 2 and s.slam_gap() == 2 and int(s.slams[0].t) == 1:
-			await _shot("slam_fast")
 		if int(s.me.boost) > 0 and int(s.me.boost) < int(OsrsTune.value("boost_ticks")) - 2:
 			await _shot("boost")
 		if not s.skull_phase.is_empty() and int(s.skull_phase.total) - int(s.skull_phase.t) == 1:
@@ -106,4 +114,39 @@ func _go() -> void:
 	await create_timer(1.2).timeout
 	await _shot("end")
 	print("osrs_shots: %d frames to %s (%s)" % [shots.size(), out, s.over])
+	quit(0)
+
+
+## G57: the Easy mode, the 1f1a933 frames.
+func _go_easy() -> void:
+	var s := OsrsEasySim.new(31)
+	var v := OsrsEasyView.new()
+	v.setup(s)
+	v.bot = OsrsEasyBot.new(31)
+	root.add_child(v)
+	await create_timer(1.5).timeout
+	await _shot("start")
+	Engine.time_scale = 2.0
+	var guard := 0.0
+	while s.over == "" and guard < 400.0:
+		await process_frame
+		guard += 1.0 / 60.0
+		if not s.bolts.is_empty() and s.bolts.any(func(b: Dictionary) -> bool: return int(b.t) == 2):
+			await _shot("lightning")
+		if not s.falls.is_empty() and s.falls.any(func(f: Dictionary) -> bool: return int(f.t) == 2):
+			await _shot("boulders")
+		if s.slams.any(func(x: Dictionary) -> bool: return int(x.t) <= 2 and int(x.t) >= 1):
+			await _shot("slam")
+		if not s.slams.is_empty() and s.projs.any(func(p: Dictionary) -> bool: return str(p.style) != "melee" and s.tick - int(p.launch) == 2):
+			await _shot("slam_orb")
+		if s.sigils.any(func(x: Dictionary) -> bool: return int(x.t) <= 3):
+			await _shot("sigil")
+		if not s.rip.is_empty():
+			await _shot("tearout")
+		if s.phase() == 3 and s.gone.size() >= OsrsEasySim.W * 2:
+			await _shot("phase3")
+	Engine.time_scale = 1.0
+	await create_timer(1.2).timeout
+	await _shot("end")
+	print("osrs_shots (easy): %d frames to %s (%s)" % [shots.size(), out, s.over])
 	quit(0)

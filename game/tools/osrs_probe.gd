@@ -13,7 +13,11 @@ extends SceneTree
 ## three different safe columns; the dagger is melee and strikes on arrival
 ## (the skate); skulls in a lane, one hit each, a third of the time; the
 ## magic / bowfire shields. Bot runs end, kill
-## sometimes, die sometimes, and replay the same. Exit 0 when every check passes.
+## sometimes, die sometimes, and replay the same. G57 (Hard): a fist slams its
+## own half, both fists all but the centre; no phase-3 speed-ups or twins.
+## G57 (Easy, OsrsEasySim): the 1f1a933 probe again, unchanged but for the
+## class names (the `easy:` lines), plus the old slam's columns and order.
+## Exit 0 when every check passes.
 
 var fails := 0
 
@@ -41,6 +45,14 @@ func _initialize() -> void:
 	_skull_wait()
 	_shields()
 	_runs()
+	print("-- Easy (OsrsEasySim, the pre-G53 trial)")
+	_easy_squares()
+	_easy_prayer()
+	_easy_flight()
+	_easy_hazards()
+	_easy_sigil()
+	_easy_slam()
+	_easy_runs()
 	print("osrs probe: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
 	quit(0 if fails == 0 else 1)
 
@@ -130,28 +142,42 @@ func _flight() -> void:
 	_ok(s.projs.size() == 1, "nothing lands before its 3 s are up")
 	s.step({ "pray": "ranged" })
 	_ok(s.projs.is_empty() and int(s.me.blocked) == 1, "Protect from Missiles switched on the landing tick blocks it")
-	# phase 3's twin: the other style, a tick behind, also 3 s
+	# G57: no enrage in Hard: phase 3 fires one shot every auto_every ticks, no twins
 	var t := OsrsSim.new(10)
 	_quiet(t)
 	t.boss.hp = float(t.boss.max_hp) * 0.3
 	t.me.tile = Vector2i(7, 9)
 	OsrsTune._values["twin_chance"] = 1.0
 	t.boss.auto_cd = 1
-	t.step({})
-	t.step({})
+	var shots: Array = []
+	for i in 30:
+		for e: Dictionary in t.step({}):
+			if str(e.type) == "proj":
+				shots.append(int(e.tick))
 	OsrsTune._values.erase("twin_chance")
-	var ok: bool = t.projs.size() == 2 and t.projs[0].style != t.projs[1].style and int(t.projs[1].land) == int(t.projs[0].land) + 1 		and int(t.projs[1].land) - int(t.projs[1].launch) == OsrsSim.flight_ticks() and t.projs[0].src != t.projs[1].src
-	_ok(ok, "phase 3's twin: the other style from the other phantom, landing a tick behind, also a 3 s flight")
+	var even := shots.size() >= 5
+	for i in range(1, shots.size()):
+		if shots[i] - shots[i - 1] != int(OsrsTune.value("auto_every")):
+			even = false
+	_ok(t.phase() == 3 and even, "Hard phase 3: one shot every %d ticks, no twin volleys, even at twin_chance 1 (%s)" % [int(OsrsTune.value("auto_every")), str(shots)])
+	var sp := OsrsSim.new(13)
+	_quiet(sp)
+	sp.boss.hp = float(sp.boss.max_hp) * 0.3
+	sp.boss.special_cd = 1
+	sp.step({})
+	_ok(int(sp.boss.special_cd) == int(OsrsTune.value("special_every")), "Hard phase 3: specials still every %d ticks (was one sooner)" % int(OsrsTune.value("special_every")))
 	# through the slam: projectiles launch and land while the floor glows
 	var u := OsrsSim.new(11)
 	_quiet(u)
 	u.me.tile = Vector2i(7, 9)
+	u.me.max_hp = 9999.0           # G57: the centre column takes both single-fist hits; a dead player stops the sim (step returns early), and the loop never ended
+	u.me.hp = 9999.0
 	u.boss.hp = float(u.boss.max_hp) * 0.5
 	u.boss.auto_cd = 2
 	u._slam()
 	var launched := 0
 	var landed := 0
-	while not u.slams.is_empty():
+	while not u.slams.is_empty() and u.over == "":
 		for e: Dictionary in u.step({}):
 			if str(e.type) == "proj":
 				launched += 1
@@ -190,11 +216,11 @@ func _hazards() -> void:
 	_quiet(s2)
 	s2.me.tile = Vector2i(7, 9)
 	s2._slam()
-	var first: int = s2.slams[0].safe
-	s2.me.tile = Vector2i(0 if first > 7 else 14, 9)
+	var first: Array = s2.slams[0].cols
+	s2.me.tile = Vector2i(int(first[0]), 9)
 	for i in 5:
 		s2.step({})
-	_ok(is_equal_approx(float(s2.me.hp), float(s2.me.max_hp) - OsrsTune.value("slam_dmg")), "a slam hit lands everywhere but its safe column")
+	_ok(is_equal_approx(float(s2.me.hp), float(s2.me.max_hp) - OsrsTune.value("slam_dmg")), "a slam hit lands on the columns it covers")
 	var s3 := OsrsSim.new(5)
 	_quiet(s3)
 	s3.me.tile = Vector2i(5, 9)
@@ -281,15 +307,16 @@ func _tearout() -> void:
 	_ok(rips >= 6, "a bot fight tears out %d rows (was 0-3 before G53)" % rips)
 
 
-## G53d: three slam hits; each spares one of the middle three columns, the
-## one its pose names (west fist: west-middle, both: centre, east fist:
-## east-middle), never the same pose twice running; running to each in turn
-## dodges them all, at either speed; standing still doesn't.
+## G57 (Hard): three slam hits slam_gap ticks apart at any HP; the first two
+## one fist each (seeded order), each slamming its own half with the centre
+## column; the third both fists, sparing only the centre. Moving to each
+## hit's safe side in turn dodges them all; standing still never does.
 func _slam_g53() -> void:
 	var ok_cols := true
 	var bad := ""
-	var seen := {}
-	var mid: Array = [OsrsSim.W / 2 - 1, OsrsSim.W / 2, OsrsSim.W / 2 + 1]
+	var orders := {}
+	var cx := OsrsSim.W / 2
+	var want := { "west": range(0, cx + 1), "east": range(cx, OsrsSim.W), "both": range(0, OsrsSim.W).filter(func(x: int) -> bool: return x != cx) }
 	for seed in 40:
 		var s := OsrsSim.new(300 + seed)
 		_quiet(s)
@@ -297,14 +324,16 @@ func _slam_g53() -> void:
 		if seed % 2 == 1:
 			s.boss.hp = float(s.boss.max_hp) * 0.45
 		s._slam()
-		for i in 3:
-			var sl: Dictionary = s.slams[i]
-			seen[str(sl.side)] = true
-			var c: Array = sl.cols
-			if not mid.has(int(sl.safe)) or c.size() != OsrsSim.W - 1 or c.has(sl.safe) or int(sl.safe) != OsrsSim.slam_safe(str(sl.side)) 					or (i > 0 and str(sl.side) == str(s.slams[i - 1].side)):
+		var sides: Array = s.slams.map(func(sl: Dictionary) -> String: return str(sl.side))
+		orders[",".join(sides)] = true
+		for sl: Dictionary in s.slams:
+			var safe: Array = sl.safe
+			var cols: Array = sl.cols
+			if cols != want[str(sl.side)] or safe.size() + cols.size() != OsrsSim.W or safe.any(func(x: int) -> bool: return cols.has(x)):
 				ok_cols = false
-				bad = "%s %s" % [str(sl.side), str(sl.safe)]
-	_ok(ok_cols and seen.size() == 3, "each slam hit spares one middle column, the one its pose names (west %d, both %d, east %d), no pose twice running %s" % [OsrsSim.slam_safe("west"), OsrsSim.slam_safe("both"), OsrsSim.slam_safe("east"), bad])
+				bad = "%s %s" % [str(sl.side), str(cols)]
+	_ok(ok_cols, "a west fist slams columns 0-%d, an east fist %d-%d, both all but %d %s" % [cx, cx, OsrsSim.W - 1, cx, bad])
+	_ok(orders.size() == 2 and orders.has("west,east,both") and orders.has("east,west,both"), "the order: one fist, the other, then both last (seen %s)" % str(orders.keys()))
 	var gap := 0
 	var fgap := 0
 	for slow in [true, false]:
@@ -333,15 +362,16 @@ func _slam_g53() -> void:
 				for x: Dictionary in f.slams:
 					if int(x.t) < int(next.t):
 						next = x
-				f.step({ "move": Vector2i(int(next.safe), 9) } if f.me.tile.x != int(next.safe) and (f.me.path as Array).is_empty() else {})
+				var to := _nearest_col(next.safe, f.me.tile.x)
+				f.step({ "move": Vector2i(to, 9) } if f.me.tile.x != to and (f.me.path as Array).is_empty() else {})
 				g.step({})
 				steps += 1
 			if not is_equal_approx(float(f.me.hp), hp0):
 				hits += 1
 			if is_equal_approx(float(g.me.hp), hp0):
 				still += 1
-		_ok(hits == 0 and still == 0, "%s slams: running to each safe column in turn dodges all three (%d / 20 hit); standing still never does (%d / 20 clean)" % ["slow" if slow else "fast", hits, still])
-	_ok(gap == 4 and fgap == 2, "slam hits %d ticks apart above 50%%, %d below" % [gap, fgap])
+		_ok(hits == 0 and still == 0, "%s HP: moving to each hit's safe side in turn dodges all three (%d / 20 hit); standing still never does (%d / 20 clean)" % ["full" if slow else "under half", hits, still])
+	_ok(gap == 4 and fgap == 4, "Hard: slam hits %d ticks apart above 50%%, %d below (no speed-up)" % [gap, fgap])
 	# every hit's pose shows (a "slam" event, the view's cue) slam_warn ticks before it lands
 	var v := OsrsSim.new(77)
 	var vb := OsrsBot.new(77)
@@ -357,6 +387,15 @@ func _slam_g53() -> void:
 				if str(posed.get(int(e.tick), "")) == str(e.side):
 					cued += 1
 	_ok(lands > 0 and cued == lands, "every slam hit's pose shows %d ticks before it lands (%d / %d)" % [int(OsrsTune.value("slam_warn")), cued, lands])
+
+
+## The column in `cols` nearest to x.
+func _nearest_col(cols: Array, x: int) -> int:
+	var best := int(cols[0])
+	for c in cols:
+		if absi(int(c) - x) < absi(best - x):
+			best = int(c)
+	return best
 
 
 ## G53: a damage potion; a dose makes bow / staff hits x boost_mult for boost_ticks.
@@ -726,3 +765,253 @@ func _runs() -> void:
 	var d := { "how": "dead", "ticks": 100, "boss_dmg": 900.0, "taken": 99.0 }
 	var f := { "how": "win", "ticks": 180, "boss_dmg": 1000.0, "taken": 80.0 }
 	_ok(OsrsSim.beats(a, d) and OsrsSim.beats(f, a) and not OsrsSim.beats(d, a), "the verdict: a kill beats a death, then the faster kill")
+
+
+# ------------------------------------------------------------- G57: Easy
+
+func _eok(c: bool, what: String) -> void:
+	_ok(c, "easy: " + what)
+
+
+## The old slam (1f1a933): east (8-14), then west (0-6), then both sides
+## (0-5, 9-14), four ticks apart at any HP; no skull, shield or dagger state.
+func _easy_slam() -> void:
+	var s := OsrsEasySim.new(21)
+	_easy_quiet(s)
+	s.boss.hp = float(s.boss.max_hp) * 0.3
+	s._slam()
+	var sides: Array = s.slams.map(func(sl: Dictionary) -> String: return str(sl.side))
+	var ok: bool = sides == ["east", "west", "both"] and s.slams[0].cols == range(8, 15) and s.slams[1].cols == range(0, 7) \
+		and s.slams[2].cols == range(0, 6) + range(9, 15) and int(s.slams[1].t) - int(s.slams[0].t) == 4 and int(s.slams[2].t) - int(s.slams[1].t) == 4
+	_eok(ok, "the old slam: east, west, both sides, 4 ticks apart even below 50%% (%s)" % str(sides))
+	_eok(not ("skulls" in s) and not s.me.has("boost_doses") and not s.boss.has("shield"), "no skulls, damage potion or shields")
+
+
+func _easy_quiet(s: OsrsEasySim) -> void:
+	s.boss.auto_cd = 9999
+	s.boss.special_cd = 9999
+	s.boss.sigil_cd = 9999
+	s.boss.rip_cd = 9999
+
+
+func _easy_squares() -> void:
+	var s := OsrsEasySim.new(1)
+	_easy_quiet(s)
+	s.me.tile = Vector2i(2, 8)
+	s.rocks[Vector2i(3, 7)] = 99
+	s.rocks[Vector2i(2, 7)] = 99
+	var p := s.path(Vector2i(2, 8), Vector2i(3, 6))
+	var cut := false
+	var prev := Vector2i(2, 8)
+	for t: Vector2i in p:
+		var d := t - prev
+		if d.x != 0 and d.y != 0 and (not s.walkable(Vector2i(prev.x + d.x, prev.y)) or not s.walkable(Vector2i(prev.x, prev.y + d.y))):
+			cut = true
+		prev = t
+	_eok(not p.is_empty() and p[-1] == Vector2i(3, 6) and not cut, "a path round two rocks without cutting a corner (%d squares)" % p.size())
+	s.rocks.clear()
+	s.me.tile = Vector2i(0, 11)
+	s.step({ "move": Vector2i(0, 5), "run": true })
+	_eok(s.me.tile == Vector2i(0, 9), "running: two squares a tick")
+	s.step({ "run": false })
+	_eok(s.me.tile == Vector2i(0, 8), "walking: one square a tick")
+	s.step({ "move": Vector2i(40, -3) })
+	_eok(OsrsEasySim.inside(s.me.tile), "a click off the floor walks to the nearest square")
+
+
+func _easy_prayer() -> void:
+	var s := OsrsEasySim.new(2)
+	_easy_quiet(s)
+	s._launch("magic", 3, 20.0)
+	s.step({ "pray": "magic" })
+	s.step({})
+	s.step({})
+	_eok(is_equal_approx(float(s.me.hp), float(s.me.max_hp)) and int(s.me.blocked) == 1, "Protect from Magic blocks a magic projectile")
+	s._launch("ranged", 2, 20.0)
+	s.step({})
+	s.step({})
+	_eok(is_equal_approx(float(s.me.hp), float(s.me.max_hp) - 20.0), "the wrong prayer lets a ranged projectile through (20)")
+	var p0 := float(s.me.pray)
+	for i in 30:
+		s.step({})
+	_eok(float(s.me.pray) < p0 - 8.0, "a protect prayer drains (%.0f → %.0f over 30 ticks)" % [p0, float(s.me.pray)])
+	s.me.hp = 40.0
+	s.step({ "eat": true })
+	_eok(is_equal_approx(float(s.me.hp), 40.0 + float(s.me.max_hp) * 0.25), "food restores 25%")
+
+
+## G45: every prayable projectile takes flight_s (3 s) from launch to impact,
+## near or far; the prayer is judged on impact; the twin lands a tick behind;
+## projectiles keep launching and landing through a slam.
+func _easy_flight() -> void:
+	_eok(is_equal_approx(OsrsEasySim.flight_ticks() * OsrsEasySim.TICK, 3.0), "a projectile flies %d ticks = %.1f s" % [OsrsEasySim.flight_ticks(), OsrsEasySim.flight_ticks() * OsrsEasySim.TICK])
+	for at: Vector2i in [Vector2i(7, 1), Vector2i(0, 11)]:
+		var s := OsrsEasySim.new(8)
+		_easy_quiet(s)
+		s.me.tile = at
+		s.boss.auto_cd = 1
+		s.step({})
+		var p: Dictionary = s.projs[0] if not s.projs.is_empty() else {}
+		var secs := (int(p.land) - int(p.launch)) * OsrsEasySim.TICK if not p.is_empty() else -1.0
+		_eok(str(p.get("style", "")) in OsrsEasySim.STYLES and is_equal_approx(secs, 3.0), "from %d squares away it lands 3 s after launch (%.1f s)" % [OsrsEasySim.boss_dist(at), secs])
+	# judged on impact: up the whole flight but dropped on the last tick lets it
+	# through; switched on only on the landing tick still blocks it
+	var s := OsrsEasySim.new(9)
+	_easy_quiet(s)
+	s._launch("magic", OsrsEasySim.flight_ticks(), 20.0)
+	s.step({ "pray": "magic" })
+	for i in OsrsEasySim.flight_ticks() - 2:
+		s.step({})
+	s.step({ "pray": "off" })
+	_eok(is_equal_approx(float(s.me.hp), float(s.me.max_hp) - 20.0), "a prayer dropped before impact doesn't block (judged on impact)")
+	s._launch("ranged", OsrsEasySim.flight_ticks(), 20.0)
+	for i in OsrsEasySim.flight_ticks() - 1:
+		s.step({})
+	_eok(s.projs.size() == 1, "nothing lands before its 3 s are up")
+	s.step({ "pray": "ranged" })
+	_eok(s.projs.is_empty() and int(s.me.blocked) == 1, "Protect from Missiles switched on the landing tick blocks it")
+	# phase 3's twin: the other style, a tick behind, also 3 s
+	var t := OsrsEasySim.new(10)
+	_easy_quiet(t)
+	t.boss.hp = float(t.boss.max_hp) * 0.3
+	t.me.tile = Vector2i(7, 9)
+	OsrsTune._values["twin_chance"] = 1.0
+	t.boss.auto_cd = 1
+	t.step({})
+	t.step({})
+	OsrsTune._values.erase("twin_chance")
+	var ok: bool = t.projs.size() == 2 and t.projs[0].style != t.projs[1].style and int(t.projs[1].land) == int(t.projs[0].land) + 1 		and int(t.projs[1].land) - int(t.projs[1].launch) == OsrsEasySim.flight_ticks()
+	_eok(ok, "phase 3's twin: the other style, landing a tick behind, also a 3 s flight")
+	# through the slam: projectiles launch and land while the floor glows
+	var u := OsrsEasySim.new(11)
+	_easy_quiet(u)
+	u.me.tile = Vector2i(7, 9)
+	u.boss.hp = float(u.boss.max_hp) * 0.5
+	u.boss.auto_cd = 2
+	u._slam()
+	var launched := 0
+	var landed := 0
+	while not u.slams.is_empty() and u.over == "":
+		for e: Dictionary in u.step({}):
+			if str(e.type) == "proj":
+				launched += 1
+			elif str(e.type) == "hurt" or str(e.type) == "blocked":
+				if str(e.get("what", e.get("style", ""))) in OsrsEasySim.STYLES and str(e.type) == "hurt":
+					landed += 1
+		u.boss.auto_cd = mini(int(u.boss.auto_cd), int(OsrsTune.value("auto_every")))
+	_eok(launched >= 2 and landed >= 1, "the Warden keeps firing through a slam (%d launched, %d landed)" % [launched, landed])
+	# and in a real fight, every slam has a projectile in the air
+	var v := OsrsEasySim.new(12)
+	var b := OsrsEasyBot.new(12)
+	var slams := 0
+	var covered := 0
+	while v.over == "":
+		for e: Dictionary in v.step(b.think(v)):
+			if str(e.type) == "slam_land":
+				slams += 1
+				if not v.projs.is_empty():
+					covered += 1
+	_eok(slams >= 1 and covered == slams, "in a bot fight every slam lands with a projectile in the air (%d / %d)" % [covered, slams])
+
+
+func _easy_hazards() -> void:
+	var s := OsrsEasySim.new(3)
+	_easy_quiet(s)
+	s.me.tile = Vector2i(7, 9)
+	s._lightning(8)
+	var on_me: bool = s.bolts.any(func(b: Dictionary) -> bool: return b.tile == Vector2i(7, 9))
+	_eok(on_me, "lightning always marks your square")
+	var hp0 := float(s.me.hp)
+	s.step({ "move": Vector2i(0, 2) })                      # run well away
+	for i in 6:
+		s.step({})
+	_eok(is_equal_approx(float(s.me.hp), hp0) and int(s.me.dodged) >= 1, "running off the shadows dodges the bolts")
+	var s2 := OsrsEasySim.new(4)
+	_easy_quiet(s2)
+	s2.me.tile = Vector2i(12, 9)
+	s2._slam()
+	for i in 5:
+		s2.step({})
+	_eok(is_equal_approx(float(s2.me.hp), float(s2.me.max_hp) - OsrsTune.value("slam_dmg")), "the east slam hits the east side")
+	s2.step({ "move": Vector2i(7, 9) })
+	for i in 9:
+		s2.step({})
+	_eok(is_equal_approx(float(s2.me.hp), float(s2.me.max_hp) - OsrsTune.value("slam_dmg")), "the centre columns are safe from the west and both-sides slams")
+	var s3 := OsrsEasySim.new(5)
+	_easy_quiet(s3)
+	s3.me.tile = Vector2i(5, 9)
+	s3._boulders()
+	for i in 6:
+		s3.step({})
+	_eok(float(s3.me.hp) < float(s3.me.max_hp) and s3.rocks.size() >= 1 and s3.walkable(s3.me.tile), "a boulder on you hurts, stays as a rock, and you're shoved off it")
+	var s4 := OsrsEasySim.new(6)
+	_easy_quiet(s4)
+	s4.boss.hp = float(s4.boss.max_hp) * 0.3
+	s4.boss.rip_cd = 1
+	s4.me.tile = Vector2i(7, 11)
+	for i in 8:
+		s4.step({})
+	_eok(s4.gone.has(Vector2i(7, 11)) and s4.me.tile.y < 11 and float(s4.me.hp) < float(s4.me.max_hp), "phase 3 tears out the far row; standing on it hurts and moves you")
+
+
+func _easy_sigil() -> void:
+	var s := OsrsEasySim.new(7)
+	_easy_quiet(s)
+	s.me.tile = Vector2i(7, 8)
+	s.sigils.append({ "tile": Vector2i(7, 8), "t": 1, "total": 1 })
+	s.step({})
+	_eok(int(s.me.empowered) == int(OsrsTune.value("sigil_hits")), "standing on the Sun Sigil when it ignites empowers you")
+	s.boss.hp = 9999.0
+	s.boss.max_hp = 9999.0
+	OsrsTune._values["accuracy"] = 1.0
+	s.step({ "attack": true })
+	var dmg := float(s.me.dmg_done)
+	_eok(dmg >= OsrsTune.value("bow_lo") * OsrsTune.value("sigil_mult"), "an empowered bow shot hits for x%.1f (%.0f)" % [OsrsTune.value("sigil_mult"), dmg])
+	OsrsTune._values.erase("accuracy")
+
+
+func _easy_runs() -> void:
+	var kills := 0
+	var deaths := 0
+	var secs := 0.0
+	for i in 20:
+		var s := OsrsEasySim.new(100 + i)
+		var b := OsrsEasyBot.new(500 + i)
+		while s.over == "":
+			s.step(b.think(s))
+		if s.over == "win":
+			kills += 1
+			secs += s.tick * OsrsEasySim.TICK
+		elif s.over == "dead":
+			deaths += 1
+		var r := s.result()
+		print("  run %2d: %-4s %3.0f s  dealt %4.0f  taken %3.0f  prayed %d/%d  dodged %d hit %d  sigils %d" % [i, r.how, r.secs, r.boss_dmg, r.taken,
+			r.blocked, int(r.blocked) + int(r.unblocked), r.dodged, r.struck, r.sigils])
+	print("  bots: %d kills (mean %.0f s), %d deaths, %d timeouts" % [kills, secs / maxf(1, kills), deaths, 20 - kills - deaths])
+	_eok(kills >= 6, "a good bot kills the Warden in a fair share of runs (%d / 20)" % kills)
+	# a careless player (prays right 60%, dodges half the time) dies often: it's meant to be hard for a new player
+	var careless := 0
+	for i in 20:
+		var s := OsrsEasySim.new(300 + i)
+		var b := OsrsEasyBot.new(700 + i)
+		b.react = 0.6
+		b.dodge = 0.5
+		while s.over == "":
+			s.step(b.think(s))
+		if s.over != "win":
+			careless += 1
+	print("  careless bots: %d / 20 fail" % careless)
+	_eok(careless >= 8, "the fight beats a careless player (%d / 20 fail)" % careless)
+	# replay: the same seed and orders give the same fight
+	var hs: Array = []
+	for k in 2:
+		var s := OsrsEasySim.new(42)
+		var b := OsrsEasyBot.new(42)
+		while s.over == "":
+			s.step(b.think(s))
+		hs.append(s.state_hash())
+	_eok(hs[0] == hs[1], "replay: the same seed plays the same fight")
+	var a := { "how": "win", "ticks": 200, "boss_dmg": 1000.0, "taken": 50.0 }
+	var d := { "how": "dead", "ticks": 100, "boss_dmg": 900.0, "taken": 99.0 }
+	var f := { "how": "win", "ticks": 180, "boss_dmg": 1000.0, "taken": 80.0 }
+	_eok(OsrsEasySim.beats(a, d) and OsrsEasySim.beats(f, a) and not OsrsEasySim.beats(d, a), "the verdict: a kill beats a death, then the faster kill")

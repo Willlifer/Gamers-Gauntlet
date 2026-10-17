@@ -4,7 +4,8 @@ extends SceneTree
 ## Input.parse_input_event to the view like a player's. A click on a skull's
 ## head (which draws over the square behind it), its square, its feet, or a
 ## little off it targets the skull, never the floor; a click on an empty
-## square walks there.
+## square walks there. G57: then the Easy mode's view (OsrsEasyView): a click
+## on the Warden attacks, a click on a square walks there.
 ##   godot --path . --script res://tools/osrs_input.gd      (exit 0 when all pass)
 
 var fails := 0
@@ -22,7 +23,7 @@ func _initialize() -> void:
 	_go.call_deferred()
 
 
-func _click(v: OsrsView, at: Vector2) -> Dictionary:
+func _click(v: Object, at: Vector2) -> Dictionary:
 	v._orders = {}
 	for down in [true, false]:
 		var e := InputEventMouseButton.new()
@@ -97,5 +98,30 @@ func _go() -> void:
 	await RenderingServer.frame_post_draw
 	root.get_texture().get_image().save_png(out.path_join("%s_skull_hover.png" % tag))
 	Engine.time_scale = 1.0
+	v.queue_free()
+	await process_frame
+	await _easy()
 	print("osrs input: %s" % ("OK" if fails == 0 else "%d FAILS" % fails))
 	quit(0 if fails == 0 else 1)
+
+
+## G57: the Easy mode's clicks (OsrsEasyView, the 1f1a933 view).
+func _easy() -> void:
+	var s := OsrsEasySim.new(41)
+	s.boss.auto_cd = 9999
+	s.boss.special_cd = 9999
+	s.boss.sigil_cd = 9999
+	s.boss.rip_cd = 9999
+	s.me.tile = Vector2i(7, 9)
+	var v := OsrsEasyView.new()
+	v.setup(s)
+	root.add_child(v)
+	await create_timer(1.0).timeout
+	Engine.time_scale = 0.0
+	var cam := v._cam
+	var boss := await _click(v, cam.unproject_position(OsrsEasyView.BOSS_POS + Vector3(0, 3.2, 0)))
+	_ok(bool(boss.get("attack", false)) and not boss.has("move"), "easy: a click on the Warden attacks it (%s)" % str(boss))
+	var sq := await _click(v, cam.unproject_position(v.w(Vector2i(3, 10))))
+	_ok(sq.get("move", Vector2i(-1, -1)) == Vector2i(3, 10), "easy: a click on a square walks there (%s)" % str(sq))
+	Engine.time_scale = 1.0
+	v.queue_free()

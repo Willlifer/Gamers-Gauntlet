@@ -10,7 +10,8 @@ extends RefCounted
 ## weapon, which is too slow). G53b: it skates the skulls (always the one
 ## fewest steps away, struck on arrival), swaps bow <-> staff when the Warden
 ## shields itself against the one it holds (`swaps` false: it doesn't), and
-## runs column to column through the slam. Seeded: the same seed plays the same way.
+## runs column to column through the slam (G57: half to half, from the
+## moment the pose shows). Seeded: the same seed plays the same way.
 
 var rng := RandomNumberGenerator.new()
 var react := -1.0             ## chance it prays right (-1: OsrsTune.bot_react)
@@ -65,6 +66,11 @@ func think(s: OsrsSim) -> Dictionary:
 		o["boost"] = true
 	# danger: step to the nearest safe square in range
 	var bad := s.danger(2)
+	for sl: Dictionary in s.slams:                       # G57: a half can be 8 columns away: move as the pose shows
+		if int(sl.t) <= int(sl.total):
+			for x in sl.cols:
+				for y in OsrsSim.H:
+					bad[Vector2i(int(x), y)] = true
 	if bad.has(me.tile):
 		var key := "%d:%s" % [s.tick / 4, str(me.tile)]
 		if not _dodge.has(key):
@@ -126,16 +132,16 @@ func _safe(s: OsrsSim, bad: Dictionary) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var bd := 999.0
 	var later := s.danger(5)
-	var next_safe := -1                                 # the slam after the imminent one: lean toward its column
+	var next_hit: Array = []                            # the slam after the imminent one: lean off its columns (G57: halves)
 	var order: Array = s.slams.duplicate()
 	order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a.t) < int(b.t))
 	if order.size() >= 2:
-		next_safe = int(order[1].safe)
+		next_hit = order[1].cols
 	for t: Vector2i in s.floor_tiles():
 		if not s.walkable(t) or bad.has(t):
 			continue
 		var d := Vector2(t).distance_to(Vector2(me.tile)) + (2.0 if later.has(t) else 0.0) + (1.5 if OsrsSim.boss_dist(t) > int(OsrsTune.value("range")) else 0.0) \
-			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0) + (0.6 * absi(t.x - next_safe) if next_safe >= 0 else 0.0)
+			+ (3.0 if OsrsSim.boss_dist(t) <= 1 else 0.0) + (2.5 if next_hit.has(t.x) else 0.0)
 		if d < bd:
 			bd = d
 			best = t

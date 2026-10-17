@@ -19,21 +19,23 @@ extends RefCounted
 ##                after launch wherever you stand, so a near one crawls and a
 ##                far one streaks (G45), and does nothing if the matching
 ##                protect prayer is up when it lands (checked on impact). They
-##                keep coming during every special. In phase 3 a twin volley
-##                sends the other style from the other phantom a tick behind
-##                (a flick).
+##                keep coming during every special. One every `auto_every`
+##                ticks in every phase: no phase-3 speed-up and no twin
+##                volleys in Hard (G57: the author's "no enrage").
 ## The Warden (the one you hit) does the specials, and smacks you if you
 ## stand next to it (melee, one tick):
 ##   lightning    shadows grow on squares; a bolt strikes each when it's full.
 ##                A struck square can't be picked again for a few ticks.
 ##   boulders     shadows under falling rocks (one on you); a rock that lands
 ##                blocks its square for a while.
-##   slam         three hits, each over the whole floor but one of the three
-##                middle columns (G53d, after the author's reference): the
-##                Warden's pose says which. West fist raised: the west-middle
-##                column is safe; both fists: the centre; east fist: the
-##                east-middle. Seeded order, never the same twice running.
-##                Below 50% the three hits come faster (slam_gap_fast).
+##   slam         three hits `slam_gap` ticks apart at any HP (G57: no faster
+##                slams below 50%). The Warden's pose says what each covers
+##                (G57, the author's Hard mode): a west fist raised slams the
+##                west half (up to and with the centre column), an east fist
+##                the east half, so the other half is safe; the first two hits
+##                are one fist each (seeded order) and the third, both fists,
+##                covers everything but the centre column. No square is safe
+##                from all three: you cross, then come back to the centre.
 ##   tear-out     every `rip_pct` of its HP lost (8%), the furthest row cracks
 ##                and falls away, down to `rows_left` rows.
 ##   skulls       at 75%, 50% and 25% it stops (shielded, no specials) and
@@ -64,7 +66,7 @@ const BOSS_RECT := Rect2i(5, -5, 5, 5)          ## the Warden's squares
 const STYLES := ["magic", "ranged"]
 const WEAPONS := ["bow", "staff", "dagger"]
 const SKULL_AT := [0.75, 0.5, 0.25]             ## skull phases at these HP fractions
-const SLAM_POSES := ["west", "both", "east"]    ## G53d: the slam's poses, each sparing one middle column
+const SLAM_POSES := ["west", "both", "east"]    ## G53d: the slam's poses (G57: a fist slams its own half; both spare the centre)
 
 var rng := RandomNumberGenerator.new()
 var tick := 0
@@ -75,7 +77,7 @@ var boss := {}
 var projs: Array = []          # { id, style, launch, land, dmg }
 var bolts: Array = []          # lightning { tile, t, total }
 var falls: Array = []          # boulders { tile, t, total }
-var slams: Array = []          # { cols: [x], safe: x, t, total, side: "west"|"both"|"east", i }
+var slams: Array = []          # { cols: [x] hit, safe: [x] spared, t, total, side: "west"|"both"|"east", i }
 var rip := {}                  # { row, t, total } while a row is cracking
 var sigils: Array = []         # { tile, t, total }
 var skulls: Array = []         # { id, tile, hp, max } during a skull phase
@@ -439,12 +441,9 @@ func _boss_turn() -> void:
 	# the flanks' projectiles (and the Warden's melee smack)
 	# They never pause for a special or the skulls: they keep coming through the
 	# slams and the tear-out (G45), so you pray and dodge at once.
-	if str(boss.twin) != "":                     # phase 3's twin, a tick behind, from the other phantom
-		_launch(str(boss.twin), flight_ticks(), -1.0, str(boss.twin_src))
-		boss.twin = ""
 	boss.auto_cd = int(boss.auto_cd) - 1
 	if int(boss.auto_cd) <= 0:
-		boss.auto_cd = int(OsrsTune.value("auto_every_p3" if ph == 3 else "auto_every"))
+		boss.auto_cd = int(OsrsTune.value("auto_every"))            # G57: the same in every phase (no phase-3 speed-up)
 		if boss_dist(me.tile) <= 1:
 			_launch("melee", 1, OsrsTune.value("melee_hit"), "warden")
 		else:
@@ -454,10 +453,7 @@ func _boss_turn() -> void:
 			boss.next_style = STYLES[rng.randi() % 2]
 			var src: String = ["west", "east"][int(boss.flank) % 2]
 			boss.flank = int(boss.flank) + 1
-			_launch(style, flight_ticks(), -1.0, src)
-			if ph == 3 and rng.randf() < OsrsTune.value("twin_chance"):
-				boss.twin = "ranged" if style == "magic" else "magic"
-				boss.twin_src = "east" if src == "west" else "west"
+			_launch(style, flight_ticks(), -1.0, src)                  # G57: no phase-3 twin volleys in Hard
 	# the shields: against magic, then bowfire, by turns (they keep cycling through everything)
 	boss.shield_cd = int(boss.shield_cd) - 1
 	if int(boss.shield_cd) <= 0:
@@ -470,7 +466,7 @@ func _boss_turn() -> void:
 	# specials
 	boss.special_cd = int(boss.special_cd) - 1
 	if int(boss.special_cd) <= 0:
-		boss.special_cd = int(OsrsTune.value("special_every")) - (1 if ph == 3 else 0)
+		boss.special_cd = int(OsrsTune.value("special_every"))      # G57: no faster specials in phase 3
 		var order: Array = [["lightning"], ["boulders", "slam", "lightning"], ["lightning", "boulders", "slam"]][ph - 1]
 		var sp: String = order[_special_i % order.size()]
 		_special_i += 1
@@ -653,33 +649,36 @@ func _boulders() -> void:
 	_ev({ "type": "boulders", "n": picks.size() })
 
 
-## Three hits (G53d); each covers every column but one of the middle three,
-## the one its pose names: "west" (a west fist) spares the west-middle
-## column, "both" the centre, "east" the east-middle. Seeded, never the same
-## pose twice running. Below 50% the hits come slam_gap_fast ticks apart
-## instead of slam_gap.
+## Three hits slam_gap ticks apart (G53d, G57): the first two one fist each,
+## west then east or east then west (seeded), each slamming its own half;
+## the third both fists, sparing only the centre column.
 func _slam() -> void:
 	_anim("upheaval")
 	var w := int(OsrsTune.value("slam_warn"))
 	var gap := slam_gap()
-	var poses: Array = []
+	var poses: Array = ["west", "east"] if rng.randi() % 2 == 0 else ["east", "west"]
+	poses.append("both")
 	for i in 3:
-		var opts: Array = SLAM_POSES.filter(func(p: String) -> bool: return poses.is_empty() or p != poses[-1])
-		poses.append(opts[rng.randi() % opts.size()])
-	for i in 3:
-		var safe := slam_safe(str(poses[i]))
-		var cols: Array = range(0, W).filter(func(x: int) -> bool: return x != safe)
+		var cols := slam_cols(str(poses[i]))
+		var safe: Array = range(0, W).filter(func(x: int) -> bool: return not cols.has(x))
 		slams.append({ "cols": cols, "safe": safe, "t": w + 1 + gap * i, "total": w, "side": poses[i], "i": i })   # +1: it ticks down this tick too, so every pose shows a full slam_warn
 	_ev({ "type": "slam", "side": poses[0], "i": 0 })
 
 
-## The column a slam pose spares: the middle three only.
-static func slam_safe(pose: String) -> int:
-	return W / 2 + { "west": -1, "both": 0, "east": 1 }[pose]
+## The columns a slam pose hits (G57): a fist its own half, the centre
+## column with it (so standing in the centre never sits out a whole slam);
+## both fists everything but the centre column.
+static func slam_cols(pose: String) -> Array:
+	match pose:
+		"west": return range(0, W / 2 + 1)
+		"east": return range(W / 2, W)
+	return range(0, W).filter(func(x: int) -> bool: return x != W / 2)
 
 
+## Ticks between a slam's hits: slam_gap at any HP (G57 dropped the faster
+## slams below 50%).
 func slam_gap() -> int:
-	return int(OsrsTune.value("slam_gap_fast" if float(boss.hp) <= float(boss.max_hp) * 0.5 else "slam_gap"))
+	return int(OsrsTune.value("slam_gap"))
 
 
 func _sigil_spot() -> Vector2i:
@@ -730,7 +729,7 @@ func _resolve() -> void:
 	for s: Dictionary in slams.duplicate():
 		s.t = int(s.t) - 1
 		if int(s.t) == int(s.total) and int(s.i) != 0:
-			_ev({ "type": "slam", "side": s.side, "safe": int(s.safe), "i": int(s.i) })
+			_ev({ "type": "slam", "side": s.side, "safe": s.safe, "i": int(s.i) })
 			_anim("upheaval")
 		if int(s.t) <= 0:
 			slams.erase(s)

@@ -7,6 +7,7 @@ extends TourneyModule
 ## Offline the human on this machine plays; the other contestant's run is
 ## a bot's, rolled at once (OsrsBot). Pick a bow or a staff first (both are
 ## in the inventory: click the other one to swap mid-fight).
+## G57: this is the Hard mode; OsrsEasyModule is the pre-G53 trial.
 
 const PICK_TIME := 12.0
 
@@ -25,7 +26,7 @@ static var autopilot := false
 
 
 static func info() -> Dictionary:
-	return { "id": "osrs_raid", "name": "OSRS: Warden's Trial", "players": 2,
+	return { "id": "osrs_raid", "name": "OSRS: Warden's Trial (Hard)", "players": 2,
 		"blurb": "Old School raid boss on 0.6 s ticks. Pray against the phantoms' shots, dodge lightning, boulders and slams, break the skulls with a lightning dagger. Fastest kill wins." }
 
 
@@ -87,7 +88,7 @@ func _build_pick() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(bg)
 	root.move_child(bg, 0)
-	TourneyUI.header(root, "WARDEN'S TRIAL", "Pick your weapon. The other one and a lightning dagger stay in your inventory: click one to wield it.")
+	TourneyUI.header(root, "WARDEN'S TRIAL  ·  HARD", "Pick your weapon. The other one and a lightning dagger stay in your inventory: click one to wield it.")
 	_timer_l = TourneyUI.label(root, "", BWStyle.F_SUB, TourneyUI.DIM)
 	_timer_l.position = Vector2(0, 150)
 	_timer_l.size = Vector2(1600, 30)
@@ -98,7 +99,7 @@ func _build_pick() -> void:
 	var staff := TourneyTile.make(root, Rect2(830, 220, 520, 300), "Staff", "Hits 15-55 every 5 ticks (3.0 s). Swingy.", Color("#3e2d55"), "STAFF")
 	staff.title_size = 48
 	staff.pressed.connect(func(): _start("staff"))
-	var how := TourneyUI.para(root, "The two phantoms on the flanks take turns firing at you: pray against each shot (blue orb: magic, arrow: missiles) before it lands. The Warden does the rest: step off the shadows before lightning and boulders hit; when it slams, only a middle column is safe: west fist raised, the west-middle; both fists, the centre; east fist, the east-middle (faster below half HP); get off the far row when it cracks; when it shields itself against magic or bowfire, swap weapons. At 75%, 50% and 25% it raises skulls: wield the lightning dagger and click skull after skull, striking as you arrive, before they burst. Sip the damage potion; stand on a Sun Sigil as it ignites. Fastest kill wins.", BWStyle.F_BODY, Color(1, 1, 1, 0.85))
+	var how := TourneyUI.para(root, "The two phantoms on the flanks take turns firing at you: pray against each shot (blue orb: magic, arrow: missiles) before it lands. The Warden does the rest: step off the shadows before lightning and boulders hit; when it slams, a raised fist slams its own half, so stand on the other; with both fists only the centre column is safe; get off the far row when it cracks; when it shields itself against magic or bowfire, swap weapons. At 75%, 50% and 25% it raises skulls: wield the lightning dagger and click skull after skull, striking as you arrive, before they burst. Sip the damage potion; stand on a Sun Sigil as it ignites. Fastest kill wins.", BWStyle.F_BODY, Color(1, 1, 1, 0.85))
 	how.position = Vector2(250, 560)
 	how.size = Vector2(1100, 200)
 	how.set_deferred("size", Vector2(1100, 200))                 # wrap at the tiles' width

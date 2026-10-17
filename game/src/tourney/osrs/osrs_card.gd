@@ -7,14 +7,18 @@ extends CanvasLayer
 ## explains the controls; the fight itself gives no extra help.
 ##   --fresh (a user arg) or OsrsCard.force shows it again, for testing;
 ##   OsrsTune card_always (G56: the settings' OSRS tab) shows it every run.
+## G57: `easy` shows the Easy mode's card (OsrsEasyModule): bow and staff
+## only, its projectiles, slam and shadows; seen once under [seen] osrs_easy.
 
 signal done
 
 const TIME := 10.0
 const SEEN := "osrs_raid"
+const SEEN_EASY := "osrs_easy"
 
 static var force := false
 
+var easy := false              ## G57: the Easy mode's lines (set before adding it)
 var _t := TIME
 var _font: Font
 var _clock: Label
@@ -22,14 +26,15 @@ var _closed := false
 
 
 ## Show it this time? (Marks it seen when it says yes.)
-static func should_show() -> bool:
+static func should_show(for_easy := false) -> bool:
 	if force or OS.get_cmdline_user_args().has("--fresh") or OsrsTune.value("card_always") > 0.5:
 		return true
+	var key := SEEN_EASY if for_easy else SEEN
 	var cf := ConfigFile.new()
 	cf.load(TourneyState.CFG)
-	if bool(cf.get_value("seen", SEEN, false)):
+	if bool(cf.get_value("seen", key, false)):
 		return false
-	cf.set_value("seen", SEEN, true)
+	cf.set_value("seen", key, true)
 	cf.save(TourneyState.CFG)
 	return true
 
@@ -54,7 +59,7 @@ func _ready() -> void:
 	card.position = Vector2(230, 70)
 	card.size = Vector2(1140, 760)
 	add_child(card)
-	_label(card, "Warden's Trial", Vector2(0, 16), 30, OsrsHud.YELLOW, 1140, true)
+	_label(card, "Warden's Trial  ·  Easy" if easy else "Warden's Trial  ·  Hard", Vector2(0, 16), 30, OsrsHud.YELLOW, 1140, true)
 	# the inventory
 	_label(card, "Your inventory", Vector2(40, 74), 16, OsrsHud.ORANGE)
 	var items := [
@@ -63,11 +68,13 @@ func _ready() -> void:
 		[{ "kind": "dagger" }, "Lightning dagger: 1 a tick, melee. For the skulls."],
 		[{ "kind": "boost", "doses": 4 }, "Damage potion: a sip and your bow / staff hit harder."],
 	]
+	if easy:
+		items = items.slice(0, 2)
 	for i in items.size():
 		var at := Vector2(40 + (i % 2) * 540, 104 + (i / 2) * 58)
 		_icon(card, at, func(c: Control) -> void: OsrsHud.draw_item(c, items[i][0], _font, c.size))
 		_label(card, items[i][1], at + Vector2(62, 14), 14, Color.WHITE)
-	_label(card, "Click one to wield or drink it. Sharks heal; prayer potions restore prayer.", Vector2(40, 222), 13, Color("#c8b88a"))
+	_label(card, "Click the other weapon to swap. Sharks heal; prayer potions restore prayer." if easy else "Click one to wield or drink it. Sharks heal; prayer potions restore prayer.", Vector2(40, 222), 13, Color("#c8b88a"))
 	# the prayers
 	_label(card, "Prayers  (1  2  3, or click)", Vector2(40, 262), 16, OsrsHud.ORANGE)
 	var i2 := 0
@@ -80,11 +87,17 @@ func _ready() -> void:
 	_label(card, "The fight", Vector2(40, 388), 16, OsrsHud.ORANGE)
 	var lines := [
 		["shots", "The phantoms on the flanks fire by turns: blue orb is magic, green arrow is missiles."],
-		["slam", "Slams: only a middle column is safe. West fist up: west-middle; both: centre; east fist: east-middle."],
+		["slam", "Slams: a raised fist slams its own half, so go to the other. Both fists: only the centre column is safe."],
 		["shadow", "Shadows mark lightning and boulders: step off. The far row cracks and falls."],
 		["skull", "Skulls rise at 75 / 50 / 25%: wield the dagger, click skull after skull before they burst."],
 		["shield", "A blue shield stops magic, a green one arrows: swap weapons."],
 	]
+	if easy:
+		lines = [
+			["shots", "The Warden fires at you: blue orb is magic, arrow is missiles."],
+			["slam", "Slams: the glowing floor is hit, east, then west, then both sides. The centre column is safe."],
+			["shadow", "Shadows mark lightning and boulders: step off. In the last phase the far row cracks and falls."],
+		]
 	for k in lines.size():
 		var at := Vector2(40, 420 + k * 56)
 		var what: String = lines[k][0]
