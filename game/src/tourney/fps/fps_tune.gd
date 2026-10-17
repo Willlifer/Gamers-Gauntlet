@@ -48,6 +48,17 @@ const ENTRIES := {
 	"bot_peek": ["Bot peek time out of cover (s)", 1.4, 0.3, 4.0, 0.1, "Bot"],
 	"bot_retreat_hp": ["Bot falls back to cover under this HP", 45.0, 0.0, 100.0, 5.0, "Bot"],
 	"kills_to_win": ["Kills to win", 5.0, 1.0, 20.0, 1.0, "Match"],
+	# Extraction (ExtractWorld)
+	"extract_time": ["Raid clock (s)", 300.0, 60.0, 900.0, 10.0, "Extract"],
+	"extract_reveal": ["Extract revealed with this long left (s)", 150.0, 10.0, 600.0, 10.0, "Extract"],
+	"guard_bark_gap": ["Guard bark gap (s)", 3.0, 0.5, 10.0, 0.1, "Extract"],
+	"guard_hear_range": ["Guard bark heard to (m)", 40.0, 5.0, 150.0, 1.0, "Extract"],
+	"guard_reaction_x": ["Guard reaction (x bot_reaction)", 3.0, 0.5, 8.0, 0.1, "Extract"],
+	"guard_accuracy_x": ["Guard accuracy (x bot_accuracy)", 0.5, 0.0, 1.5, 0.05, "Extract"],
+	"armour_cut": ["Armour damage cut (0-1)", 0.35, 0.0, 0.9, 0.05, "Extract"],
+	"medkit_heal": ["Medkit heal (HP over 4 s)", 60.0, 10.0, 100.0, 5.0, "Extract"],
+	"chest_range": ["Interact reach (m)", 2.5, 1.0, 5.0, 0.1, "Extract"],
+	"mag_cap": ["Magazines carried per caliber (the pouch's cap)", 3.0, 1.0, 9.0, 1.0, "Extract"],
 }
 
 static var _values := {}
@@ -103,7 +114,7 @@ static func recoil(id: String) -> Dictionary:
 ## G51c: the sight on `id` (one of its SPECS optics; "" for a gun without).
 static func optic(id: String) -> String:
 	_ensure()
-	var o: Dictionary = FpsWeapons.SPECS[id].get("optics", {})
+	var o: Dictionary = FpsWeapons.spec(id).get("optics", {})
 	if o.is_empty():
 		return ""
 	var k := str(_optics.get(id, o.default))

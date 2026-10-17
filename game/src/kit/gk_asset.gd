@@ -27,6 +27,7 @@ var colliders: Array[Dictionary] = []  ## { size: Vector3, xform: Transform3D, b
 ## test the level's layer 1, pass through, so a roof edge doesn't stop a
 ## bullet between buildings.
 const BARRIER_LAYER := 16
+var trimeshes: Array[Dictionary] = []  ## { mesh: ArrayMesh, xform } concave colliders (terrain); env only
 var lights := {}                 ## env only: sun, sky and fog numbers (GKStage reads them)
 var meta := {}                   ## hands, socket, class, notes, budgets...
 var warnings: PackedStringArray = []
@@ -52,6 +53,14 @@ func add_box_xf(xf: Transform3D, size: Vector3, barrier := false) -> void:
 	if o.determinant() < 0.0:
 		o.x = -o.x                     # a box is symmetric: flip an axis back
 	colliders.append({ "size": (size * sc).abs(), "xform": Transform3D(o.orthonormalized(), xf.origin), "barrier": barrier })
+
+
+## A mesh that collides as itself (a ConcavePolygonShape3D): heightfield
+## terrain, which boxes can't follow. Same StaticBody3D as the boxes.
+func add_trimesh_collider(mesh: ArrayMesh, xform := Transform3D.IDENTITY) -> void:
+	if mesh == null:
+		return
+	trimeshes.append({ "mesh": mesh, "xform": xform })
 
 
 func triangle_count() -> int:
@@ -100,13 +109,18 @@ func instantiate(with_collision := true, plain := false) -> Node3D:
 		mk.transform = markers[k]
 		mk.gizmo_extents = 0.05
 		root.add_child(mk)
-	if with_collision and not colliders.is_empty():
+	if with_collision and (not colliders.is_empty() or not trimeshes.is_empty()):
 		var body := StaticBody3D.new()
 		body.name = "Collision"
 		var walls := StaticBody3D.new()           # the invisible walls, on their own layer
 		walls.name = "Barriers"
 		walls.collision_layer = BARRIER_LAYER
 		walls.collision_mask = 0
+		for t in trimeshes:
+			var ts := CollisionShape3D.new()
+			ts.shape = (t.mesh as ArrayMesh).create_trimesh_shape()
+			ts.transform = t.xform
+			body.add_child(ts)
 		for c in colliders:
 			var cs := CollisionShape3D.new()
 			var bs := BoxShape3D.new()
@@ -132,7 +146,7 @@ func describe() -> Dictionary:
 	var b := aabb()
 	return { "id": id, "kind": kind, "version": version, "params": params, "markers": mk,
 		"tris": triangle_count(), "aabb": { "min": _v(b.position), "max": _v(b.end) },
-		"colliders": colliders.size(), "meta": meta, "lights": lights }
+		"colliders": colliders.size(), "trimeshes": trimeshes.size(), "meta": meta, "lights": lights }
 
 
 static func _v(v: Vector3) -> Array:

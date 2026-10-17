@@ -6,7 +6,7 @@ extends RefCounted
 ## --module aram`, the tools) but never roll and get no Quick play tile:
 ## the MOBA pair left the pool on the author's 10-16 verdict (G60).
 
-static var POOL: Array = [BWFightModule, FpsModule, FpsMidModule, FpsCampusModule, MmoRaidEasyModule, MmoModule, MmoTanksModule, OsrsEasyModule, OsrsModule]
+static var POOL: Array = [BWFightModule, FpsModule, FpsMidModule, FpsCampusModule, FpsExtractModule, MmoRaidEasyModule, MmoModule, MmoTanksModule, OsrsEasyModule, OsrsModule]
 static var SHELVED: Array = [AramModule, PitModule]
 
 

@@ -6,6 +6,8 @@ extends SceneTree
 ## aimed, marksman hip), the pistols aimed in at a foot, a bullet trail
 ## fading in from the barrel, and a muzzle flash per gun. Exit 0.
 ##   [MAP=campus] godot --path . --script res://tools/fps_shots.gd
+## VARIANTS=1: Extraction's 14 variants instead, each in hand at the hip and
+## aimed in, beside its base, to design/shots/fps/variants/ (and a sheet).
 
 var out := ""
 var w: FpsWorld
@@ -21,6 +23,8 @@ func _initialize() -> void:
 	out = ProjectSettings.globalize_path("res://").path_join("../design/shots/fps").simplify_path()
 	if OS.get_environment("MAP") != "":
 		out = out.path_join(OS.get_environment("MAP"))         # MAP=campus: that map's frames in their own folder
+	if OS.get_environment("VARIANTS") != "":
+		out = out.path_join("variants")
 	DirAccess.make_dir_recursive_absolute(out)
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1600, 900))
@@ -176,6 +180,9 @@ func _go() -> void:
 	bot.set_physics_process(false)          # hold the bot still for framing
 	pl.shielded = true                      # and keep the player alive through the walk
 	_look_at(bot.eye())
+	if OS.get_environment("VARIANTS") != "":
+		await _variants(pl)
+		return
 	await _wait(0.6)
 	await _shot("1_hip")
 	pl.debug_aim = true
@@ -359,6 +366,43 @@ func _go() -> void:
 		await _wait(0.4)
 		await _shot("%d_across_the_court_hit" % n)
 		n += 1
+	await _sheet()
+
+
+## Extraction's variants in hand: the base at the hip, then each variant at
+## the hip and aimed in (the scoped ones half aimed too, so the sight itself
+## shows); the sheet with them.
+func _variants(pl: FpsPlayer) -> void:
+	var n := 1
+	var last_base := ""
+	for id: String in FpsWeapons.VARIANTS:
+		if not FpsWeapons.available(id):
+			continue
+		var sp := FpsWeapons.spec(id)
+		if str(sp.base) != last_base:
+			last_base = str(sp.base)
+			pl.set_loadout(last_base, "pistol")
+			await _wait(0.8)
+			await _shot("%02d_%s_base_hip" % [n, last_base])
+			n += 1
+		pl.set_loadout(id, "pistol")
+		await _wait(0.8)
+		await _shot("%02d_%s_hip" % [n, id])
+		n += 1
+		pl.debug_aim = true
+		if sp.get("scope", false):
+			await _wait(FpsTune.value("ads_time") * 0.55)
+			await _shot("%02d_%s_half_aimed" % [n, id])
+			n += 1
+		await _wait(0.8)
+		await _shot("%02d_%s_aimed" % [n, id])
+		n += 1
+		pl.debug_aim = false
+		await _wait(0.3)
+	await _sheet()
+
+
+func _sheet() -> void:
 	# G62: the map survey (the view from each spawn, the map from above, the
 	# bot's route in a seeded hunt), and the polish sheets for the author
 	await _survey()

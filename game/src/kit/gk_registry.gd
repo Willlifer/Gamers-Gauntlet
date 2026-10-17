@@ -13,7 +13,7 @@ static var _defs := {}
 static func _ensure() -> void:
 	if not _defs.is_empty():
 		return
-	for d in [GKSniper.new(), GKShotgun.new(), GKSlingshot.new(), GKDustMid.new(), GKRooftop.new()]:
+	for d in [GKSniper.new(), GKShotgun.new(), GKSlingshot.new(), GKDustMid.new(), GKRooftop.new(), GKExtractForest.new()]:
 		_defs[(d as GKDef).id()] = d
 	# modelled in Blender (G43): listed once their .glb is built
 	for b: Array in BLENDER:

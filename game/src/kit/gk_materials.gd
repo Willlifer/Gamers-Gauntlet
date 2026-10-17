@@ -92,6 +92,11 @@ const ROLES := {
 	"bark": { "a": "#4a3a2c", "b": "#3a2c20", "c": "#5a4a3a", "rough": 0.95, "pat": "grain", "scale": 3.0, "amt": 0.5, "world": true, "axis": [0, 1, 0] },
 	"paint_splat": { "a": "#e0308a", "b": "#c02070", "rough": 0.5, "pat": "plain", "scale": 4.0, "amt": 0.1 },
 	"net": { "a": "#2a2a2a", "b": "#1a1a1a", "rough": 0.9, "pat": "plain", "scale": 4.0, "amt": 0.1, "world": true },
+	# extraction forest (agent D gauntlet): a brick that holds up on a 15 m face at
+	# 80 m (the fine `blocks` course aliases into moire there), and birch bark
+	"brick_hall": { "a": "#8e4b3a", "b": "#7a3e30", "c": "#9a5a46", "rough": 0.95, "pat": "plaster", "scale": 0.7, "amt": 0.25, "world": true },
+	"brick_ruin": { "a": "#84503f", "b": "#6c3e31", "c": "#8a7a68", "rough": 0.95, "pat": "blocks", "scale": 0.12, "amt": 0.45, "world": true },
+	"bark_birch": { "a": "#e2ddd2", "b": "#8a857c", "c": "#2e2b27", "rough": 0.9, "pat": "plaster", "scale": 2.4, "amt": 0.55, "world": true },
 	"barrier": { "a": "#ff00ff", "b": "#ff00ff", "rough": 1.0, "pat": "plain", "scale": 1.0, "amt": 0.0, "world": true },
 }
 

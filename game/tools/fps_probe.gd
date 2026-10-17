@@ -12,7 +12,10 @@ extends SceneTree
 ## the match seed; the Dust hallway's spawn pockets are hidden from the far
 ## half of the lane and from each other, its crates cut the long sight lines,
 ## and the bot only walks where a straight line is clear; the tune cfg
-## migration; the bullet trail's fade; the sight pictures.
+## migration; the bullet trail's fade; the sight pictures. Extraction: every
+## variant builds dressed, differs from its base, fires; the scarce reload
+## spends a mag of the caliber, refuses at zero, the pouch caps at mag_cap,
+## the duel path stays infinite.
 ## Exit 0 when every check passes.
 
 var fails := 0
@@ -373,6 +376,171 @@ func _roofs(w: FpsWorld) -> void:
 	await _frames(3)
 
 
+## The surface roles of an asset, by part.
+func _roles(a: GKAsset) -> Array:
+	var out := []
+	for p in a.parts:
+		var m: ArrayMesh = p.mesh
+		for i in m.get_surface_count():
+			out.append("%s/%s" % [p.name, m.surface_get_name(i)])
+	out.sort()
+	return out
+
+
+## Extraction: every variant has a caliber and a value, builds dressed,
+## differs from its base (parts or roles), its markers move with its mods,
+## fires through the loadout, and arms the bot.
+func _variants(w: FpsWorld) -> void:
+	var p := w.player
+	_ok(FpsWeapons.VARIANTS.size() == 14, "variants: fourteen (%d)" % FpsWeapons.VARIANTS.size())
+	for id in FpsWeapons.SPECS:
+		var sp := FpsWeapons.spec(id)
+		_ok(sp.get("caliber", "") in ["rifle", "shotgun", "pistol"] and int(sp.get("value", 0)) > 0, "%s: caliber %s, value $%d" % [id, sp.get("caliber", "?"), int(sp.get("value", 0))])
+	var per := {}
+	for id: String in FpsWeapons.VARIANTS:
+		var sp := FpsWeapons.spec(id)
+		var base_id := str(sp.base)
+		per[base_id] = int(per.get(base_id, 0)) + 1
+		if not FpsWeapons.available(id):
+			print("skip %s: its base %s isn't built" % [id, base_id])
+			continue
+		var base := GKRegistry.build(str(sp.asset), sp.params)
+		var a := FpsVariants.build(id)
+		_ok(a != null and not a.parts.is_empty() and a.warnings.is_empty(), "%s builds (%d parts, %d tris%s)" % [id, a.parts.size(), a.triangle_count(), "" if a.warnings.is_empty() else ", warnings " + str(a.warnings)])
+		var plain := FpsVariants.build(base_id)
+		_ok(a.parts.size() != plain.parts.size() or _roles(a) != _roles(plain), "%s differs from %s (parts %d vs %d)" % [id, base_id, a.parts.size(), plain.parts.size()])
+		_ok(FpsVariants.build(id) == a, "%s: the dressed asset is cached" % id)
+		var bsp := FpsWeapons.spec(base_id)
+		var diff := 0
+		for k in ["damage", "cycle", "mag", "pellets", "recoil", "spread"]:
+			if not is_equal_approx(float(sp.get(k, 0)), float(bsp.get(k, 0))):
+				diff += 1
+		_ok(diff >= 1 and str(sp.name) != str(bsp.name), "%s: its own numbers (%d of damage/cycle/mag/pellets/recoil/spread differ) and name '%s'" % [id, diff, sp.name])
+		for m: Dictionary in (sp.dress as Dictionary).get("mods", []):
+			match str(m.kind):
+				"suppressor", "brake", "long_barrel":
+					_ok(a.marker("muzzle").origin.z > base.marker("muzzle").origin.z + 0.02, "%s: the %s pushes the muzzle out (%.3f -> %.3f)" % [id, m.kind, base.marker("muzzle").origin.z, a.marker("muzzle").origin.z])
+				"red_dot", "scope":
+					var e := a.marker("eye").origin
+					_ok(e != base.marker("eye").origin and e.y > a.marker("muzzle").origin.y, "%s: the %s sets the eye (%s)" % [id, m.kind, e])
+				"stock":
+					_ok(a.marker("butt").origin.z < base.marker("butt").origin.z - 0.02, "%s: the stock moves the butt back" % id)
+				"drum":
+					var wide := func(x: GKAsset) -> float:
+						for q in x.parts:
+							if str(q.name) == "mag":
+								return (q.mesh as ArrayMesh).get_aabb().size.x
+						return 0.0
+					_ok(float(wide.call(a)) > float(wide.call(plain)) * 1.3, "%s: the drum is fatter than the mag (%.3f vs %.3f m across)" % [id, wide.call(a), wide.call(plain)])
+		# every attachment sits on the gun: its box touches the gun built so far
+		# (the base, then each mod in order: a brake on a long barrel)
+		var bb := base.aabb().grow(0.005)
+		for q in a.parts:
+			if str(q.name).begins_with("mod_") or (str(q.name) == "mag" and not base.parts.any(func(r: Dictionary) -> bool: return r.mesh.get_aabb() == q.mesh.get_aabb())):
+				var qb := (q.mesh as ArrayMesh).get_aabb()
+				_ok(bb.intersects(qb), "%s: %s touches the gun" % [id, q.name])
+				bb = bb.merge(qb)
+		# in hand: it fires
+		p.set_loadout(id, "pistol")
+		await _frames(12)
+		var a0 := int(p.ammo[id])
+		var made := [0]
+		var count := func() -> void: made[0] = w._bullets.size()
+		var n0 := w._bullets.size()
+		p._cool = 0.0
+		p._held_before = false
+		p.debug_fire = true
+		p.fired.connect(func(_f: Vector3, _h: Array) -> void: count.call(), CONNECT_ONE_SHOT)
+		await _frames(4)
+		p.debug_fire = false
+		await _frames(2)
+		_ok(int(p.ammo[id]) < a0 and int(made[0]) >= n0 + int(sp.pellets), "%s fires in hand (%d rounds, %d bullets)" % [id, a0 - int(p.ammo[id]), int(made[0]) - n0])
+		_ok(p.vm.asset == a and p.vm.gun.get_child_count() >= a.parts.size(), "%s: the view model holds the dressed asset" % id)
+		if sp.get("scope", false):
+			_ok(p.vm.lens_view != null and p.vm._lens != null, "%s: its scope renders a picture" % id)
+	for base_id in ["sniper", "marksman", "shotgun", "carbine", "auto_rifle", "pistol", "deagle"]:
+		_ok(int(per.get(base_id, 0)) == 2, "%s has two variants (%d)" % [base_id, per.get(base_id, 0)])
+	_ok(FpsWeapons.PRIMARIES.size() == 6 and not FpsWeapons.PRIMARIES.any(func(id: String) -> bool: return FpsWeapons.SPECS[id].has("base")), "the duel radial still lists the six primaries, no variants")
+	# the bot holds a variant
+	var vid := "auto_rifle_drum" if FpsWeapons.available("auto_rifle_drum") else "sniper_sd"
+	w.bot.set_weapon(vid)
+	await _frames(2)
+	_ok(w.bot.weapon == vid and w.bot.gun_asset.meta.has("dress") and _roles(w.bot.gun_asset) == _roles(FpsVariants.build(vid)), "bot: holds the %s dressed (%d parts)" % [vid, w.bot.gun_asset.parts.size()])
+	w.bot.set_weapon("sniper")
+	await _frames(60)
+
+
+## Extraction's scarce ammo: a reload spends a mag of the caliber, refuses at
+## zero, the pouch caps at mag_cap, the duals take one for both, a shotgun
+## mag is a tube of shells; off, the duel reload is still infinite.
+func _scarce(w: FpsWorld) -> void:
+	var p := w.player
+	p.scarce = true
+	p.mags = { "rifle": 0, "shotgun": 0, "pistol": 0 }
+	var gave := 0
+	for i in 5:
+		gave += int(p.give_mag("pistol"))
+	_ok(gave == 3 and int(p.mags.pistol) == 3, "scarce: the pouch takes %d pistol mags, cap %d" % [gave, int(FpsTune.value("mag_cap"))])
+	p.set_loadout("pistol", "deagle")
+	await _frames(6)
+	_ok(int(p.ammo.pistol) == 15 and int(p.ammo.deagle) == 7, "scarce: the guns handed over come loaded (%d / %d)" % [p.ammo.pistol, p.ammo.deagle])
+	p.ammo.pistol = 0
+	p.vm.reload_t = -1.0
+	p._reload()
+	_ok(int(p.ammo.pistol) == 15 and int(p.mags.pistol) == 2, "scarce: a reload fills the gun and spends a mag (%d left)" % int(p.mags.pistol))
+	for i in 2:
+		await _frames(2)
+		p.ammo.pistol = 0
+		p.vm.reload_t = -1.0
+		p._reload()
+	_ok(int(p.ammo.pistol) == 15 and int(p.mags.pistol) == 0, "scarce: two more reloads empty the pouch")
+	p.ammo.pistol = 0
+	p.vm.reload_t = -1.0
+	p._reload()
+	await _frames(2)
+	_ok(int(p.ammo.pistol) == 0 and p.vm.reload_t < 0.0 and w.hud._note.text == "No magazines", "scarce: with no mags the reload refuses ('%s')" % w.hud._note.text)
+	_ok(p.give_mag("rifle") and int(p.mags.rifle) == 1, "scarce: a found rifle mag goes in the pouch")
+	p.respawn(p.global_transform)
+	_ok(int(p.ammo.pistol) == 0 and int(p.mags.rifle) == 1, "scarce: respawn refills nothing")
+	# the duals: one mag for both
+	if FpsWeapons.available("dual_berettas"):
+		p.mags.pistol = 1
+		p.set_loadout("dual_berettas", "pistol")
+		await _frames(6)
+		p.ammo.dual_l = 0
+		p.ammo.dual_r = 3
+		p.vm.reload_t = -1.0
+		p._reload()
+		_ok(int(p.ammo.dual_l) == 15 and int(p.ammo.dual_r) == 15 and int(p.mags.pistol) == 0, "scarce: the duals' trick reload takes one mag for both")
+	# the shotgun: a mag is a tube of shells, shell by shell
+	p.mags.shotgun = 1
+	p.set_loadout("shotgun", "pistol")
+	await _frames(6)
+	p.ammo.shotgun = 0
+	var shells := 0
+	for i in 8:
+		p.vm.reload_t = -1.0
+		p._cool = 0.0
+		var before := int(p.ammo.shotgun)
+		p._reload()
+		shells += int(p.ammo.shotgun) - before
+		await _frames(1)
+	_ok(shells == 6 and int(p.mags.shotgun) == 0, "scarce: one shotgun mag is one tube of shells (%d loaded, pouch %d)" % [shells, int(p.mags.shotgun)])
+	p.ammo.shotgun = 2
+	p.vm.reload_t = -1.0
+	p._reload()
+	_ok(int(p.ammo.shotgun) == 2, "scarce: the next tube needs another mag")
+	# the duel path: infinite
+	p.scarce = false
+	p.set_loadout("pistol", "deagle")
+	await _frames(6)
+	p.ammo.pistol = 0
+	p.vm.reload_t = -1.0
+	p._reload()
+	_ok(int(p.ammo.pistol) == 15 and int(p.mags.pistol) == 0, "duel: the reload is free with the pouch empty")
+	await _frames(60)
+
+
 ## Campus paintball: inside a bush, past 3 m, the bot can't see you; out of it, it can.
 func _bushes(w: FpsWorld) -> void:
 	_ok(not w.hide_volumes.is_empty(), "campus: the map has bushes (%d)" % w.hide_volumes.size())
@@ -525,6 +693,8 @@ func _map(map_id: String) -> void:
 	if map_id == "rooftop":
 		await _guns(w)
 		await _g51_world(w)
+		await _variants(w)
+		await _scarce(w)
 	_ok(w.player.run_key == ("campus_speed" if map_id == "campus" else "run_speed"), "%s: top speed from %s (the floaty max is the campus's alone)" % [map_id, w.player.run_key])
 	if map_id == "campus":
 		_bushes(w)

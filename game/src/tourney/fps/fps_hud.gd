@@ -178,6 +178,9 @@ func _process(delta: float) -> void:
 		_ammo.text = "%s   %d  |  %d" % [sp.name, int(player.ammo.dual_l), int(player.ammo.dual_r)]
 	else:
 		_ammo.text = "%s   %s" % [sp.name, ("%d / %d" % [player.ammo[player.weapon], mag]) if mag > 0 else "∞"]
+	if player.scarce and mag > 0:
+		# Extraction: the pouch's magazines of this gun's caliber
+		_ammo.text += "  |  %d mags" % int(player.mags.get(str(sp.get("caliber", "rifle")), 0))
 	_status.text = "%d HP    %s" % [int(player.hp), player.stance.to_upper()]
 	_hp_bar.size.x = 240.0 * player.hp / 100.0
 	_hp_bar.color = Color("#7fd35a") if player.hp > 40.0 else Color("#ff6b5e")

@@ -64,7 +64,7 @@ func equip(id: String) -> void:
 	if id == weapon_id and gun and _optic_kind == FpsTune.optic(id):
 		return
 	weapon_id = id
-	spec = FpsWeapons.SPECS[id]
+	spec = FpsWeapons.spec(id)                 # Extraction: a variant merged over its base
 	for f in frames:
 		f.queue_free()
 	frames.clear()
@@ -91,7 +91,7 @@ func equip(id: String) -> void:
 		gun = frames[0]
 	else:
 		if not _assets.has(id):
-			_assets[id] = GKRegistry.build(str(spec.asset), spec.params)
+			_assets[id] = FpsVariants.build(id)    # the base asset, dressed when the spec has a `dress`
 		asset = _assets[id]
 		gun = _prep(asset.instantiate(false))
 		if spec.get("dual", false):

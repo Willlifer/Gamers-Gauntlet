@@ -95,11 +95,13 @@ func set_weapon(id: String) -> void:
 	weapon = id if FpsWeapons.available(id) else "sniper"
 	if ch == null:
 		return
-	var sp: Dictionary = FpsWeapons.SPECS[weapon]
+	var sp := FpsWeapons.spec(weapon)
 	var params: Dictionary = (sp.params as Dictionary).duplicate()
-	if weapon == "sniper":
-		params = { "scale": 1.25, "bipod": "folded" }
+	if str(sp.asset) == "sniper":
+		params["scale"] = 1.25                  # the procedural rifle at the body's scale in its hands
 	gun_asset = GKRegistry.build(str(sp.asset), params)
+	if sp.has("dress"):
+		gun_asset = FpsVariants.apply(gun_asset, sp.dress)   # Extraction: a variant's attachments and tint
 	gun = GKBWHold.swap_weapon(ch, gun_asset)
 	GKBWHold.hold_rifle(ch, gun_asset, "low")
 
@@ -199,7 +201,7 @@ func _physics_process(delta: float) -> void:
 			if _burst > 0 and _burst_t <= 0.0 and sees:
 				_fire()
 				_burst -= 1
-				_burst_t = float(FpsWeapons.SPECS[weapon].cycle)
+				_burst_t = float(FpsWeapons.spec(weapon).cycle)
 				if _burst <= 0:
 					_after_burst()
 			elif not sees and _seen <= 0.0:
@@ -209,7 +211,7 @@ func _physics_process(delta: float) -> void:
 				else:
 					_go(_pick_spot())
 			elif _burst <= 0 and _seen >= FpsTune.value("bot_reaction") and _cool <= 0.0:
-				var sp: Dictionary = FpsWeapons.SPECS[weapon]
+				var sp := FpsWeapons.spec(weapon)
 				_burst = _rng.randi_range(3, 6) if sp.get("auto", false) or sp.get("dual", false) else 1
 				_burst_t = 0.0
 				_cool = (1.6 + _rng.randf() * 0.6) * (0.7 if sp.get("auto", false) else (0.55 if sp.action == "slide" else 1.0))
@@ -531,15 +533,26 @@ func _can_see() -> bool:
 	return eye().distance_to(to) < 3.0 or world.bush_between(eye(), to) < 1.0
 
 
+## Its base chance to land a shot, before range and your movement (Extraction's
+## guard scales it down, G63).
+func accuracy() -> float:
+	return FpsTune.value("bot_accuracy")
+
+
+## How far a missed shot lands from you (x; the guard misses wider, G63).
+func miss_spread() -> float:
+	return 1.0
+
+
 func _fire() -> void:
 	var to: Vector3 = target.cam.global_position + Vector3(0, -0.5, 0)
 	var dist := eye().distance_to(to)
-	var acc := FpsTune.value("bot_accuracy")
+	var acc := accuracy()
 	acc *= lerpf(1.0, 0.55, float(target.speed01))
 	acc *= { "stand": 1.0, "crouch": 0.85, "prone": 0.6 }[target.stance]
 	acc *= clampf(1.15 - dist / 140.0, 0.35, 1.0)
 	var muzzle := gun.global_transform * gun_asset.marker("muzzle").origin
-	var sp: Dictionary = FpsWeapons.SPECS[weapon]
+	var sp := FpsWeapons.spec(weapon)
 	world.muzzle_flash(muzzle, (to - muzzle).normalized(), float(sp.get("flash", 1.0)))
 	if sp.get("boom", false):
 		world.boom(muzzle)
@@ -552,7 +565,7 @@ func _fire() -> void:
 		if _rng.randf() < 0.12:
 			aim = target.cam.global_position
 	else:
-		aim = to + Vector3(_rng.randf_range(-1.2, 1.2), _rng.randf_range(-0.6, 1.4), _rng.randf_range(-1.2, 1.2))
+		aim = to + Vector3(_rng.randf_range(-1.2, 1.2), _rng.randf_range(-0.6, 1.4), _rng.randf_range(-1.2, 1.2)) * miss_spread()
 	for k in int(sp.pellets):
 		var dir := (aim - muzzle).normalized()
 		if int(sp.pellets) > 1:

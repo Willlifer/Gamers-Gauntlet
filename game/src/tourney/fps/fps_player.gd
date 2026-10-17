@@ -11,6 +11,12 @@ extends CharacterBody3D
 ## an empty gun) does the trick reload.
 ## Inaccuracy is one number per frame (spread_deg); the reticle draws it, the
 ## shots use it, so the crosshair never lies.
+## Extraction (scarce ammo): `mags` is the pouch, magazines per caliber
+## (FpsWeapons caliber: rifle / shotgun / pistol, cap FpsTune.mag_cap). With
+## `scarce` on, a reload spends one mag of the gun's caliber and refuses
+## ("No magazines") when the pouch is empty; the duals spend one for both;
+## the shotgun's mag is a tube's worth of shells; _fill()/respawn() don't
+## refill. Off (the duels), reloads are infinite as before.
 
 signal fired(from: Vector3, hits: Array)
 signal died
@@ -30,6 +36,10 @@ var weapon := "sniper"
 var slots: Array = ["sniper", "pistol"]      ## [primary, sidearm]
 var shielded := false                       ## picking a loadout: can't be hurt
 var ammo := {}
+var mags := { "rifle": 0, "shotgun": 0, "pistol": 0 }   ## Extraction: spare magazines per caliber
+var scarce := false                         ## Extraction: reloads spend `mags`
+var _shells := 0                            # scarce shotgun: shells left of the mag last spent
+var _refuse_t := -10.0                      # when "No magazines" was last shown
 var spread_deg := 0.0
 var speed01 := 0.0
 var aiming := false
@@ -69,13 +79,14 @@ func _ready() -> void:
 	add_child(cam)
 	vm = FpsViewmodel.new()
 	cam.add_child(vm)
-	for id in FpsWeapons.ORDER:
-		ammo[id] = int(FpsWeapons.SPECS[id].mag)
+	for id in FpsWeapons.SPECS:
+		ammo[id] = int(FpsWeapons.spec(id).mag)
 	vm.equip(weapon)
 
 
+## The gun in hand's spec (a variant's merged over its base).
 func spec() -> Dictionary:
-	return FpsWeapons.SPECS[weapon]
+	return FpsWeapons.spec(weapon)
 
 
 func _unhandled_input(ev: InputEvent) -> void:
@@ -107,12 +118,58 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_switch(str(slots[posmod(i, slots.size())]))
 
 
-## A new life's guns: full magazines, the primary in hand.
-func set_loadout(primary: String, sidearm: String) -> void:
+## A new life's guns: full magazines, the primary in hand. Scarce: only the
+## two guns handed over come loaded (`loaded`; false leaves their rounds as
+## they are, for a half-full pickup), the pouch is untouched.
+func set_loadout(primary: String, sidearm: String, loaded := true) -> void:
 	slots = [primary, sidearm]
 	_fill()
+	if scarce and loaded:
+		for id in slots:
+			_load(id)
 	weapon = ""
 	_switch(primary)
+
+
+## Extraction: put `id` in slot `idx` (0 primary, 1 sidearm) with `rounds` in
+## it (-1: a full magazine) and take it in hand.
+func set_slot(idx: int, id: String, rounds := -1) -> void:
+	slots[idx] = id
+	_load(id, rounds)
+	weapon = ""
+	_switch(id)
+
+
+func _load(id: String, rounds := -1) -> void:
+	var sp := FpsWeapons.spec(id)
+	var n := int(sp.mag) if rounds < 0 else mini(rounds, int(sp.mag))
+	ammo[id] = n
+	if sp.get("dual", false):
+		ammo["dual_l"] = n
+		ammo["dual_r"] = n
+
+
+## Extraction: a magazine of `caliber` into the pouch; false when it holds
+## FpsTune.mag_cap already.
+func give_mag(caliber: String) -> bool:
+	if int(mags.get(caliber, 0)) >= int(FpsTune.value("mag_cap")):
+		return false
+	mags[caliber] = int(mags.get(caliber, 0)) + 1
+	return true
+
+
+## Scarce: spend one magazine of the gun's caliber; false (and a note) when
+## the pouch has none.
+func _spend_mag(sp: Dictionary) -> bool:
+	var cal := str(sp.get("caliber", "rifle"))
+	if int(mags.get(cal, 0)) <= 0:
+		var now := Time.get_ticks_msec() * 0.001
+		if world and world.hud and now - _refuse_t > 1.5:   # a held trigger asks every frame
+			_refuse_t = now
+			world.hud.note("No magazines")
+		return false
+	mags[cal] = int(mags[cal]) - 1
+	return true
 
 
 ## The scope's magnification for the gun in hand.
@@ -132,18 +189,29 @@ func _switch(id: String) -> void:
 		BWSfx.ui("ph_swap_draw", { "gain_db": -4.0 })
 
 
-## Full magazines for every gun (the duals: one per hand).
+## Full magazines for every gun (the duals: one per hand); scarce: nothing
+## refills, the keys just exist.
 func _fill() -> void:
-	for id in FpsWeapons.ORDER:
-		ammo[id] = int(FpsWeapons.SPECS[id].mag)
-	ammo["dual_l"] = int(FpsWeapons.SPECS.dual_berettas.mag)
-	ammo["dual_r"] = int(FpsWeapons.SPECS.dual_berettas.mag)
+	for id in FpsWeapons.SPECS:
+		if scarce:
+			if not ammo.has(id):
+				ammo[id] = 0
+		else:
+			ammo[id] = int(FpsWeapons.spec(id).mag)
+	for k in ["dual_l", "dual_r"]:
+		if scarce:
+			if not ammo.has(k):
+				ammo[k] = 0
+		else:
+			ammo[k] = int(FpsWeapons.SPECS.dual_berettas.mag)
 
 
 func _reload() -> void:
 	var sp := spec()
 	if sp.get("dual", false):
 		if vm.reload_t >= 0.0 or (ammo.dual_l >= int(sp.mag) and ammo.dual_r >= int(sp.mag)):
+			return
+		if scarce and not _spend_mag(sp):        # one mag serves both guns
 			return
 		vm.start_reload()
 		_cool = float(sp.reload)
@@ -155,6 +223,18 @@ func _reload() -> void:
 		return
 	if int(sp.mag) <= 0 or ammo[weapon] >= int(sp.mag) or vm.reload_t >= 0.0:
 		return
+	if scarce:
+		if sp.get("shell_reload", false):
+			# a shotgun "mag" is a tube's worth of shells; the next tube costs another
+			if _shells <= 0:
+				if not _spend_mag(sp):
+					_reload_pending = false
+					return
+				_shells = int(sp.mag)
+			_shells -= 1
+		elif not _spend_mag(sp):
+			_reload_pending = false
+			return
 	vm.start_reload()
 	_cool = float(sp.reload)
 	if world and world.audio:
@@ -398,6 +478,7 @@ func respawn(at: Transform3D) -> void:
 	alive = true
 	stance = "stand"
 	_pitch = 0.0
-	_fill()
+	if not scarce:
+		_fill()
 	vm.equip(weapon)
 	_held_before = true                      # a held button doesn't fire the new life's first shot
