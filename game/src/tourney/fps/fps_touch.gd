@@ -332,6 +332,11 @@ func _drag(i: int, at: Vector2, rel: Vector2) -> void:
 	if not _touches.has(i):
 		return
 	var role := str(_touches[i].role)
+	# G69: the finger's own last point, not `ev.relative`: the web build keeps
+	# the previous point by slot in the browser's changedTouches list, not by
+	# finger, so with two fingers moving one drag's relative was measured from
+	# the other finger (move + turn together spun the view)
+	rel = at - (_touches[i].at as Vector2)
 	_touches[i].at = at
 	if role == "stick":
 		_stick_p = at

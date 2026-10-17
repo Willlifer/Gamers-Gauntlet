@@ -170,6 +170,26 @@ func _run() -> void:
 	_touch(0, fa, false)
 	_touch(1, c, false)
 	_touch(2, la, false)
+	await _frames(5)
+	# G69: the web build's relative, which is measured from the previous point
+	# in the same changedTouches slot, so from the other finger: move and look
+	# fingers alternating must still turn by the look finger's own travel only
+	_touch(1, c, true)
+	_touch(2, la, true)
+	await _frames(1)
+	yaw0 = p.rotation.y
+	var wsp := c + Vector2(0, -80)
+	var wlp := la
+	for k in 5:
+		_drag(1, wsp, wsp - wlp)
+		wlp = la + Vector2(20 * (k + 1), 0)
+		_drag(2, wlp, wlp - wsp)
+		await _frames(2)
+	var want_deg := FpsTune.value("touch_sens")    # degrees per 100 px
+	var wgot := rad_to_deg(absf(p.rotation.y - yaw0))
+	_ok(absf(wgot - want_deg) < want_deg * 0.25, "web-style relatives: move + turn turns %.1f deg for 100 px (want %.1f)" % [wgot, want_deg])
+	_touch(1, wsp, false)
+	_touch(2, wlp, false)
 	await _frames(25)
 	# reload
 	var before := int(p.ammo[gun])
