@@ -4,6 +4,17 @@ Things to keep an eye on while playing. Nothing here is owed: it is a
 checklist, not a ledger. Tick what you notice, ignore the rest. Newest batch
 on top; delete a batch once it has been played.
 
+## Batch 2026-10-16b (G57–G59)
+
+- **OSRS Easy:** is it the trial you remember from before the skulls?
+- **OSRS Hard:** one fist clears its own half (the other half is safe); the
+  both-hands slam (always third) spares only the centre. Each fist's half
+  includes the centre column, so you move every hit: fine, or should the
+  centre be safe from the fists? No speed-ups at low HP any more.
+- **Raid night Easy vs Hard:** the gap feels right? Easy bots kill a little
+  faster (121 s vs 129 s).
+- **Braves:** the smoke canister's arc reads; it flies over minions.
+
 ## Batch 2026-10-16 (G50–G56)
 
 **Lobby and settings**
