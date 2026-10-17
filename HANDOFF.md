@@ -1,28 +1,27 @@
-# Handoff — 2026-10-16 (evening)
+# Handoff — 2026-10-17
 
-**Where:** `C:\Users\ferth\Documents\Gamers Gauntlet`; game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
+**Where:** `C:\Users\ferth\Documents\Gamers Gauntlet`; game in `game/` (Godot 4.7). Gamers Gauntlet: short plug-in games in a party shell. The author verifies by playing and by looking at frames.
 
-**Git:** branch `main`, pushed at `59e5f90` with a fresh web build (G50–G65), on the author's word. Build web from a clean worktree of HEAD, never the shared tree. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only.
+**Git:** branch `main`, pushed with a fresh web build through G67, on the author's word. Build web from a clean worktree of HEAD, never the shared tree (`git worktree add --detach <scratch> HEAD`, copy `game/.godot`, `--headless --import`, `--export-release "Web" ../web/index.html`, copy `web/index.*` back, commit, push). Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only.
 
-## The verdicts (G60, `history/2026-10-16_session.md` "Evening")
-- **OSRS Warden's Trial** Easy / Hard (G57): 9/10, "genuinely fun". **Frozen.**
-- **Raids** (Raid night Easy / Hard G59, Planet of Tanks): 10/10. **Frozen.**
-- **Twins:** 9/10. **Frozen.**
-- **FPS:** 7/10, "super fun"; polish the maps and the gun models (open).
-- **MOBA:** 3/10; **pulled from the pool** (`TourneyModules.SHELVED`; code, tools and `--module aram` / `pit` stay). Back only on a new combat pitch from the author (L-6).
+## Where it stands
+- **Paused.** The author: "proof of concept is there". New direction G68: **a party game, not a tournament**; everyone plays at once. The shape is the author's call (online per L-8, phones as controllers, or drop-in rounds). Don't start it unasked.
+- **Frozen:** OSRS Easy/Hard (9/10), the raids and Planet of Tanks (10/10), the Twins (9/10). **MOBA** shelved (G60, L-6).
+- **FPS** (7/10, "super fun"): G61 gun polish, G62 nav and sounds, G63-G65 Extraction (dusk, calm guards, the frame-rate fix).
 
-## Three agents in this tree tonight
-- **This one:** G57 committed (`2ead7c2`; the probe hang fixed), the MOBA pulled (`8232709`), the docs (this commit).
-- **Gun models** (G61, `3495bce` `d24bb75` `6dfadda`): kit shader relief/checker/speckle, a see-through variant (the carbine's mag), the muzzle-flash flipbook, three glb rebuilds. Blind scores 28 → 29/50; the rest is sculpt/painted art (L-18, the author decides from `design/shots/kit/final_<id>_before_after.png`).
-- **FPS polish** (G62, `17ebb66`): `FpsNav` + a bot that paths, peeks and retreats; `FpsAudio` (36 synthesized sounds + B/W's pool); `FpsMapPolish` (spawn screens, a Dust stack, campus walls). L-12 settled. Sheets `design/shots/fps/polish/<map>_before_after.png`.
-- **FPS: Extraction** (session ferth-7c, G63–G64, `2553a2c`): the forest extraction run, 14 gun variants, scarce ammo. L-20 awaiting play; L-21 (the campus quad, the brick scale) waits for the author.
+## Today (2026-10-17)
+- **G66 light startup:** a friend's browser froze on load (a ~7 s script compile on the main thread). Now `scenes/boot.tscn` shows "Starting… n/12" and compiles in 12 per-frame steps; each game's code loads only when picked (`TourneyModules` is a static table). Exported first lobby frame 3.7 s → 2.0 s; 291 → 130 scripts at launch. Live since `a3b4b04`.
+- **G67 touch controls** for the four shooters (`src/tourney/fps/fps_touch.gd`): a floating stick, look by drag, FIRE / AIM / RELOAD / SWAP / JUMP / CROUCH, USE + MED in Extraction, II for pause. On for coarse-pointer web and native mobile; `-- --touch` or `?touch=1` force it. Probe `tools/fps_touch_probe.gd` 38/0. **Not tried on a real phone (L-22).** Frames in `design/shots/fps/touch/` (local, gitignored).
 
 ## Do this first
-1. **The author playtests** everything since `05e8497` (`design/PLAYTEST.md`): the FPS polish, Extraction (`--module fps_extract`), and the gun sheets (`design/shots/kit/final_<id>_before_after.png`).
-2. **Then push, on the author's word:** build web from a clean worktree of HEAD (`git worktree add --detach <scratch> HEAD`, copy `game/.godot`, `--import`, `--export-release "Web"`), copy `web/` back, commit, push. Never export from the shared tree.
+1. If the author returns with phone notes: L-22 and the PLAYTEST batch for G67.
+2. If they pick a party-game shape: G68 is the starting point; the sims are deterministic and lockstep-ready (G7, G8).
 
 ## Run
-- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_easy` (bw_twins, fps_roof, fps_mid, fps_campus, fps_extract, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid; shelved: aram, pit). `-- --fresh` shows the first-time cards again.
+- Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_easy` (bw_twins, fps_roof, fps_mid, fps_campus, fps_extract, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid; shelved: aram, pit). `-- --fresh` shows the first-time cards; `-- --boot-time` prints the startup steps; `-- --touch` shows the phone overlay.
 
-**Green on clean HEAD after Extraction (ferth-af):** import with 0 script errors, fps_probe, tourney_probe. ferth-7c: extract_probe 78/0, extract_map_probe, kit_probe 4227/0. **Earlier this evening:** osrs_probe (102 ok, 4 s), tourney_probe (twice, ~5 min), tourney_shots (twice), moba_probe, aram_shots; kit_probe (G61), fps_probe (G61 in a scratch copy; G62 in the tree with ferth-7c's hunks present), fps_audio_check, fps_shots on all three maps.
-**Not rerun:** mmo_probe, mmo_tanks_probe, the input checks, twins_probe, osrs_input, osrs_shots, the B/W self-test (none of their code changed from here).
+**Green at G67:** import 0 errors (clean worktree), fps_probe, extract_probe, tourney_probe, fps_touch_probe 38/0. At G66: tourney_shots, all 10 games via quick play, twins_probe, the B/W self-test 865/865.
+
+## Open author questions
+- G68: the party-game shape.
+- OSRS hard: the centre column in both fist halves? Extraction: 50 ft at the 1.25× scale (~19 m, set 15.24 m)? L-18 the gun-art round; L-21 the campus quad and the brick scale.
