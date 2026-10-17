@@ -2,7 +2,7 @@
 
 **Where:** `C:\Users\ferth\Documents\Gamers Gauntlet`; game in `game/` (Godot 4.7). Gamers Gauntlet: a party tournament of short plug-in games. The author verifies by playing and by looking at frames.
 
-**Git:** branch `main`, ~37 local commits since `1f1a933` (origin/main), **not pushed**: the author says when. Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only (other agents share the tree). The web build (`web/`) predates all of this.
+**Git:** branch `main`, pushed at `05e8497` (G50–G60 with a fresh web build, 10-16 evening) on the author's word; later local commits (gun models, FPS polish, the forest) wait for the next "push". Commit with `-c user.name=ferth -c user.email=consumerot@gmail.com` and the session trailers; `git add` explicit paths only (other agents share the tree). The forest agent's `FpsExtractModule` sits in the working-tree `POOL` uncommitted: it goes in with `game/src/tourney/extract/`, never alone (main failed to compile once that way).
 
 ## The verdicts (G60, `history/2026-10-16_session.md` "Evening")
 - **OSRS Warden's Trial** Easy / Hard (G57): 9/10, "genuinely fun". **Frozen.**
@@ -20,7 +20,7 @@
 ## Do this first
 1. **Look at what the other agents committed** (`git log`, `git status`): register the FPS polish and the gun models in LEDGER (L-12, L-18), GAMES.md and the history; then the forest (L-20) if it landed.
 2. **The author plays the FPS** when the polish is in (`design/PLAYTEST.md`); nothing else is owed on the frozen games.
-3. **Push when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys).
+3. **Next push, when the author says:** `sh build_web.sh`, commit `web/`, push (Vercel redeploys). Check the build compiles headless first (the POOL names only committed modules).
 
 ## Run
 - Quick play from the lobby, or `--path . res://scenes/module.tscn -- --module osrs_easy` (bw_twins, fps_roof, fps_mid, fps_campus, mmo_raid_easy, mmo_raid, mmo_tanks, osrs_easy, osrs_raid; shelved: aram, pit). `-- --fresh` shows the first-time cards again.
