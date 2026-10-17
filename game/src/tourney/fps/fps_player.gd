@@ -49,6 +49,14 @@ var run_key := "run_speed"                  ## FpsTune key of the top speed (the
 var debug_aim := false                      ## tools: hold aim without a mouse
 var debug_move := Vector2.ZERO              ## tools: x strafe, y forward (-1..1)
 var debug_fire := false                     ## tools: hold the trigger
+## G67 touch (FpsTouch sets these; all zero on a desktop): the stick (x
+## strafe, y forward, length 0..1 is the speed), the triggers, aim held in,
+## the crouch button held (tap / hold like Shift).
+var touch_move := Vector2.ZERO
+var touch_fire := false
+var touch_fire_r := false
+var touch_aim := false
+var touch_crouch := false
 var _pitch := 0.0
 var _eye := 1.98
 var _shift_t := -1.0
@@ -96,16 +104,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 		var sens := FpsTune.value("mouse_sens") * 0.001 * (FpsTune.value("ads_sens") if aiming else 1.0)
 		if scoped:
 			sens /= zoom()
-		rotate_y(-ev.relative.x * sens)
-		_pitch = clampf(_pitch - ev.relative.y * sens, -1.45, 1.45)
-		_look += ev.relative
+		_turn(ev.relative, sens)
 	elif ev is InputEventKey and ev.pressed and not ev.echo:
 		var k: int = ev.physical_keycode           # the keys are FpsBinds' (G51: set in the buy phase)
 		if k == FpsBinds.key("jump"):
-			if stance != "stand":
-				stance = "stand"
-			elif is_on_floor():
-				velocity.y = FpsTune.value("jump")
+			jump()
 		elif k == FpsBinds.key("reload"):
 			_reload()
 		elif k == FpsBinds.key("primary"):
@@ -114,8 +117,42 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_switch(str(slots[1]))
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP or ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			var i := slots.find(weapon) + 1
-			_switch(str(slots[posmod(i, slots.size())]))
+			next_weapon()
+
+
+func _turn(rel: Vector2, sens: float) -> void:
+	rotate_y(-rel.x * sens)
+	_pitch = clampf(_pitch - rel.y * sens, -1.45, 1.45)
+	_look += rel
+
+
+## Space: stand up, or jump when standing.
+func jump() -> void:
+	if stance != "stand":
+		stance = "stand"
+	elif is_on_floor():
+		velocity.y = FpsTune.value("jump")
+
+
+## The wheel: the other slot.
+func next_weapon() -> void:
+	var i := slots.find(weapon) + 1
+	_switch(str(slots[posmod(i, slots.size())]))
+
+
+func reload() -> void:
+	_reload()
+
+
+## G67: a touch drag of `rel` canvas px (FpsTouch): FpsTune.touch_sens degrees
+## per 100 px, scaled like the mouse when aimed or scoped.
+func touch_look(rel: Vector2) -> void:
+	if not input_on or not alive:
+		return
+	var sens := deg_to_rad(FpsTune.value("touch_sens")) * 0.01 * (FpsTune.value("ads_sens") if aiming else 1.0)
+	if scoped:
+		sens /= zoom()
+	_turn(rel, sens)
 
 
 ## A new life's guns: full magazines, the primary in hand. Scarce: only the
@@ -248,7 +285,7 @@ func _reload() -> void:
 func _physics_process(delta: float) -> void:
 	var cap := _shape.shape as CapsuleShape3D
 	# stance: tap Shift to crouch / stand, hold it to lie down
-	if input_on and alive and FpsBinds.pressed("crouch"):
+	if input_on and alive and (FpsBinds.pressed("crouch") or touch_crouch):
 		if _shift_t < 0.0:
 			_shift_t = 0.0
 		_shift_t += delta
@@ -266,13 +303,20 @@ func _physics_process(delta: float) -> void:
 	_eye = move_toward(_eye, float(EYE[stance]), delta * 4.5)
 	# movement
 	var dir := Vector3.ZERO
+	var amount := 1.0                           # G67: the touch stick's push (1 on keys)
 	if input_on and alive:
 		var f := int(FpsBinds.pressed("forward")) - int(FpsBinds.pressed("back"))
 		var s := int(FpsBinds.pressed("right")) - int(FpsBinds.pressed("left"))
 		if debug_move != Vector2.ZERO:
 			f = int(signf(debug_move.y))
 			s = int(signf(debug_move.x))
-		dir = (-transform.basis.z * f + transform.basis.x * s)
+		var fa := float(f)
+		var sa := float(s)
+		if touch_move != Vector2.ZERO and f == 0 and s == 0:
+			fa = touch_move.y
+			sa = touch_move.x
+			amount = minf(1.0, touch_move.length())
+		dir = (-transform.basis.z * fa + transform.basis.x * sa)
 		dir.y = 0.0
 		dir = dir.normalized()
 	var top := FpsTune.value(run_key)
@@ -284,7 +328,7 @@ func _physics_process(delta: float) -> void:
 		top *= FpsTune.value("ads_move")
 	var hv := Vector3(velocity.x, 0, velocity.z)
 	var accel := FpsTune.value("accel") * (1.0 if is_on_floor() else 0.25)
-	hv = hv.move_toward(dir * top, accel * delta)
+	hv = hv.move_toward(dir * top * amount, accel * delta)
 	velocity.x = hv.x
 	velocity.z = hv.z
 	if not is_on_floor():
@@ -319,7 +363,7 @@ func _action_sounds() -> void:
 
 
 func _process(delta: float) -> void:
-	aiming = input_on and alive and (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or debug_aim) and not spec().get("dual", false)
+	aiming = input_on and alive and (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or debug_aim or touch_aim) and not spec().get("dual", false)
 	_punch = move_toward(_punch, 0.0, delta * _recover)
 	cam.position.y = _eye
 	# G51 sideways sway: a slow drift of the aim itself, doubled in a scope
@@ -352,9 +396,9 @@ func _weapon(delta: float) -> void:
 	if not alive or not input_on:
 		_drawing = false
 		return
-	var held := (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire
+	var held := (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire or touch_fire
 	if sp.get("dual", false):
-		_duals(delta, held, (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire_r)
+		_duals(delta, held, (Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED) or debug_fire_r or touch_fire_r)
 		return
 	if sp.action == "draw":
 		if held and _cool <= 0.0:
@@ -478,6 +522,7 @@ func respawn(at: Transform3D) -> void:
 	alive = true
 	stance = "stand"
 	_pitch = 0.0
+	touch_aim = false
 	if not scarce:
 		_fill()
 	vm.equip(weapon)

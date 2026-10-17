@@ -92,7 +92,8 @@ func _ready() -> void:
 	hud.player = player
 	add_child(hud)
 	player.cam.make_current()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	capture()
+	add_touch()
 	clock = FpsTune.value("extract_time")
 	started = Time.get_ticks_msec() / 1000.0
 	if stubbed:

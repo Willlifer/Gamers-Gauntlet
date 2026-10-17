@@ -89,7 +89,8 @@ func _ready() -> void:
 	hud.player = player
 	add_child(hud)
 	player.cam.make_current()
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	capture()
+	add_touch()
 	hud.note("First to %d. The bot is %s." % [int(FpsTune.value("kills_to_win")), { "rooftop": "on the far roof", "dust_mid": "at the tower end" }.get(map_id, "at the far end")])
 	open_loadout()
 
@@ -116,7 +117,7 @@ func open_loadout() -> void:
 		player.set_loadout(id, side)
 		player.input_on = _tune == null
 		player.shielded = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		capture()
 		hud.note("%s  +  %s" % [FpsWeapons.SPECS[id].name, FpsWeapons.SPECS[side].name]))
 	add_child(_menu)
 
@@ -247,16 +248,40 @@ func _unhandled_input(ev: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif ev.physical_keycode == KEY_F1 and _menu == null:
 			_toggle_tune()
-	elif ev is InputEventMouseButton and ev.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and _tune == null and _menu == null:
+	elif ev is InputEventMouseButton and ev.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and _tune == null and _menu == null and not FpsTouch.wanted():
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
+
+
+## Lock the mouse for look; G67: not on touch (no pointer lock on a phone,
+## and the overlay reads the fingers itself).
+func capture() -> void:
+	if not FpsTouch.wanted():
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## G67: the touch controls (FpsTouch), on a phone or with -- --touch.
+func add_touch() -> void:
+	if FpsTouch.wanted():
+		var t := FpsTouch.new()
+		t.world = self
+		add_child(t)
+
+
+## Is the radial loadout up (FpsTouch stands down while it is)?
+func menu_open() -> bool:
+	return _menu != null
+
+
+func toggle_tune() -> void:
+	_toggle_tune()
 
 
 func _toggle_tune() -> void:
 	if _tune:
 		_tune.queue_free()
 		_tune = null
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		capture()
 		player.input_on = true
 		return
 	_tune = FpsTunePanel.new()

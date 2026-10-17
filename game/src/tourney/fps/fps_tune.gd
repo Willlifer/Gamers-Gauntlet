@@ -61,6 +61,10 @@ const ENTRIES := {
 	"medkit_heal": ["Medkit heal (HP over 4 s)", 60.0, 10.0, 100.0, 5.0, "Extract"],
 	"chest_range": ["Interact reach (m)", 2.5, 1.0, 5.0, 0.1, "Extract"],
 	"mag_cap": ["Magazines carried per caliber (the pouch's cap)", 3.0, 1.0, 9.0, 1.0, "Extract"],
+	# Touch (G67, FpsTouch: phones only, or -- --touch)
+	"touch_sens": ["Touch look speed (deg per 100 px dragged)", 16.0, 3.0, 60.0, 0.5, "Touch"],
+	"touch_stick": ["Touch joystick radius (px)", 115.0, 60.0, 200.0, 5.0, "Touch"],
+	"touch_alpha": ["Touch button opacity", 0.5, 0.15, 1.0, 0.05, "Touch"],
 }
 
 static var _values := {}

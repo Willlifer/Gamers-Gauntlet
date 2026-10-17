@@ -185,7 +185,7 @@ func _process(delta: float) -> void:
 	_hp_bar.size.x = 240.0 * player.hp / 100.0
 	_hp_bar.color = Color("#7fd35a") if player.hp > 40.0 else Color("#ff6b5e")
 	_score_l.text = "You %d  –  %d Bot" % [score.x, score.y]
-	_paused.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and player.input_on
+	_paused.visible = Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and player.input_on and not FpsTouch.on
 	_dead.visible = not player.alive
 
 

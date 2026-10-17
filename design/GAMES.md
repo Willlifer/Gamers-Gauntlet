@@ -134,6 +134,18 @@ Numbers: `FpsTune` (F1); the guns: `FpsWeapons.SPECS`.
     white core, tongues, orange glow, per gun; no black box.
   - Run speed 6.6; the floaty 12 m/s is `campus_speed`, campus only.
   - Settings (sensitivity, FOV, `FpsBinds` keys): O in the buy phase.
+- **Touch controls (G67, all four shooters; `FpsTouch`):** on a phone/tablet
+  only (native mobile, or the web build on a touchscreen with a coarse main
+  pointer; `-- --touch` or `?touch=1` force it, `--no-touch` / `?touch=0`
+  stop it). Left: a floating stick (push = speed). Right: drag to look
+  (`touch_sens` 16 deg / 100 px); FIRE (hold; its finger also looks), AIM
+  (toggle), RELOAD, SWAP, JUMP, CROUCH (tap / hold prone). Dual Berettas: FIRE
+  is the left gun, AIM turns into FIRE R (the right gun, held). Extraction:
+  USE (F; lit with the prompt) and MED (4; only with a medkit). II (top
+  left) = Esc: the match keeps running; look speed, the F1 numbers, Leave
+  (= F10, tap twice). Web: a full-screen button. Portrait: "turn your phone".
+  The radial takes a tap. HP and the gun move to the top corners. Numbers:
+  `FpsTune` "Touch" (`touch_sens`, `touch_stick` 115 px, `touch_alpha` 0.5).
 - **Rooftop map (G51c):** mirrored roofs (same cover and spawns), more cover
   (ducts, a water tank, skylights, HVAC); each block's top storey is open
   below, by a ramped stairwell; the bridge is walkable (ramps). The parapet

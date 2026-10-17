@@ -101,7 +101,7 @@ func _process(delta: float) -> void:
 	if extracting >= 0.0:
 		_prompt_l.text = "Extracting…  %.1f" % maxf(0.0, 3.0 - extracting)
 	else:
-		_prompt_l.text = ("F   " + prompt) if prompt != "" else ""
+		_prompt_l.text = (("" if FpsTouch.on else "F   ") + prompt) if prompt != "" else ""
 	_prompt_l.visible = _prompt_l.text != "" and player.alive
 	for m: Dictionary in _marks.duplicate():
 		m.t -= delta

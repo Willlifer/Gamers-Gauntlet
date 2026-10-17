@@ -238,20 +238,26 @@ func cycle_optic() -> void:
 
 func _wheel_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseMotion:
-		var d: Vector2 = ev.position - _center()
-		var h := -1
-		if d.length() > _radius() * 0.3 and d.length() < _radius() * 1.1:
-			var a := atan2(d.y, d.x)
-			for i in options.size():
-				var sp := _span(i)
-				if fposmod(a - sp.x, TAU) < sp.y - sp.x:
-					h = i
-		if h != _hover:
-			_hover = h
-			_wheel.queue_redraw()
-			_refresh_inv()
-	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT and _hover >= 0:
-		_pick(str(options[_hover]))
+		_hover_at(ev.position)
+	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		_hover_at(ev.position)                  # G67: a tap has no motion before it
+		if _hover >= 0:
+			_pick(str(options[_hover]))
+
+
+func _hover_at(pos: Vector2) -> void:
+	var d: Vector2 = pos - _center()
+	var h := -1
+	if d.length() > _radius() * 0.3 and d.length() < _radius() * 1.1:
+		var a := atan2(d.y, d.x)
+		for i in options.size():
+			var sp := _span(i)
+			if fposmod(a - sp.x, TAU) < sp.y - sp.x:
+				h = i
+	if h != _hover:
+		_hover = h
+		_wheel.queue_redraw()
+		_refresh_inv()
 
 
 func _unhandled_input(ev: InputEvent) -> void:
