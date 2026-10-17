@@ -32,3 +32,7 @@ game/audio/music/layers/*
 !game/audio/music/layers/layers.json
 game/audio/music/blackwhite_loop.wav*
 game/audio/music/drum_beat.wav*
+
+# Python bytecode
+__pycache__/
+*.pyc
